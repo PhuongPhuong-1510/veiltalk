@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T05 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T06 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -105,6 +105,16 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/test/java/com/veiltalk/auth/AuthLoginIntegrationTests.java` | Integration test TC-04, TC-05, TC-06 và lưu SHA-256 hash của refresh token |
 | `backend/src/test/java/com/veiltalk/auth/AuthRefreshLogoutIntegrationTests.java` | Integration test TC-07, TC-08, TC-09, ownership, soft delete và Redis blacklist TTL |
 
+### Module người dùng
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `backend/src/main/java/com/veiltalk/user/UserProfileController.java` | REST controller mỏng cho `GET/PUT /users/me` |
+| `backend/src/main/java/com/veiltalk/user/UserProfileService.java` | Lấy/cập nhật hồ sơ user đang hoạt động; trả cùng lỗi 401 khi user thiếu hoặc đã soft delete |
+| `backend/src/main/java/com/veiltalk/user/UserProfileUpdateRequest.java` | DTO cập nhật từng phần; validate display name và phân biệt field avatar URL không gửi với giá trị null |
+| `backend/src/main/java/com/veiltalk/user/UserProfileResponse.java` | DTO hồ sơ theo API mục 4.1–4.2, gồm trạng thái đã có nhân vật ảo |
+| `backend/src/test/java/com/veiltalk/user/UserProfileIntegrationTests.java` | Integration test GET/PUT, partial update, xóa avatar URL, validation, authentication và soft delete |
+
 ### Module nhân vật ảo
 
 | Đường dẫn | Nội dung |
@@ -182,6 +192,14 @@ user/thời hạn trong database. Refresh kiểm tra đồng thời JWT type, ha
 token cùng user, đặt `revoked_at`, rồi blacklist access-token `jti` trong Redis với TTL
 bằng thời gian token còn lại. `JwtAuthenticationFilter` từ chối ngay JTI đã blacklist.
 TC-07, TC-08, TC-09, các ca ownership/soft delete và toàn bộ 43 test Backend đều PASS.
+
+P2-T06 triển khai `GET /users/me` và `PUT /users/me` trong package tính năng `user`.
+Controller lấy UUID từ `Authentication`; service chỉ truy vấn bằng
+`findByIdAndDeletedAtIsNull`. Access token còn hạn nhưng user không tồn tại hoặc đã soft
+delete đều trả cùng `401 UNAUTHORIZED` với thông báo `Invalid session`, không tiết lộ trạng
+thái tài khoản. PUT cập nhật từng phần, validate `display_name` 1–100 ký tự và phân biệt
+`avatar_url` không được gửi với `avatar_url: null` để xóa ảnh. Toàn bộ 8 integration test
+riêng P2-T06 PASS.
 
 ## Signaling Server
 
