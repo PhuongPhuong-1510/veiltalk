@@ -82,6 +82,9 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/auth/UserRoleConverter.java` | Chuyển enum role sang giá trị PostgreSQL chữ thường |
 | `backend/src/main/java/com/veiltalk/auth/UserRepository.java` | Repository user; query email, discoverable và soft delete |
 | `backend/src/main/java/com/veiltalk/auth/RefreshTokenRepository.java` | Repository refresh token |
+| `backend/src/main/java/com/veiltalk/auth/JwtService.java` | Sinh, xác thực và đọc access/refresh JWT ký HS256 |
+| `backend/src/main/java/com/veiltalk/auth/JwtClaims.java` | Kiểu dữ liệu bất biến cho claims JWT đã xác thực |
+| `backend/src/test/java/com/veiltalk/auth/JwtServiceTests.java` | Unit test thời hạn, claims, chữ ký, loại token và cấu hình JWT |
 
 ### Module nhân vật ảo
 
@@ -124,6 +127,13 @@ publish `localhost:6379` cho Backend chạy local; Backend trong full Compose d�
 hostname nội bộ `redis`. Integration test xác minh `StringRedisTemplate` ghi/đọc key
 `jwt:blacklist:{jti}` với TTL và luôn xóa key sau kiểm tra. Toàn bộ 12 test PASS.
 
+P2-T01 bổ sung `JwtService` không cần thư viện JWT mới: dùng Java Cryptography API để ký
+HMAC-SHA256 và Jackson để xử lý JSON. Access token chứa `sub`, `role`, `type`, `jti`,
+`iat`, `exp` và hết hạn sau 15 phút; refresh token chứa `type`, `jti`, `iat`, `exp` và
+hết hạn sau 7 ngày. Secret và thời hạn lấy từ `JWT_SECRET`, `JWT_ACCESS_EXPIRY`,
+`JWT_REFRESH_EXPIRY`. Validation khóa thuật toán HS256, kiểm tra chữ ký constant-time,
+thời hạn, cấu trúc claims và phân biệt access/refresh token. Toàn bộ 8 unit test JWT PASS.
+
 ## Signaling Server
 
 | Đường dẫn | Nội dung |
@@ -165,4 +175,6 @@ P0-T05 đã được xác minh bằng `npm run build` và `npm run lint`.
 ## Chỗ dễ nhầm
 
 - `docker-compose.yml` chỉ mount volume dữ liệu PostgreSQL, không tự động mount schema.
-  File `infra/postgres/init.sql` được tạo và chạy chủ động bằng `psql` ở P1-T01.
+  Schema ứng dụng chỉ được tạo và quản lý bằng Flyway từ
+  `backend/src/main/resources/db/migration/`; không có hoặc chạy
+  `infra/postgres/init.sql`.
