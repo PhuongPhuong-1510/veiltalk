@@ -10,7 +10,7 @@
 
 | Thư mục | Nội dung | Trạng thái |
 |---|---|---|
-| `backend/` | Spring Boot API | đã tạo thư mục, chưa có code |
+| `backend/` | Spring Boot 3.5.16 API (Java 21, Maven) | project skeleton hoàn tất; `clean package -DskipTests` thành công |
 | `signaling/` | Node.js WebSocket relay | đã tạo thư mục, chưa có code |
 | `frontend/` | React + Three.js | đã tạo thư mục, chưa có code |
 | `infra/` | init SQL, cấu hình hạ tầng | đã tạo thư mục, chưa có cấu hình |
@@ -32,7 +32,19 @@ Các thư mục ứng dụng và hạ tầng hiện chứa `.gitkeep` để Git 
 
 ## Backend
 
-*(điền sau Phase 1–2)*
+| Đường dẫn | Nội dung |
+|---|---|
+| `backend/pom.xml` | Maven project `com.veiltalk:backend`, Java 21, Spring Boot 3.5.16 và các starter nền tảng |
+| `backend/mvnw`, `backend/mvnw.cmd` | Maven Wrapper scripts |
+| `backend/.mvn/wrapper/maven-wrapper.properties` | Maven Wrapper 3.3.4, Maven 3.9.16 |
+| `backend/src/main/java/com/veiltalk/BackendApplication.java` | Điểm khởi động Spring Boot |
+| `backend/src/main/resources/application.yml` | Cấu hình tên ứng dụng; chưa có datasource/Redis |
+| `backend/src/test/java/com/veiltalk/BackendApplicationTests.java` | Smoke test khởi tạo Spring context |
+
+P0-T03 đã được xác minh bằng `mvnw.cmd clean package -DskipTests`. Smoke test
+`BackendApplicationTests` chưa chạy thành công vì Data JPA chưa có URL datasource ở
+giai đoạn này (`Failed to determine a suitable driver class`). Không có cấu hình tạm,
+H2 hoặc Testcontainers; cấu hình database sẽ được bổ sung ở task đúng phạm vi.
 
 ### Module xác thực
 ### Module nhân vật ảo
