@@ -166,6 +166,8 @@ Phân biệt lỗi môi trường thường gặp:
 | **TC-26** | **Load lịch sử tin nhắn**           | Conversation có ≥ 50 tin nhắn | GET /conversations/{id}/messages?limit=20                                              | HTTP 200, trả về 20 tin nhắn mới nhất, has_more=true, prev_cursor có giá trị | FR-12             |
 | **TC-27** | **Cập nhật status tin nhắn**        | TC-23 đã chạy                 | PUT /conversations/{id}/messages/{msgId} {status:'read'}                               | HTTP 200, status = 'read'                                                    | FR-11             |
 | **TC-28** | **Không cho giảm status**           | TC-27 đã chạy (status=read)   | PUT .../messages/{msgId} {status:'sent'}                                               | HTTP 400 — không được quay về trạng thái trước                               | ADD 6.6           |
+| **TC-59** | **Danh sách conversation phân trang** | User A có ≥ 3 conversation với updated_at khác nhau | GET /conversations?limit=2, sau đó gọi trang tiếp theo bằng next_cursor | Trang đầu có 2 conversation sắp xếp updated_at DESC, has_more=true; trang sau không trùng/thiếu và has_more=false | ADD 6.2 |
+| **TC-60** | **Chi tiết conversation và quyền thành viên** | Conversation giữa user A và B; user C không phải thành viên | A và C lần lượt gọi GET /conversations/{id}; A gọi thêm với ID không tồn tại | A nhận HTTP 200 cùng other_user/last_message; C nhận 403 FORBIDDEN; ID không tồn tại nhận 404 NOT_FOUND | ADD 6.3 |
 
 ### 2.5. Module Video (FR-16, FR-17)
 
@@ -236,7 +238,7 @@ Các TC này được đo chi tiết trong Performance Test Report. Dưới đâ
 | **FR-04 — Nhân vật ảo**                | TC-10 đến TC-15                                            |
 | **FR-05/06 — Bảo mật danh tính**       | TC-14 (không lộ email), TC-44 (webhook auth), TC-45 (CORS) |
 | **FR-09 — Xử lý tracking lost**        | TC-51 (kiểm tra avatar freeze)                             |
-| **FR-11 — Gửi tin nhắn**               | TC-23, TC-24, TC-25                                        |
+| **FR-11 — Gửi tin nhắn**               | TC-23, TC-24, TC-25, TC-59, TC-60                          |
 | **FR-12 — Lịch sử tin nhắn**           | TC-26, TC-27, TC-28                                        |
 | **FR-13/14 — Gọi video, WebRTC**       | TC-48, TC-49, TC-53, TC-54, TC-56                          |
 | **FR-16 — Quay video**                 | TC-29, TC-30, TC-31, TC-32, TC-33                          |

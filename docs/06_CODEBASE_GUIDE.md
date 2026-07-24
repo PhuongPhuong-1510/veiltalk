@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T13 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T14 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -159,13 +159,19 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/messaging/Message.java` | Entity bảng `messages` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageStatus.java` | Enum `SENT`, `DELIVERED`, `READ` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageStatusConverter.java` | Chuyển enum message sang giá trị PostgreSQL chữ thường |
-| `backend/src/main/java/com/veiltalk/messaging/ConversationController.java` | REST controller tạo hoặc lấy conversation 1-1 |
-| `backend/src/main/java/com/veiltalk/messaging/ConversationService.java` | Chuẩn hóa cặp user và tạo conversation idempotent |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationController.java` | REST controller tạo, liệt kê và lấy chi tiết conversation 1-1 |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationService.java` | Tạo idempotent, cursor pagination, dựng metadata user còn lại và last message |
 | `backend/src/main/java/com/veiltalk/messaging/CreateConversationRequest.java` | DTO request `POST /conversations` |
 | `backend/src/main/java/com/veiltalk/messaging/ConversationResponse.java` | DTO conversation cùng metadata công khai của user còn lại |
-| `backend/src/main/java/com/veiltalk/messaging/ConversationRepository.java` | Repository cuộc trò chuyện; insert `ON CONFLICT DO NOTHING` và lookup cặp active |
-| `backend/src/main/java/com/veiltalk/messaging/MessageRepository.java` | Repository tin nhắn; trả lịch sử dạng `Slice` theo thời gian tăng dần và loại soft delete |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationListResponse.java` | DTO danh sách conversation với next_cursor và has_more |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationSummaryResponse.java` | DTO một item trong danh sách conversation |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationDetailResponse.java` | DTO chi tiết conversation |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationLastMessageResponse.java` | DTO metadata tin nhắn mới nhất |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationCursorCodec.java` | Mã hóa/giải mã cursor Base64URL từ updated_at và conversation id |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationRepository.java` | Insert idempotent và truy vấn keyset pagination theo cặp `(updated_at, id)` |
+| `backend/src/main/java/com/veiltalk/messaging/MessageRepository.java` | Lịch sử dạng `Slice` và batch query last message không bị soft delete |
 | `backend/src/test/java/com/veiltalk/messaging/ConversationCreateIntegrationTests.java` | Integration test TC-21–TC-22, validation, authentication và soft-delete |
+| `backend/src/test/java/com/veiltalk/messaging/ConversationQueryIntegrationTests.java` | Integration test TC-59–TC-60, cursor, membership và soft-delete |
 
 ### Module video
 
@@ -284,6 +290,14 @@ cùng conversation id. Response chỉ chứa metadata công khai của user còn
 từ chối self-conversation, UUID sai định dạng, user không tồn tại/đã soft delete và phiên
 đăng nhập không còn hợp lệ. TC-21–TC-22, các ca validation/authentication/soft-delete và
 toàn bộ 87 test Backend đều PASS.
+
+P2-T14 triển khai protected `GET /conversations` và `GET /conversations/{id}`. Danh sách
+sắp xếp ổn định theo `(updated_at DESC, id DESC)`, phân trang bằng cursor Base64URL và
+trả `last_message` mới nhất chưa soft delete theo batch query. `limit` mặc định 20, hợp
+lệ từ 1 đến 50. Endpoint chi tiết kiểm tra membership, trả `403 FORBIDDEN` cho người
+ngoài và `404 NOT_FOUND` cho conversation không tồn tại/đã soft delete. Do TC-26 đã
+thuộc P2-T16, TC-59–TC-60 được nối sau ID lớn nhất để kiểm thử đúng P2-T14. Các ca
+cursor/limit/session/soft-delete và toàn bộ 92 test Backend đều PASS.
 
 ## Signaling Server
 
