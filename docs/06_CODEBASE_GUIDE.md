@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đã khởi tạo cấu trúc repository, chưa có code ứng dụng.**
+> **Trạng thái: đã hoàn thành P1-T01 — Backend kết nối PostgreSQL và Flyway quản lý schema từ V1.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -10,10 +10,10 @@
 
 | Thư mục | Nội dung | Trạng thái |
 |---|---|---|
-| `backend/` | Spring Boot 3.5.16 API (Java 21, Maven) | project skeleton hoàn tất; `clean package -DskipTests` thành công |
+| `backend/` | Spring Boot 3.5.16 API (Java 21, Maven) | datasource và Flyway V1 đã cấu hình; smoke test thành công |
 | `signaling/` | Node.js WebSocket relay | project skeleton hoàn tất |
 | `frontend/` | Vite + React + TypeScript | project skeleton hoàn tất |
-| `infra/` | init SQL, cấu hình hạ tầng | đã tạo thư mục, chưa có cấu hình |
+| `infra/` | cấu hình hạ tầng | đã tạo thư mục, không chứa Docker init script |
 | `docs/` | Tài liệu thiết kế, roadmap, checklist và runbook | đã có |
 
 `infra/` hiện còn `.gitkeep` để Git theo dõi thư mục rỗng; các thư mục ứng dụng đã có
@@ -25,7 +25,7 @@ project skeleton tương ứng.
 |---|---|
 | `.env.example` | Template biến môi trường, không chứa secret thật |
 | `.env` | Cấu hình môi trường cục bộ đã tạo; chứa secret, bị Git ignore và không được commit |
-| `docker-compose.yml` | 7 service: backend, signaling, frontend, postgres, redis, minio, nginx; dùng mạng `internal-net` và volume persistent cho PostgreSQL/MinIO |
+| `docker-compose.yml` | 7 service; PostgreSQL publish cổng 5432 cho Backend chạy local, còn Backend trong Compose dùng hostname `postgres` |
 | `Makefile` | Shortcut `up`, `down`, `logs`, `migrate` |
 | `.gitignore` | Quy tắc bỏ qua file môi trường, output build và file cục bộ |
 | `.gitattributes` | Quy tắc thuộc tính file của repository |
@@ -42,23 +42,24 @@ P0-T07 đã xác minh ba service nền tảng:
 | Redis 7 | Container Up, `redis-cli ping` trả `PONG` |
 | MinIO | Container Up, health API và Console HTTP trả 200 |
 
-Phase 0 không tạo bảng hoặc schema. Schema PostgreSQL bắt đầu từ P1-T01.
+P1-T01 đã tạo schema bằng Flyway V1 khi Backend khởi động. PostgreSQL có 6 bảng ứng
+dụng và bảng lịch sử `flyway_schema_history`; không dùng Docker init script.
 
 ## Backend
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `backend/pom.xml` | Maven project `com.veiltalk:backend`, Java 21, Spring Boot 3.5.16 và các starter nền tảng |
+| `backend/pom.xml` | Maven project `com.veiltalk:backend`, Java 21, Spring Boot 3.5.16; có Flyway Core và Flyway PostgreSQL |
 | `backend/mvnw`, `backend/mvnw.cmd` | Maven Wrapper scripts |
 | `backend/.mvn/wrapper/maven-wrapper.properties` | Maven Wrapper 3.3.4, Maven 3.9.16 |
 | `backend/src/main/java/com/veiltalk/BackendApplication.java` | Điểm khởi động Spring Boot |
-| `backend/src/main/resources/application.yml` | Cấu hình tên ứng dụng; chưa có datasource/Redis |
+| `backend/src/main/resources/application.yml` | Cấu hình datasource PostgreSQL bằng biến môi trường và Flyway tại `classpath:db/migration`; không baseline database mới |
+| `backend/src/main/resources/db/migration/V1__initial_schema.sql` | Migration khởi tạo đúng theo DDD mục 6: 6 bảng, index, constraint và trigger |
 | `backend/src/test/java/com/veiltalk/BackendApplicationTests.java` | Smoke test khởi tạo Spring context |
 
-P0-T03 đã được xác minh bằng `mvnw.cmd clean package -DskipTests`. Smoke test
-`BackendApplicationTests` chưa chạy thành công vì Data JPA chưa có URL datasource ở
-giai đoạn này (`Failed to determine a suitable driver class`). Không có cấu hình tạm,
-H2 hoặc Testcontainers; cấu hình database sẽ được bổ sung ở task đúng phạm vi.
+P1-T01 đã được xác minh bằng `mvn test`: Spring context khởi động, Flyway áp dụng đúng
+V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration tạo đúng
+6 bảng ứng dụng và một bản ghi V1 thành công trong `flyway_schema_history`.
 
 ### Module xác thực
 ### Module nhân vật ảo

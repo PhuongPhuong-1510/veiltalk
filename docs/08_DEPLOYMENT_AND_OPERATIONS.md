@@ -46,7 +46,7 @@ Repository VeilTalk tổ chức theo monorepo với các thư mục sau:
 | **docker-compose.yml**      | Định nghĩa 7 service: backend, signaling, postgres, redis, minio, frontend, nginx |
 | **docker-compose.dev.yml**  | Override cho môi trường development (volume mount source code)                    |
 | **.env.example**            | Template biến môi trường — copy thành .env và điền giá trị                        |
-| **infra/postgres/init.sql** | Script schema được tạo và chạy ở P1-T01, không mount khi verify hạ tầng P0-T07     |
+| **backend/src/main/resources/db/migration/** | Flyway migrations; V1 tạo toàn bộ schema ứng dụng khi Backend khởi động lần đầu |
 | **infra/minio/**            | MinIO bucket setup script                                                         |
 | **Makefile**                | Shortcut: make up, make down, make logs, make migrate                             |
 
@@ -58,7 +58,7 @@ Copy file .env.example thành .env và điền giá trị trước khi chạy. K
 
 \# Database
 
-DB_HOST=postgres
+DB_HOST=localhost
 
 DB_PORT=5432
 
@@ -144,9 +144,10 @@ File docker-compose.yml định nghĩa 7 service nhất quán với SAD mục 10
 
 - minio_data:/data — file video persistent
 
-Schema không được tự động mount khi khởi động PostgreSQL ở Phase 0. File
-`infra/postgres/init.sql` được tạo và chạy chủ động bằng `psql` trong P1-T01 để
-thứ tự task nhất quán và tránh chạy schema trước giai đoạn Database Schema.
+Schema không được mount hoặc tạo bằng Docker init script. Flyway thuộc Backend sở hữu
+schema từ migration V1. Khi phát triển, Backend chạy local và kết nối PostgreSQL
+container qua `localhost:5432`; khi chạy full Docker Compose, service Backend dùng
+hostname nội bộ `postgres`.
 
 ## 5. Hướng dẫn Triển khai từng Bước
 
@@ -173,6 +174,10 @@ thứ tự task nhất quán và tránh chạy schema trước giai đoạn Data
 ## 9. Tạo bucket và cấu hình webhook MinIO (xem mục 5.3)
 
 ## 10. Khởi động toàn bộ: docker compose up -d
+
+Khi Backend khởi động, Flyway tự kiểm tra và áp dụng các migration còn thiếu. Database
+mới được tạo từ `V1__initial_schema.sql`; không chạy schema thủ công bằng `psql` và
+không dùng Flyway baseline cho database mới.
 
 ## 11. Kiểm tra health (xem mục 6): make health hoặc curl localhost:8080/actuator/health
 
