@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đã hoàn thành P1-T01 — Backend kết nối PostgreSQL và Flyway quản lý schema từ V1.**
+> **Trạng thái: đã hoàn thành P1-T03 — Flyway quản lý và tái tạo ổn định schema từ V1.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -50,6 +50,11 @@ P1-T02 đã đối chiếu schema thực tế với DDD mục 3, 5 và 6: đủ 
 `update_updated_at()` và 5 trigger. Các kiểm tra riêng cho
 `users.is_discoverable DEFAULT FALSE`, trạng thái video `recording` và unique partial
 index `idx_users_email` đều đạt.
+
+P1-T03 đã xác minh Flyway có tính lặp lại: chạy lại Backend trên database phát triển
+không thực thi lại V1 và không thay đổi object. Migration V1 cũng tái tạo thành công
+toàn bộ schema trên database kiểm thử sạch `veiltalk_p1_t03_test`; metadata khớp
+P1-T02 và database kiểm thử đã được xóa sau khi kiểm tra.
 
 ## Backend
 
