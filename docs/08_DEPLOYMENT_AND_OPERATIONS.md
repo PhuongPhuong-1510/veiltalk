@@ -56,6 +56,17 @@ Copy file .env.example thành .env và điền giá trị trước khi chạy. K
 
 ### 3.1. Backend (Spring Boot)
 
+Các giá trị host phụ thuộc nơi Backend chạy:
+
+| **Cách chạy Backend** | **DB_HOST** | **REDIS_HOST** |
+|-----------------------|-------------|----------------|
+| Maven/IDE trực tiếp trên máy host | `localhost` | `localhost` |
+| Service `backend` trong Docker Compose | `postgres` | `redis` |
+
+File `.env` có thể chứa hostname dành cho Compose. Khi chạy Maven/IDE local, chỉ override
+hai biến host trong process hiện tại; không đổi secret và không commit `.env`. Lệnh
+PowerShell đầy đủ để nạp `.env` và chạy test nằm trong Test Plan mục 1.4.1.
+
 \# Database
 
 DB_HOST=localhost

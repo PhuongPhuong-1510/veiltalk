@@ -49,6 +49,64 @@ Xác minh hệ thống VeilTalk đáp ứng toàn bộ yêu cầu chức năng (
 | **Khoảng cách camera**        | 50–80cm từ người dùng đến camera — theo SRS mục 4.1                     |
 | **Database**                  | PostgreSQL 16 (fresh schema từ V1\_\_initial_schema.sql trong DDD)      |
 
+#### 1.4.1. Chạy Backend test local trên Windows
+
+Khi Maven chạy trực tiếp trên Windows còn PostgreSQL và Redis chạy bằng Docker Compose,
+phải dùng `localhost` thay cho hostname nội bộ Compose `postgres` và `redis`. Spring Boot
+không tự đọc file `.env`; cần nạp các biến từ file này vào process PowerShell trước khi
+chạy test. Không sửa hoặc commit `.env` chỉ để đổi hostname.
+
+```powershell
+Set-Location backend
+
+Get-Content ..\.env | ForEach-Object {
+    $envLine = $_.Trim()
+    if ($envLine -and -not $envLine.StartsWith("#")) {
+        $envPair = $envLine -split "=", 2
+        if ($envPair.Count -eq 2) {
+            [Environment]::SetEnvironmentVariable(
+                $envPair[0].Trim(),
+                $envPair[1].Trim().Trim('"'),
+                "Process"
+            )
+        }
+    }
+}
+
+$env:DB_HOST = "localhost"
+$env:REDIS_HOST = "localhost"
+.\mvnw.cmd test
+```
+
+Nếu chạy bằng IDE, có thể dùng chức năng nạp env file của IDE rồi override hai biến
+`DB_HOST` và `REDIS_HOST` thành `localhost`.
+
+Known issue trên môi trường Windows hiện tại: `mvnw.cmd` đôi khi dừng với thông báo
+`Cannot index into a null array` / `Cannot start maven from wrapper`. Đây là lỗi khởi động
+Maven Wrapper, không phải kết quả test. Khi gặp lỗi này, dùng Maven 3.9.16 mà wrapper đã
+tải trong `%USERPROFILE%\.m2\wrapper\dists\`:
+
+```powershell
+$maven = Get-ChildItem `
+    "$env:USERPROFILE\.m2\wrapper\dists\apache-maven-3.9.16" `
+    -Recurse -Filter mvn.cmd |
+    Select-Object -First 1
+
+if (-not $maven) {
+    throw "Không tìm thấy Maven 3.9.16 trong wrapper cache"
+}
+
+& $maven.FullName test
+```
+
+Phân biệt lỗi môi trường thường gặp:
+
+- `password authentication failed`: process chưa nhận đúng `DB_PASSWORD`/`DB_USER`
+  từ `.env`.
+- `UnknownHostException: postgres` hoặc `redis`: Maven đang chạy local nhưng vẫn dùng
+  hostname nội bộ Docker; override host thành `localhost`.
+- Chỉ ghi nhận test PASS khi Maven kết thúc bằng `BUILD SUCCESS`.
+
 ### 1.5. Tiêu chí Chấp nhận
 
 - Tất cả TC đánh dấu Priority = Cao phải PASS trước khi nộp sản phẩm.

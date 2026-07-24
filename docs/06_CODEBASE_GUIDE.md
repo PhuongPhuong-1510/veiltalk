@@ -215,3 +215,12 @@ P0-T05 đã được xác minh bằng `npm run build` và `npm run lint`.
   Schema ứng dụng chỉ được tạo và quản lý bằng Flyway từ
   `backend/src/main/resources/db/migration/`; không có hoặc chạy
   `infra/postgres/init.sql`.
+- Hostname `postgres` và `redis` chỉ phân giải được bên trong Docker Compose. Khi chạy
+  Backend test bằng Maven/IDE trên Windows, nạp secret từ `.env` nhưng override
+  `DB_HOST=localhost` và `REDIS_HOST=localhost`; xem
+  `docs/07_DEVELOPMENT_AND_TESTING.md` mục 1.4.1.
+- Trên môi trường Windows hiện tại, `backend/mvnw.cmd` có thể báo
+  `Cannot index into a null array` / `Cannot start maven from wrapper`. Đây là known issue
+  của script khởi động wrapper, không phải test failure. Có thể chạy Maven 3.9.16 đã tải
+  trong `%USERPROFILE%\.m2\wrapper\dists\`; chỉ kết luận test PASS khi có
+  `BUILD SUCCESS`.
