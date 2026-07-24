@@ -3,6 +3,7 @@ package com.veiltalk.avatar;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,12 @@ public class AvatarModelCatalogService {
 
 	public List<AvatarModel> getModels() {
 		return models;
+	}
+
+	public Optional<AvatarModel> findById(String modelId) {
+		return models.stream()
+				.filter(model -> model.id().equals(modelId))
+				.findFirst();
 	}
 
 	private List<AvatarModel> validate(Catalog catalog) {

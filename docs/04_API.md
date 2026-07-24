@@ -375,7 +375,7 @@ Request Body
 | **Field**          | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                                                         |
 |--------------------|----------|--------------|-------------------------------------------------------------------------------------------------------------------|
 | **model_id**       | string   | Có           | ID của model dựng sẵn (lấy từ GET /avatars/models) — server validate và tra model_url tương ứng từ catalog nội bộ |
-| **customizations** | object   | Không        | Các tùy chỉnh dạng JSON (màu tóc, trang phục...) — phải nằm trong danh sách supported_customizations của model đó |
+| **customizations** | object   | Không        | Các tùy chỉnh dạng JSON (màu tóc, trang phục...); key phải nằm trong supported_customizations và giá trị outfit phải thuộc outfit_options của model đó |
 
 HTTP Status Codes
 
@@ -383,7 +383,7 @@ HTTP Status Codes
 |-----------------|--------------|---------------------------------------------------------------------------------------------|
 | **200**         | OK           | Nhân vật ảo đã được cập nhật                                                                |
 | **201**         | Created      | Nhân vật ảo đã được tạo mới (lần đầu thiết lập)                                             |
-| **400**         | Bad Request  | model_id không thuộc danh sách model hợp lệ, hoặc customizations chứa key không được hỗ trợ |
+| **400**         | Bad Request  | model_id không hợp lệ; customizations có key không được hỗ trợ hoặc outfit không thuộc outfit_options; client gửi model_url |
 | **401**         | Unauthorized | Token không hợp lệ                                                                          |
 
 ### 5.4. GET /avatars/{userId}

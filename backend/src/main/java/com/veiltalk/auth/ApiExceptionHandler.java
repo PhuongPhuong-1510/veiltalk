@@ -36,6 +36,11 @@ public class ApiExceptionHandler {
 		return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", exception.getMessage(), Map.of());
 	}
 
+	@ExceptionHandler(ValidationException.class)
+	ResponseEntity<Map<String, Object>> handleValidation(ValidationException exception) {
+		return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", exception.getMessage(), Map.of());
+	}
+
 	private ResponseEntity<Map<String, Object>> error(
 			HttpStatus status,
 			String code,

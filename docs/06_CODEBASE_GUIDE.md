@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T10 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T11 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -98,6 +98,7 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/auth/RefreshResponse.java` | DTO access token mới theo API mục 3.3 |
 | `backend/src/main/java/com/veiltalk/auth/ApiExceptionHandler.java` | Chuẩn hóa lỗi validation và conflict theo định dạng API |
 | `backend/src/main/java/com/veiltalk/auth/ConflictException.java` | Lỗi nghiệp vụ HTTP 409 |
+| `backend/src/main/java/com/veiltalk/auth/ValidationException.java` | Lỗi validation nghiệp vụ HTTP 400 theo response chuẩn |
 | `backend/src/main/java/com/veiltalk/auth/UnauthorizedException.java` | Lỗi nghiệp vụ HTTP 401 với thông báo đăng nhập chung |
 | `backend/src/main/java/com/veiltalk/auth/UserTokenRevocationService.java` | Lưu/kiểm tra mốc Redis `jwt:user-revoked-after:{userId}` theo thời hạn access token |
 | `backend/src/test/java/com/veiltalk/auth/JwtServiceTests.java` | Unit test thời hạn, claims, chữ ký, loại token và cấu hình JWT |
@@ -139,9 +140,12 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/avatar/AvatarProfileRepository.java` | Repository hồ sơ nhân vật ảo |
 | `backend/src/main/java/com/veiltalk/avatar/AvatarModel.java` | DTO bất biến cho một model catalog, ánh xạ các field JSON snake_case |
 | `backend/src/main/java/com/veiltalk/avatar/AvatarModelCatalogService.java` | Đọc và kiểm tra catalog model nội bộ từ classpath khi khởi động |
-| `backend/src/main/java/com/veiltalk/avatar/AvatarController.java` | REST controller public cho `GET /avatars/models` |
+| `backend/src/main/java/com/veiltalk/avatar/AvatarController.java` | REST controller cho public `GET /avatars/models` và protected `PUT /avatars/me` |
+| `backend/src/main/java/com/veiltalk/avatar/AvatarUpsertRequest.java` | DTO request upsert; bắt buộc model_id và từ chối model_url do client gửi |
+| `backend/src/main/java/com/veiltalk/avatar/AvatarService.java` | Validate model/customizations rồi tạo hoặc cập nhật avatar profile theo user_id |
 | `backend/src/main/resources/avatar-models.json` | Catalog nội bộ gồm 6 model; không lưu database |
 | `backend/src/test/java/com/veiltalk/avatar/AvatarModelCatalogIntegrationTests.java` | Integration test TC-10 cho endpoint public và contract catalog |
+| `backend/src/test/java/com/veiltalk/avatar/AvatarUpsertIntegrationTests.java` | Integration test TC-11–TC-13, validation customization/outfit và chống client tự gán model_url |
 
 ### Module nhắn tin
 
@@ -251,6 +255,12 @@ P2-T10 triển khai public `GET /avatars/models`. Catalog gồm 6 model nằm tr
 database. Mỗi item trả `id`, `name`, `model_url`, `thumbnail_url`,
 `supported_customizations`, `outfit_options`; không trả `model_id`. TC-10, hồi quy
 SecurityConfig và toàn bộ 71 test Backend đều PASS.
+
+P2-T11 triển khai protected `PUT /avatars/me` theo cơ chế upsert trên unique
+`avatar_profiles.user_id`: lần đầu trả `201`, cập nhật trả `200`. Server chỉ nhận
+`model_id`, tự tra `model_url` từ catalog và từ chối URL do client gửi. Customization key
+phải được model hỗ trợ; outfit phải thuộc `outfit_options`. TC-11–TC-13, các ca validation
+liên quan và toàn bộ 76 test Backend đều PASS.
 
 ## Signaling Server
 
