@@ -11,7 +11,7 @@
 | Thư mục | Nội dung | Trạng thái |
 |---|---|---|
 | `backend/` | Spring Boot 3.5.16 API (Java 21, Maven) | project skeleton hoàn tất; `clean package -DskipTests` thành công |
-| `signaling/` | Node.js WebSocket relay | đã tạo thư mục, chưa có code |
+| `signaling/` | Node.js WebSocket relay | project skeleton hoàn tất |
 | `frontend/` | React + Three.js | đã tạo thư mục, chưa có code |
 | `infra/` | init SQL, cấu hình hạ tầng | đã tạo thư mục, chưa có cấu hình |
 | `docs/` | Tài liệu thiết kế, roadmap, checklist và runbook | đã có |
@@ -53,7 +53,15 @@ H2 hoặc Testcontainers; cấu hình database sẽ được bổ sung ở task 
 
 ## Signaling Server
 
-*(điền sau Phase 3)*
+| Đường dẫn | Nội dung |
+|---|---|
+| `signaling/package.json` | Node.js project và scripts `start`, `check` |
+| `signaling/package-lock.json` | Khóa phiên bản dependency |
+| `signaling/src/index.js` | Entry-point skeleton; chưa triển khai WebSocket/JWT relay |
+| `signaling/Dockerfile` | Image Node.js 24 Alpine, cài production dependencies và chạy entry-point |
+
+Dependencies nền tảng: `ws` 8.21.1, `jsonwebtoken` 9.0.3 và `dotenv` 17.4.2.
+P0-T04 đã được xác minh bằng `npm run check` và `npm start`.
 
 ## Frontend
 
