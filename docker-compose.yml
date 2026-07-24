@@ -14,6 +14,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"
     networks:
       - internal-net
 
@@ -41,7 +43,7 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      REDIS_HOST: ${REDIS_HOST}
+      REDIS_HOST: redis
       REDIS_PORT: ${REDIS_PORT}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY}

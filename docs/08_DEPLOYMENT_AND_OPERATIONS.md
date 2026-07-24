@@ -70,7 +70,7 @@ DB_PASSWORD=\<strong-password\>
 
 \# Redis
 
-REDIS_HOST=redis
+REDIS_HOST=localhost
 
 REDIS_PORT=6379
 
@@ -131,7 +131,7 @@ File docker-compose.yml định nghĩa 7 service nhất quán với SAD mục 10
 | **Service**   | **Image — Port — Phụ thuộc**                                                    |
 |---------------|---------------------------------------------------------------------------------|
 | **postgres**  | postgres:16-alpine — 5432 (internal) — không phụ thuộc                          |
-| **redis**     | redis:7-alpine — 6379 (internal) — không phụ thuộc                              |
+| **redis**     | redis:7-alpine — 6379 (publish cho Backend local) — không phụ thuộc              |
 | **minio**     | minio/minio:latest — 9000 (API), 9001 (Console) — không phụ thuộc               |
 | **backend**   | veiltalk/backend:latest — 8080 — postgres, redis, minio                         |
 | **signaling** | veiltalk/signaling:latest — 3000 — không phụ thuộc runtime (chỉ cần JWT secret) |
@@ -148,6 +148,9 @@ Schema không được mount hoặc tạo bằng Docker init script. Flyway thu�
 schema từ migration V1. Khi phát triển, Backend chạy local và kết nối PostgreSQL
 container qua `localhost:5432`; khi chạy full Docker Compose, service Backend dùng
 hostname nội bộ `postgres`.
+
+Redis cũng chạy trong Docker và publish `localhost:6379` cho Backend local. Khi chạy
+full Docker Compose, service Backend dùng hostname nội bộ `redis`.
 
 ## 5. Hướng dẫn Triển khai từng Bước
 

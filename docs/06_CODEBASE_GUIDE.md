@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đã hoàn thành P1-T05 — schema V1 đã có đầy đủ JPA entity và repository.**
+> **Trạng thái: đã hoàn thành Phase 1 — PostgreSQL/Flyway/JPA/Redis đã được xác minh.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -25,7 +25,7 @@ project skeleton tương ứng.
 |---|---|
 | `.env.example` | Template biến môi trường, không chứa secret thật |
 | `.env` | Cấu hình môi trường cục bộ đã tạo; chứa secret, bị Git ignore và không được commit |
-| `docker-compose.yml` | 7 service; PostgreSQL publish cổng 5432 cho Backend chạy local, còn Backend trong Compose dùng hostname `postgres` |
+| `docker-compose.yml` | 7 service; PostgreSQL/Redis publish cổng 5432/6379 cho Backend local, còn Backend trong Compose dùng hostname nội bộ |
 | `Makefile` | Shortcut `up`, `down`, `logs`, `migrate` |
 | `.gitignore` | Quy tắc bỏ qua file môi trường, output build và file cục bộ |
 | `.gitattributes` | Quy tắc thuộc tính file của repository |
@@ -118,6 +118,11 @@ P1-T05 bổ sung 6 `JpaRepository` theo package tính năng. Integration test x�
 query user tôn trọng `is_discoverable`/`deleted_at`, query message loại soft delete,
 sắp xếp `client_timestamp ASC` và phân trang bằng `Slice`. Toàn bộ 11 test PASS và dữ
 liệu test được rollback.
+
+P1-T06 cấu hình Spring Data Redis qua `REDIS_HOST`/`REDIS_PORT`. Redis container
+publish `localhost:6379` cho Backend chạy local; Backend trong full Compose dùng
+hostname nội bộ `redis`. Integration test xác minh `StringRedisTemplate` ghi/đọc key
+`jwt:blacklist:{jti}` với TTL và luôn xóa key sau kiểm tra. Toàn bộ 12 test PASS.
 
 ## Signaling Server
 
