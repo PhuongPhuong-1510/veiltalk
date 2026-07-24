@@ -46,7 +46,7 @@ Repository VeilTalk tổ chức theo monorepo với các thư mục sau:
 | **docker-compose.yml**      | Định nghĩa 7 service: backend, signaling, postgres, redis, minio, frontend, nginx |
 | **docker-compose.dev.yml**  | Override cho môi trường development (volume mount source code)                    |
 | **.env.example**            | Template biến môi trường — copy thành .env và điền giá trị                        |
-| **infra/postgres/init.sql** | Script khởi tạo schema (V1\_\_initial_schema.sql từ DDD)                          |
+| **infra/postgres/init.sql** | Script schema được tạo và chạy ở P1-T01, không mount khi verify hạ tầng P0-T07     |
 | **infra/minio/**            | MinIO bucket setup script                                                         |
 | **Makefile**                | Shortcut: make up, make down, make logs, make migrate                             |
 
@@ -144,7 +144,9 @@ File docker-compose.yml định nghĩa 7 service nhất quán với SAD mục 10
 
 - minio_data:/data — file video persistent
 
-- ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql — schema khởi tạo
+Schema không được tự động mount khi khởi động PostgreSQL ở Phase 0. File
+`infra/postgres/init.sql` được tạo và chạy chủ động bằng `psql` trong P1-T01 để
+thứ tự task nhất quán và tránh chạy schema trước giai đoạn Database Schema.
 
 ## 5. Hướng dẫn Triển khai từng Bước
 

@@ -16,7 +16,8 @@
 | `infra/` | init SQL, cấu hình hạ tầng | đã tạo thư mục, chưa có cấu hình |
 | `docs/` | Tài liệu thiết kế, roadmap, checklist và runbook | đã có |
 
-Các thư mục ứng dụng và hạ tầng hiện chứa `.gitkeep` để Git theo dõi cấu trúc rỗng.
+`infra/` hiện còn `.gitkeep` để Git theo dõi thư mục rỗng; các thư mục ứng dụng đã có
+project skeleton tương ứng.
 
 ## File cấu hình ở thư mục gốc
 
@@ -30,6 +31,18 @@ Các thư mục ứng dụng và hạ tầng hiện chứa `.gitkeep` để Git 
 | `.gitattributes` | Quy tắc thuộc tính file của repository |
 | `AGENTS.md` | Quy tắc làm việc bắt buộc trong repository |
 | `CLAUDE.md` | Chỉ dẫn cho công cụ tương thích |
+
+## Hạ tầng cục bộ
+
+P0-T07 đã xác minh ba service nền tảng:
+
+| Service | Kết quả |
+|---|---|
+| PostgreSQL 16 | Container Up, `pg_isready` và truy vấn `psql` thành công |
+| Redis 7 | Container Up, `redis-cli ping` trả `PONG` |
+| MinIO | Container Up, health API và Console HTTP trả 200 |
+
+Phase 0 không tạo bảng hoặc schema. Schema PostgreSQL bắt đầu từ P1-T01.
 
 ## Backend
 
@@ -92,6 +105,5 @@ P0-T05 đã được xác minh bằng `npm run build` và `npm run lint`.
 
 ## Chỗ dễ nhầm
 
-- `docker-compose.yml` mount `infra/postgres/init.sql`, nhưng file này chưa tồn tại vì
-  thuộc P1-T01. Đây là blocker tiềm năng khi khởi động PostgreSQL ở P0-T07; cần quyết
-  định cách xử lý trước khi chạy task đó, không tạo SQL sớm trong P0-T06.
+- `docker-compose.yml` chỉ mount volume dữ liệu PostgreSQL, không tự động mount schema.
+  File `infra/postgres/init.sql` được tạo và chạy chủ động bằng `psql` ở P1-T01.
