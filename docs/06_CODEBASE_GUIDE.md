@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: chưa có code.**
+> **Trạng thái: đã khởi tạo cấu trúc repository, chưa có code ứng dụng.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -10,10 +10,25 @@
 
 | Thư mục | Nội dung | Trạng thái |
 |---|---|---|
-| `backend/` | Spring Boot API | chưa có |
-| `signaling/` | Node.js WebSocket relay | chưa có |
-| `frontend/` | React + Three.js | chưa có |
-| `infra/` | init SQL, cấu hình hạ tầng | chưa có |
+| `backend/` | Spring Boot API | đã tạo thư mục, chưa có code |
+| `signaling/` | Node.js WebSocket relay | đã tạo thư mục, chưa có code |
+| `frontend/` | React + Three.js | đã tạo thư mục, chưa có code |
+| `infra/` | init SQL, cấu hình hạ tầng | đã tạo thư mục, chưa có cấu hình |
+| `docs/` | Tài liệu thiết kế, roadmap, checklist và runbook | đã có |
+
+Các thư mục ứng dụng và hạ tầng hiện chứa `.gitkeep` để Git theo dõi cấu trúc rỗng.
+
+## File cấu hình ở thư mục gốc
+
+| File | Nội dung hiện tại |
+|---|---|
+| `.env.example` | Template biến môi trường, không chứa secret thật |
+| `docker-compose.yml` | Skeleton Compose hợp lệ, chưa khai báo service |
+| `Makefile` | Shortcut `up`, `down`, `logs`, `migrate` |
+| `.gitignore` | Quy tắc bỏ qua file môi trường, output build và file cục bộ |
+| `.gitattributes` | Quy tắc thuộc tính file của repository |
+| `AGENTS.md` | Quy tắc làm việc bắt buộc trong repository |
+| `CLAUDE.md` | Chỉ dẫn cho công cụ tương thích |
 
 ## Backend
 
