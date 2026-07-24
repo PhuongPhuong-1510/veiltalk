@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T08 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T09 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -121,6 +121,12 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/user/UserSettingsRequest.java` | DTO partial update settings; validation theme, gồm xử lý rõ `theme: null` |
 | `backend/src/main/java/com/veiltalk/user/UserSettingsResponse.java` | DTO response cho API settings mục 4.3–4.4 |
 | `backend/src/test/java/com/veiltalk/user/UserSettingsIntegrationTests.java` | Integration test TC-20, defaults, partial update, theme validation và soft delete |
+| `backend/src/main/java/com/veiltalk/user/UserProfileController.java` | REST controller cho profile, settings và `POST /users/search` với response 200/429 và Retry-After |
+| `backend/src/main/java/com/veiltalk/user/UserSearchService.java` | Tìm email chính xác chỉ trong nhóm discoverable, trả response trung lập khi không tìm thấy |
+| `backend/src/main/java/com/veiltalk/user/UserSearchRequest.java` | DTO email search với validation email |
+| `backend/src/main/java/com/veiltalk/user/UserSearchResponse.java` | DTO `found` và user summary không chứa email |
+| `backend/src/main/java/com/veiltalk/user/UserSearchRateLimiter.java` | Redis fixed-window limiter 10 request/phút/user |
+| `backend/src/test/java/com/veiltalk/user/UserSearchIntegrationTests.java` | Integration test TC-16–TC-19 và invalid email |
 | `backend/src/main/java/com/veiltalk/user/DeleteAccountRequest.java` | DTO xác nhận mật khẩu cho `DELETE /users/me` |
 | `backend/src/main/java/com/veiltalk/user/UserAccountService.java` | Soft delete user, revoke refresh tokens và tạo global access-token revocation marker |
 | `backend/src/test/java/com/veiltalk/user/UserAccountDeletionIntegrationTests.java` | Integration test password confirmation, soft delete, refresh revoke và global JWT revocation |
@@ -226,6 +232,13 @@ P2-T08 triển khai phần core của `DELETE /users/me`: xác nhận mật kh�
 `JwtAuthenticationFilter` từ chối access token có `iat` không mới hơn mốc revoke, vô hiệu
 hóa tất cả phiên access token hiện có. MinIO `AbortMultipartUpload` và TC-37 được chuyển
 sang P2-T24; P2-T08 không tạo upload session hoặc cleanup retry. Toàn bộ 65 test Backend
+PASS.
+
+P2-T09 triển khai `POST /users/search`. Query dùng repository method
+`findByEmailAndIsDiscoverableTrueAndDeletedAtIsNull`, nên user chưa opt-in, đã soft delete
+hoặc không tồn tại đều trả cùng `{\"found\":false}`. User tìm thấy chỉ trả `id` và
+`display_name`, không lộ email. Redis fixed-window limiter giới hạn 10 request/phút/user;
+request vượt ngưỡng trả `429` kèm `Retry-After`. TC-16–TC-19 cùng toàn bộ 70 test Backend
 PASS.
 
 ## Signaling Server
