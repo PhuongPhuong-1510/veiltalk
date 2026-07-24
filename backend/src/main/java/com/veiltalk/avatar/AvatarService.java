@@ -11,11 +11,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.veiltalk.auth.UnauthorizedException;
 import com.veiltalk.auth.UserRepository;
 import com.veiltalk.auth.ValidationException;
+import com.veiltalk.auth.NotFoundException;
 
 @Service
 public class AvatarService {
 
 	private static final String INVALID_SESSION_MESSAGE = "Invalid session";
+	private static final String AVATAR_NOT_FOUND_MESSAGE = "Avatar not found";
 
 	private final AvatarProfileRepository avatarProfileRepository;
 	private final AvatarModelCatalogService catalogService;
@@ -50,6 +52,35 @@ public class AvatarService {
 		return new UpsertResult(existingProfile.isEmpty());
 	}
 
+	@Transactional(readOnly = true)
+	public AvatarProfileResponse getOwnAvatar(UUID authenticatedUserId) {
+		requireActiveUser(authenticatedUserId);
+		AvatarProfile profile = avatarProfileRepository.findByUserId(authenticatedUserId)
+				.orElseThrow(this::avatarNotFound);
+		return new AvatarProfileResponse(
+				profile.getId(),
+				profile.getUserId(),
+				profile.getModelId(),
+				profile.getModelUrl(),
+				profile.getCustomizations(),
+				profile.getCreatedAt(),
+				profile.getUpdatedAt());
+	}
+
+	@Transactional(readOnly = true)
+	public AvatarPublicResponse getUserAvatar(UUID userId) {
+		if (userRepository.findByIdAndDeletedAtIsNull(userId).isEmpty()) {
+			throw avatarNotFound();
+		}
+		AvatarProfile profile = avatarProfileRepository.findByUserId(userId)
+				.orElseThrow(this::avatarNotFound);
+		return new AvatarPublicResponse(
+				profile.getUserId(),
+				profile.getModelId(),
+				profile.getModelUrl(),
+				profile.getCustomizations());
+	}
+
 	private void validateCustomizations(AvatarModel model, Map<String, Object> customizations) {
 		Set<String> supportedKeys = Set.copyOf(model.supportedCustomizations());
 		for (String key : customizations.keySet()) {
@@ -68,6 +99,10 @@ public class AvatarService {
 		if (userRepository.findByIdAndDeletedAtIsNull(authenticatedUserId).isEmpty()) {
 			throw new UnauthorizedException(INVALID_SESSION_MESSAGE);
 		}
+	}
+
+	private NotFoundException avatarNotFound() {
+		return new NotFoundException(AVATAR_NOT_FOUND_MESSAGE);
 	}
 
 	public record UpsertResult(boolean created) {

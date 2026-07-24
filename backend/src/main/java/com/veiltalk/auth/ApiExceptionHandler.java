@@ -36,6 +36,11 @@ public class ApiExceptionHandler {
 		return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", exception.getMessage(), Map.of());
 	}
 
+	@ExceptionHandler(NotFoundException.class)
+	ResponseEntity<Map<String, Object>> handleNotFound(NotFoundException exception) {
+		return error(HttpStatus.NOT_FOUND, "NOT_FOUND", exception.getMessage(), Map.of());
+	}
+
 	@ExceptionHandler(ValidationException.class)
 	ResponseEntity<Map<String, Object>> handleValidation(ValidationException exception) {
 		return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", exception.getMessage(), Map.of());
