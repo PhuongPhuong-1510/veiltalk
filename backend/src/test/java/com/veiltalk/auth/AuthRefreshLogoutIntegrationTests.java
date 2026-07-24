@@ -9,6 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -113,7 +117,9 @@ class AuthRefreshLogoutIntegrationTests {
 						.content(refreshBody(tokens.refreshToken())))
 				.andExpect(status().isNoContent());
 
-		RefreshToken storedToken = refreshTokenRepository.findAll().stream().findFirst().orElseThrow();
+		RefreshToken storedToken = refreshTokenRepository
+				.findByTokenHash(hash(tokens.refreshToken()))
+				.orElseThrow();
 		assertThat(storedToken.getRevokedAt()).isNotNull();
 		assertThat(jwtBlacklistService.isBlacklisted(accessClaims.jwtId())).isTrue();
 		Long blacklistTtl = redisTemplate.getExpire(
@@ -140,8 +146,10 @@ class AuthRefreshLogoutIntegrationTests {
 						.content(refreshBody(otherUserTokens.refreshToken())))
 				.andExpect(status().isUnauthorized());
 
-		assertThat(refreshTokenRepository.findAll())
-				.allMatch(token -> token.getRevokedAt() == null);
+		assertThat(refreshTokenRepository.findByTokenHash(hash(firstUserTokens.refreshToken())).orElseThrow()
+				.getRevokedAt()).isNull();
+		assertThat(refreshTokenRepository.findByTokenHash(hash(otherUserTokens.refreshToken())).orElseThrow()
+				.getRevokedAt()).isNull();
 	}
 
 	@Test
@@ -193,6 +201,17 @@ class AuthRefreshLogoutIntegrationTests {
 				  "refresh_token": "%s"
 				}
 				""".formatted(refreshToken);
+	}
+
+	private String hash(String refreshToken) {
+		try {
+			return HexFormat.of().formatHex(
+					MessageDigest.getInstance("SHA-256")
+							.digest(refreshToken.getBytes(StandardCharsets.UTF_8)));
+		}
+		catch (NoSuchAlgorithmException exception) {
+			throw new IllegalStateException(exception);
+		}
 	}
 
 	private record Tokens(String accessToken, String refreshToken) {

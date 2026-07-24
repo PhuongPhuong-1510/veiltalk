@@ -45,6 +45,29 @@ public class UserProfileService {
 		return toResponse(user);
 	}
 
+	@Transactional(readOnly = true)
+	public UserSettingsResponse getSettings(UUID authenticatedUserId) {
+		return toSettingsResponse(requireActiveUser(authenticatedUserId));
+	}
+
+	@Transactional
+	public UserSettingsResponse updateSettings(
+			UUID authenticatedUserId,
+			UserSettingsRequest request) {
+		User user = requireActiveUser(authenticatedUserId);
+		if (request.getDiscoverable() != null) {
+			user.setDiscoverable(request.getDiscoverable());
+		}
+		if (request.getEmailNotifications() != null) {
+			user.setEmailNotifications(request.getEmailNotifications());
+		}
+		if (request.isThemeProvided()) {
+			user.setTheme(Theme.fromDatabaseValue(request.getTheme()));
+		}
+		userRepository.saveAndFlush(user);
+		return toSettingsResponse(user);
+	}
+
 	private User requireActiveUser(UUID authenticatedUserId) {
 		return userRepository.findByIdAndDeletedAtIsNull(authenticatedUserId)
 				.orElseThrow(() -> new UnauthorizedException(INVALID_SESSION_MESSAGE));
@@ -59,5 +82,12 @@ public class UserProfileService {
 				user.getRole().getDatabaseValue(),
 				avatarProfileRepository.existsByUserId(user.getId()),
 				user.getCreatedAt());
+	}
+
+	private UserSettingsResponse toSettingsResponse(User user) {
+		return new UserSettingsResponse(
+				user.isDiscoverable(),
+				user.isEmailNotifications(),
+				user.getTheme().getDatabaseValue());
 	}
 }

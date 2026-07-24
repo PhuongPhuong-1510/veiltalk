@@ -88,6 +88,8 @@ Lưu trữ thông tin tài khoản người dùng. Đây là bảng trung tâm m
 | **avatar_url**      | VARCHAR(500)     | YES       |               | NULL              | URL ảnh đại diện ứng dụng (khác với nhân vật ảo 3D) — nullable nếu chưa đặt                                                                                                                |
 | **role**            | VARCHAR(20)      | NO        |               | 'user'            | Vai trò phân quyền: 'user' hoặc 'admin' — dùng trong JWT claim (NFR-29)                                                                                                                    |
 | **is_discoverable** | BOOLEAN          | NO        |               | FALSE             | Opt-in cho phép tìm kiếm qua email (FR-22) — mặc định FALSE. Lưu trong users thay vì bảng settings riêng vì đây là thuộc tính cốt lõi ảnh hưởng đến query tìm kiếm (có thể index partial). |
+| **email_notifications** | BOOLEAN      | NO        |               | TRUE              | Bật/tắt thông báo email của tài khoản; mặc định bật. Được bổ sung bởi migration V2.                                                                                                      |
+| **theme**           | VARCHAR(20)      | NO        | CHECK         | 'system'          | Theme đồng bộ server-side: `dark`, `light` hoặc `system`. Được bổ sung bởi migration V2.                                                                                                |
 | **created_at**      | TIMESTAMPTZ      | NO        |               | NOW()             | Thời điểm tạo tài khoản (UTC)                                                                                                                                                              |
 | **updated_at**      | TIMESTAMPTZ      | NO        |               | NOW()             | Thời điểm cập nhật gần nhất (UTC) — cập nhật tự động qua trigger đơn giản                                                                                                                  |
 | **deleted_at**      | TIMESTAMPTZ      | YES       |               | NULL              | Soft delete — NULL nếu còn hoạt động; có giá trị khi user yêu cầu xóa tài khoản (NFR-27)                                                                                                   |
@@ -397,6 +399,22 @@ CREATE TRIGGER trg_conversations_updated_at BEFORE UPDATE ON conversations FOR E
 CREATE TRIGGER trg_messages_updated_at BEFORE UPDATE ON messages FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_videos_updated_at BEFORE UPDATE ON videos FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 ```
+
+### 6.1. Migration V2 — User settings
+
+Không sửa migration V1 đã chạy. P2-T07 bổ sung hai cột settings còn thiếu vào bảng
+`users`; các bản ghi hiện có nhận giá trị mặc định ngay khi migration chạy.
+
+```sql
+-- Migration: V2__add_user_settings.sql
+ALTER TABLE users
+    ADD COLUMN email_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN theme VARCHAR(20) NOT NULL DEFAULT 'system',
+    ADD CONSTRAINT chk_users_theme CHECK (theme IN ('dark', 'light', 'system'));
+```
+
+Schema hiện hành sau V2 có các giá trị settings mặc định:
+`is_discoverable = FALSE`, `email_notifications = TRUE`, `theme = 'system'`.
 
 ## 7. Redis — Cấu trúc Key-Value
 

@@ -67,9 +67,9 @@ class AuthLoginIntegrationTests {
 		String refreshToken = com.jayway.jsonpath.JsonPath.read(
 				result.getResponse().getContentAsString(),
 				"$.tokens.refresh_token");
-		RefreshToken storedToken = refreshTokenRepository.findAll().stream().findFirst().orElseThrow();
 		String expectedHash = HexFormat.of().formatHex(
 				MessageDigest.getInstance("SHA-256").digest(refreshToken.getBytes(StandardCharsets.UTF_8)));
+		RefreshToken storedToken = refreshTokenRepository.findByTokenHash(expectedHash).orElseThrow();
 
 		assertThat(storedToken.getTokenHash()).isEqualTo(expectedHash);
 		assertThat(storedToken.getTokenHash()).isNotEqualTo(refreshToken);
@@ -79,17 +79,19 @@ class AuthLoginIntegrationTests {
 
 	@Test
 	void tc05RejectsWrongPasswordWithoutRevealingWhichCredentialFailed() throws Exception {
+		long tokenCountBefore = refreshTokenRepository.count();
 		MvcResult result = mockMvc.perform(loginRequest(EMAIL, "WrongPass123"))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
 				.andReturn();
 
-		assertThat(refreshTokenRepository.findAll()).isEmpty();
+		assertThat(refreshTokenRepository.count()).isEqualTo(tokenCountBefore);
 		assertThat(result.getResponse().getContentAsString()).isEqualTo(invalidEmailResponseBody());
 	}
 
 	@Test
 	void tc06RejectsUnknownEmailWithSameResponseAsWrongPassword() throws Exception {
+		long tokenCountBefore = refreshTokenRepository.count();
 		MvcResult wrongPassword = mockMvc.perform(loginRequest(EMAIL, "WrongPass123"))
 				.andExpect(status().isUnauthorized())
 				.andReturn();
@@ -99,7 +101,7 @@ class AuthLoginIntegrationTests {
 
 		assertThat(unknownEmail.getResponse().getContentAsString())
 				.isEqualTo(wrongPassword.getResponse().getContentAsString());
-		assertThat(refreshTokenRepository.findAll()).isEmpty();
+		assertThat(refreshTokenRepository.count()).isEqualTo(tokenCountBefore);
 	}
 
 	private String invalidEmailResponseBody() throws Exception {

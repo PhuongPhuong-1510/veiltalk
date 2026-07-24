@@ -3,6 +3,9 @@ package com.veiltalk.auth;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.veiltalk.user.Theme;
+import com.veiltalk.user.ThemeConverter;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -37,6 +40,13 @@ public class User {
 
 	@Column(name = "is_discoverable", nullable = false)
 	private boolean isDiscoverable;
+
+	@Column(name = "email_notifications", nullable = false)
+	private boolean emailNotifications = true;
+
+	@Convert(converter = ThemeConverter.class)
+	@Column(nullable = false, length = 20)
+	private Theme theme = Theme.SYSTEM;
 
 	@Column(name = "created_at", nullable = false, insertable = false, updatable = false)
 	private Instant createdAt;
@@ -104,6 +114,22 @@ public class User {
 
 	public void setDiscoverable(boolean discoverable) {
 		isDiscoverable = discoverable;
+	}
+
+	public boolean isEmailNotifications() {
+		return emailNotifications;
+	}
+
+	public void setEmailNotifications(boolean emailNotifications) {
+		this.emailNotifications = emailNotifications;
+	}
+
+	public Theme getTheme() {
+		return theme;
+	}
+
+	public void setTheme(Theme theme) {
+		this.theme = theme;
 	}
 
 	public Instant getCreatedAt() {

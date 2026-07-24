@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T06 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T07 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -66,6 +66,7 @@ P1-T02 và database kiểm thử đã được xóa sau khi kiểm tra.
 | `backend/src/main/java/com/veiltalk/BackendApplication.java` | Điểm khởi động Spring Boot |
 | `backend/src/main/resources/application.yml` | Cấu hình datasource, Flyway và Hibernate `ddl-auto: validate` để kiểm tra entity mapping với schema |
 | `backend/src/main/resources/db/migration/V1__initial_schema.sql` | Migration khởi tạo đúng theo DDD mục 6: 6 bảng, index, constraint và trigger |
+| `backend/src/main/resources/db/migration/V2__add_user_settings.sql` | Bổ sung `email_notifications`, `theme` và CHECK constraint theme vào `users`; không sửa V1 |
 | `backend/src/test/java/com/veiltalk/BackendApplicationTests.java` | Smoke test khởi tạo Spring context |
 
 P1-T01 đã được xác minh bằng `mvn test`: Spring context khởi động, Flyway áp dụng đúng
@@ -114,6 +115,11 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/user/UserProfileUpdateRequest.java` | DTO cập nhật từng phần; validate display name và phân biệt field avatar URL không gửi với giá trị null |
 | `backend/src/main/java/com/veiltalk/user/UserProfileResponse.java` | DTO hồ sơ theo API mục 4.1–4.2, gồm trạng thái đã có nhân vật ảo |
 | `backend/src/test/java/com/veiltalk/user/UserProfileIntegrationTests.java` | Integration test GET/PUT, partial update, xóa avatar URL, validation, authentication và soft delete |
+| `backend/src/main/java/com/veiltalk/user/Theme.java` | Enum `DARK`, `LIGHT`, `SYSTEM` cho theme tài khoản |
+| `backend/src/main/java/com/veiltalk/user/ThemeConverter.java` | Lưu/đọc Theme dưới dạng `dark`, `light`, `system` trong PostgreSQL |
+| `backend/src/main/java/com/veiltalk/user/UserSettingsRequest.java` | DTO partial update settings; validation theme, gồm xử lý rõ `theme: null` |
+| `backend/src/main/java/com/veiltalk/user/UserSettingsResponse.java` | DTO response cho API settings mục 4.3–4.4 |
+| `backend/src/test/java/com/veiltalk/user/UserSettingsIntegrationTests.java` | Integration test TC-20, defaults, partial update, theme validation và soft delete |
 
 ### Module nhân vật ảo
 
@@ -200,6 +206,15 @@ delete đều trả cùng `401 UNAUTHORIZED` với thông báo `Invalid session`
 thái tài khoản. PUT cập nhật từng phần, validate `display_name` 1–100 ký tự và phân biệt
 `avatar_url` không được gửi với `avatar_url: null` để xóa ảnh. Toàn bộ 8 integration test
 riêng P2-T06 PASS.
+
+P2-T07 triển khai `GET /users/me/settings` và `PUT /users/me/settings`. Migration V2
+bổ sung `email_notifications BOOLEAN NOT NULL DEFAULT TRUE` và
+`theme VARCHAR(20) NOT NULL DEFAULT 'system'` với CHECK constraint; migration V1 không
+bị sửa. Entity `User` dùng `ThemeConverter` để lưu enum Java viết hoa thành
+`dark`/`light`/`system`. PUT cập nhật từng phần, giữ nguyên field không gửi và từ chối
+theme null/ngoài tập hợp hợp lệ. TC-20 cùng các ca defaults, partial update, validation
+và soft delete đều PASS. Ba test auth cũ cũng được cô lập khỏi dữ liệu có sẵn bằng cách
+lookup đúng token do test tạo. Toàn bộ 60 test Backend PASS.
 
 ## Signaling Server
 

@@ -6,6 +6,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,7 +58,9 @@ class AuthRegistrationIntegrationTests {
 		String refreshToken = com.jayway.jsonpath.JsonPath.read(
 				result.getResponse().getContentAsString(),
 				"$.tokens.refresh_token");
-		RefreshToken storedToken = refreshTokenRepository.findAll().stream().findFirst().orElseThrow();
+		String tokenHash = HexFormat.of().formatHex(
+				MessageDigest.getInstance("SHA-256").digest(refreshToken.getBytes(StandardCharsets.UTF_8)));
+		RefreshToken storedToken = refreshTokenRepository.findByTokenHash(tokenHash).orElseThrow();
 		assertThat(storedToken.getUserId()).isEqualTo(savedUser.getId());
 		assertThat(storedToken.getTokenHash()).isNotEqualTo(refreshToken);
 		assertThat(storedToken.getRevokedAt()).isNull();

@@ -32,4 +32,18 @@ public class UserProfileController {
 				(UUID) authentication.getPrincipal(),
 				request);
 	}
+
+	@GetMapping("/users/me/settings")
+	UserSettingsResponse getSettings(Authentication authentication) {
+		return userProfileService.getSettings((UUID) authentication.getPrincipal());
+	}
+
+	@PutMapping("/users/me/settings")
+	UserSettingsResponse updateSettings(
+			Authentication authentication,
+			@Valid @RequestBody UserSettingsRequest request) {
+		return userProfileService.updateSettings(
+				(UUID) authentication.getPrincipal(),
+				request);
+	}
 }

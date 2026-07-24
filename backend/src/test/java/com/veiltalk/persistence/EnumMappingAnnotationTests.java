@@ -11,6 +11,7 @@ import com.veiltalk.auth.User;
 import com.veiltalk.auth.UserRoleConverter;
 import com.veiltalk.messaging.Message;
 import com.veiltalk.messaging.MessageStatusConverter;
+import com.veiltalk.user.ThemeConverter;
 import com.veiltalk.video.Video;
 import com.veiltalk.video.VideoStatusConverter;
 
@@ -22,6 +23,7 @@ class EnumMappingAnnotationTests {
 	@Test
 	void enumFieldsUseExplicitConvertersWithoutEnumerated() throws NoSuchFieldException {
 		assertConverter(User.class.getDeclaredField("role"), UserRoleConverter.class);
+		assertConverter(User.class.getDeclaredField("theme"), ThemeConverter.class);
 		assertConverter(Message.class.getDeclaredField("status"), MessageStatusConverter.class);
 		assertConverter(Video.class.getDeclaredField("status"), VideoStatusConverter.class);
 	}

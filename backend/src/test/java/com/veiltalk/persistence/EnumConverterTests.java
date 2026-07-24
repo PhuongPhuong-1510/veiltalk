@@ -10,6 +10,8 @@ import com.veiltalk.auth.UserRole;
 import com.veiltalk.auth.UserRoleConverter;
 import com.veiltalk.messaging.MessageStatus;
 import com.veiltalk.messaging.MessageStatusConverter;
+import com.veiltalk.user.Theme;
+import com.veiltalk.user.ThemeConverter;
 import com.veiltalk.video.VideoStatus;
 import com.veiltalk.video.VideoStatusConverter;
 
@@ -18,6 +20,7 @@ class EnumConverterTests {
 	private final UserRoleConverter userRoleConverter = new UserRoleConverter();
 	private final MessageStatusConverter messageStatusConverter = new MessageStatusConverter();
 	private final VideoStatusConverter videoStatusConverter = new VideoStatusConverter();
+	private final ThemeConverter themeConverter = new ThemeConverter();
 
 	@Test
 	void convertsUserRoleBetweenJavaAndDatabaseValues() {
@@ -44,6 +47,14 @@ class EnumConverterTests {
 	}
 
 	@Test
+	void convertsThemeBetweenJavaAndDatabaseValues() {
+		for (Theme theme : Theme.values()) {
+			assertEquals(theme.name().toLowerCase(), themeConverter.convertToDatabaseColumn(theme));
+			assertEquals(theme, themeConverter.convertToEntityAttribute(theme.name().toLowerCase()));
+		}
+	}
+
+	@Test
 	void preservesNullValues() {
 		assertNull(userRoleConverter.convertToDatabaseColumn(null));
 		assertNull(userRoleConverter.convertToEntityAttribute(null));
@@ -51,6 +62,8 @@ class EnumConverterTests {
 		assertNull(messageStatusConverter.convertToEntityAttribute(null));
 		assertNull(videoStatusConverter.convertToDatabaseColumn(null));
 		assertNull(videoStatusConverter.convertToEntityAttribute(null));
+		assertNull(themeConverter.convertToDatabaseColumn(null));
+		assertNull(themeConverter.convertToEntityAttribute(null));
 	}
 
 	@Test
@@ -61,5 +74,7 @@ class EnumConverterTests {
 				() -> messageStatusConverter.convertToEntityAttribute("deleted"));
 		assertThrows(IllegalArgumentException.class,
 				() -> videoStatusConverter.convertToEntityAttribute("uploaded"));
+		assertThrows(IllegalArgumentException.class,
+				() -> themeConverter.convertToEntityAttribute("blue"));
 	}
 }
