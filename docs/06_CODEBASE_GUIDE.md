@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T07 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T08 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -99,6 +99,7 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/auth/ApiExceptionHandler.java` | Chuẩn hóa lỗi validation và conflict theo định dạng API |
 | `backend/src/main/java/com/veiltalk/auth/ConflictException.java` | Lỗi nghiệp vụ HTTP 409 |
 | `backend/src/main/java/com/veiltalk/auth/UnauthorizedException.java` | Lỗi nghiệp vụ HTTP 401 với thông báo đăng nhập chung |
+| `backend/src/main/java/com/veiltalk/auth/UserTokenRevocationService.java` | Lưu/kiểm tra mốc Redis `jwt:user-revoked-after:{userId}` theo thời hạn access token |
 | `backend/src/test/java/com/veiltalk/auth/JwtServiceTests.java` | Unit test thời hạn, claims, chữ ký, loại token và cấu hình JWT |
 | `backend/src/test/java/com/veiltalk/auth/JwtAuthenticationFilterTests.java` | Unit test Bearer header, access/refresh token và token không hợp lệ |
 | `backend/src/test/java/com/veiltalk/auth/SecurityConfigTests.java` | MVC slice test quy tắc truy cập, response 401, CORS và security headers |
@@ -120,6 +121,9 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/user/UserSettingsRequest.java` | DTO partial update settings; validation theme, gồm xử lý rõ `theme: null` |
 | `backend/src/main/java/com/veiltalk/user/UserSettingsResponse.java` | DTO response cho API settings mục 4.3–4.4 |
 | `backend/src/test/java/com/veiltalk/user/UserSettingsIntegrationTests.java` | Integration test TC-20, defaults, partial update, theme validation và soft delete |
+| `backend/src/main/java/com/veiltalk/user/DeleteAccountRequest.java` | DTO xác nhận mật khẩu cho `DELETE /users/me` |
+| `backend/src/main/java/com/veiltalk/user/UserAccountService.java` | Soft delete user, revoke refresh tokens và tạo global access-token revocation marker |
+| `backend/src/test/java/com/veiltalk/user/UserAccountDeletionIntegrationTests.java` | Integration test password confirmation, soft delete, refresh revoke và global JWT revocation |
 
 ### Module nhân vật ảo
 
@@ -215,6 +219,14 @@ bị sửa. Entity `User` dùng `ThemeConverter` để lưu enum Java viết hoa
 theme null/ngoài tập hợp hợp lệ. TC-20 cùng các ca defaults, partial update, validation
 và soft delete đều PASS. Ba test auth cũ cũng được cô lập khỏi dữ liệu có sẵn bằng cách
 lookup đúng token do test tạo. Toàn bộ 60 test Backend PASS.
+
+P2-T08 triển khai phần core của `DELETE /users/me`: xác nhận mật khẩu, đánh dấu
+`users.deleted_at`, revoke toàn bộ refresh token còn hoạt động và lưu mốc epoch-second
+`jwt:user-revoked-after:{userId}` trong Redis với TTL bằng access-token lifetime tối đa.
+`JwtAuthenticationFilter` từ chối access token có `iat` không mới hơn mốc revoke, vô hiệu
+hóa tất cả phiên access token hiện có. MinIO `AbortMultipartUpload` và TC-37 được chuyển
+sang P2-T24; P2-T08 không tạo upload session hoặc cleanup retry. Toàn bộ 65 test Backend
+PASS.
 
 ## Signaling Server
 

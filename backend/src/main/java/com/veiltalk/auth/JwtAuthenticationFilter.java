@@ -21,12 +21,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private final JwtService jwtService;
 	private final JwtBlacklistService jwtBlacklistService;
+	private final UserTokenRevocationService userTokenRevocationService;
 
 	public JwtAuthenticationFilter(
 			JwtService jwtService,
-			JwtBlacklistService jwtBlacklistService) {
+			JwtBlacklistService jwtBlacklistService,
+			UserTokenRevocationService userTokenRevocationService) {
 		this.jwtService = jwtService;
 		this.jwtBlacklistService = jwtBlacklistService;
+		this.userTokenRevocationService = userTokenRevocationService;
 	}
 
 	@Override
@@ -58,7 +61,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			if (!ACCESS_TOKEN_TYPE.equals(claims.type())
 					|| claims.subject() == null
 					|| claims.role() == null
-					|| jwtBlacklistService.isBlacklisted(claims.jwtId())) {
+					|| jwtBlacklistService.isBlacklisted(claims.jwtId())
+					|| userTokenRevocationService.isRevoked(claims.subject(), claims.issuedAt())) {
 				return;
 			}
 

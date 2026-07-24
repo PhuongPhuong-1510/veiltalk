@@ -283,7 +283,16 @@ HTTP Status Codes
 
 ### 4.5. DELETE /users/me
 
-Yêu cầu xóa tài khoản — soft delete ngay lập tức (NFR-27). Background job dọn dẹp dữ liệu thật sau 30 ngày. Khi account bị soft delete: tất cả phiên quay video đang ở trạng thái recording được abort ngay lập tức (Backend gọi MinIO AbortMultipartUpload) để không để lại orphan data trên storage.
+Yêu cầu xóa tài khoản — soft delete ngay lập tức (NFR-27). Backend xác nhận mật khẩu,
+đặt `users.deleted_at`, revoke toàn bộ refresh token còn hoạt động và ghi mốc epoch-second
+vào Redis theo key `jwt:user-revoked-after:{userId}`. TTL của key bằng thời hạn access
+token tối đa. `JwtAuthenticationFilter` từ chối mọi access token của user có claim `iat`
+không mới hơn mốc revoke, vì vậy tất cả phiên đăng nhập hiện có mất hiệu lực ngay.
+
+Background job dọn dẹp dữ liệu thật sau 30 ngày. Việc abort các multipart upload đang
+recording được thực hiện trong P2-T24 sau khi hạ tầng MinIO và luồng multipart
+P2-T19–P2-T22 hoàn thành. Nếu MinIO abort thất bại, việc soft delete/revoke token không
+bị rollback; cleanup phải được lưu bền vững để retry, không chỉ ghi log.
 
 Request Body
 
@@ -295,7 +304,7 @@ HTTP Status Codes
 
 | **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                                                     |
 |-----------------|--------------|-------------------------------------------------------------------------------------------|
-| **204**         | No Content   | Tài khoản đã được đánh dấu xóa (deleted_at = NOW()); tất cả token bị thu hồi ngay lập tức |
+| **204**         | No Content   | Tài khoản đã được soft delete; toàn bộ refresh/access token cũ bị thu hồi ngay lập tức |
 | **401**         | Unauthorized | Token không hợp lệ hoặc mật khẩu xác nhận sai                                             |
 
 ### 4.6. POST /users/search

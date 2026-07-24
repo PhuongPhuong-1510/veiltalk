@@ -29,6 +29,9 @@ class JwtAuthenticationFilterTests {
 	@Mock
 	private JwtBlacklistService jwtBlacklistService;
 
+	@Mock
+	private UserTokenRevocationService userTokenRevocationService;
+
 	@AfterEach
 	void clearSecurityContext() {
 		SecurityContextHolder.clearContext();
@@ -70,6 +73,23 @@ class JwtAuthenticationFilterTests {
 		when(jwtBlacklistService.isBlacklisted(JWT_ID)).thenReturn(true);
 
 		runFilter(requestWithAuthorization("Bearer revoked-token"));
+
+		assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+	}
+
+	@Test
+	void userRevokedAccessTokenDoesNotCreateAuthentication() throws Exception {
+		JwtClaims claims = new JwtClaims(
+				USER_ID,
+				UserRole.ADMIN,
+				"access",
+				JWT_ID,
+				Instant.parse("2026-07-24T12:00:00Z"),
+				Instant.parse("2026-07-24T12:15:00Z"));
+		when(jwtService.extractClaims("user-revoked-token")).thenReturn(claims);
+		when(userTokenRevocationService.isRevoked(USER_ID, claims.issuedAt())).thenReturn(true);
+
+		runFilter(requestWithAuthorization("Bearer user-revoked-token"));
 
 		assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
 	}
@@ -117,7 +137,10 @@ class JwtAuthenticationFilterTests {
 	}
 
 	private void runFilter(MockHttpServletRequest request) throws Exception {
-		var filter = new JwtAuthenticationFilter(jwtService, jwtBlacklistService);
+		var filter = new JwtAuthenticationFilter(
+				jwtService,
+				jwtBlacklistService,
+				userTokenRevocationService);
 		filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 	}
 }

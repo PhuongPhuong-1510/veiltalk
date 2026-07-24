@@ -42,6 +42,9 @@ class SecurityConfigTests {
 	@MockitoBean
 	private JwtBlacklistService jwtBlacklistService;
 
+	@MockitoBean
+	private UserTokenRevocationService userTokenRevocationService;
+
 	@Test
 	void publicRoutesDoNotRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/auth/test"))

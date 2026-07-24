@@ -39,7 +39,8 @@ public class SecurityConfig {
 	SecurityFilterChain securityFilterChain(
 			HttpSecurity http,
 			JwtService jwtService,
-			JwtBlacklistService jwtBlacklistService) throws Exception {
+			JwtBlacklistService jwtBlacklistService,
+			UserTokenRevocationService userTokenRevocationService) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
@@ -64,7 +65,10 @@ public class SecurityConfig {
 								.includeSubDomains(true)
 								.maxAgeInSeconds(HSTS_MAX_AGE_SECONDS)))
 				.addFilterBefore(
-						new JwtAuthenticationFilter(jwtService, jwtBlacklistService),
+						new JwtAuthenticationFilter(
+								jwtService,
+								jwtBlacklistService,
+								userTokenRevocationService),
 						UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();

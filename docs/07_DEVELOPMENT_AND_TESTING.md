@@ -179,7 +179,7 @@ Phân biệt lỗi môi trường thường gặp:
 | **TC-34** | **Đổi tên video**                 | Video status=ready                               | PUT /videos/{id} {title:'Tên mới'}                                            | HTTP 200, title cập nhật                                                                          | FR-17           |
 | **TC-35** | **Xóa video**                     | Video status=ready                               | DELETE /videos/{id}                                                           | HTTP 204; GET /videos/{id} → 404; storage_used_bytes giảm                                         | FR-17           |
 | **TC-36** | **Video failed — view_url null**  | Video status=failed                              | GET /videos/{id}                                                              | HTTP 200, view_url=null, status='failed'                                                          | ADD 7.7         |
-| **TC-37** | **Xóa tài khoản abort recording** | User đang có video status=recording              | DELETE /users/me với password đúng                                            | HTTP 204; video recording bị abort trên MinIO (kiểm tra MinIO Console không còn multipart upload) | ADD 4.5         |
+| **TC-37** | **Xóa tài khoản abort recording — thực hiện tại P2-T24** | P2-T19–P2-T22 hoàn thành; user đang có video status=recording | DELETE /users/me với password đúng | HTTP 204 và token bị revoke ngay; video recording được abort trên MinIO. Nếu abort lỗi, cleanup job bền vững retry mà không rollback soft delete | ADD 4.5, ADD 7.5 |
 
 ## 3. Ca Kiểm thử Bảo mật
 
