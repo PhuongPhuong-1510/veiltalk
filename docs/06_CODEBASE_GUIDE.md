@@ -23,7 +23,7 @@ Các thư mục ứng dụng và hạ tầng hiện chứa `.gitkeep` để Git 
 | File | Nội dung hiện tại |
 |---|---|
 | `.env.example` | Template biến môi trường, không chứa secret thật |
-| `docker-compose.yml` | Skeleton Compose hợp lệ, chưa khai báo service |
+| `docker-compose.yml` | 7 service: backend, signaling, frontend, postgres, redis, minio, nginx; dùng mạng `internal-net` và volume persistent cho PostgreSQL/MinIO |
 | `Makefile` | Shortcut `up`, `down`, `logs`, `migrate` |
 | `.gitignore` | Quy tắc bỏ qua file môi trường, output build và file cục bộ |
 | `.gitattributes` | Quy tắc thuộc tính file của repository |

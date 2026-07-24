@@ -1,1 +1,107 @@
-services: {}
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - internal-net
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - internal-net
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - internal-net
+
+  backend:
+    image: veiltalk/backend:latest
+    build:
+      context: ./backend
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MINIO_WEBHOOK_SECRET: ${MINIO_WEBHOOK_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SIGNALING_JWT_SECRET: ${SIGNALING_JWT_SECRET}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - internal-net
+
+  signaling:
+    image: veiltalk/signaling:latest
+    build:
+      context: ./signaling
+    environment:
+      PORT: ${PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX}
+    ports:
+      - "3000:3000"
+    networks:
+      - internal-net
+
+  frontend:
+    image: veiltalk/frontend:latest
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+      - signaling
+    networks:
+      - internal-net
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - signaling
+      - frontend
+    networks:
+      - internal-net
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  internal-net:
+    driver: bridge
