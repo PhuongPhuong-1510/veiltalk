@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T12 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T13 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -159,8 +159,13 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/messaging/Message.java` | Entity bảng `messages` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageStatus.java` | Enum `SENT`, `DELIVERED`, `READ` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageStatusConverter.java` | Chuyển enum message sang giá trị PostgreSQL chữ thường |
-| `backend/src/main/java/com/veiltalk/messaging/ConversationRepository.java` | Repository cuộc trò chuyện |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationController.java` | REST controller tạo hoặc lấy conversation 1-1 |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationService.java` | Chuẩn hóa cặp user và tạo conversation idempotent |
+| `backend/src/main/java/com/veiltalk/messaging/CreateConversationRequest.java` | DTO request `POST /conversations` |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationResponse.java` | DTO conversation cùng metadata công khai của user còn lại |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationRepository.java` | Repository cuộc trò chuyện; insert `ON CONFLICT DO NOTHING` và lookup cặp active |
 | `backend/src/main/java/com/veiltalk/messaging/MessageRepository.java` | Repository tin nhắn; trả lịch sử dạng `Slice` theo thời gian tăng dần và loại soft delete |
+| `backend/src/test/java/com/veiltalk/messaging/ConversationCreateIntegrationTests.java` | Integration test TC-21–TC-22, validation, authentication và soft-delete |
 
 ### Module video
 
@@ -271,6 +276,14 @@ trả hồ sơ đầy đủ; endpoint theo user chỉ trả avatar metadata, kh�
 sơ hoặc timestamps. User không tồn tại, đã soft delete hoặc chưa có avatar cùng trả
 `404 NOT_FOUND` với body `Avatar not found`. TC-14–TC-15, các ca `/me`, authentication,
 soft-delete và toàn bộ 81 test Backend đều PASS.
+
+P2-T13 triển khai protected `POST /conversations`. Service chuẩn hóa hai UUID để lưu
+`user_a_id < user_b_id`, sau đó dùng `INSERT ... ON CONFLICT DO NOTHING` dựa trên
+`idx_conv_pair`; lần tạo đầu trả `201`, các lần gọi lại từ bất kỳ phía nào trả `200` với
+cùng conversation id. Response chỉ chứa metadata công khai của user còn lại. Endpoint
+từ chối self-conversation, UUID sai định dạng, user không tồn tại/đã soft delete và phiên
+đăng nhập không còn hợp lệ. TC-21–TC-22, các ca validation/authentication/soft-delete và
+toàn bộ 87 test Backend đều PASS.
 
 ## Signaling Server
 
