@@ -12,6 +12,8 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -27,6 +29,11 @@ public class SecurityConfig {
 	private static final long HSTS_MAX_AGE_SECONDS = 31_536_000;
 	private static final String UNAUTHORIZED_RESPONSE =
 			"{\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication is required\",\"details\":{}}}";
+
+	@Bean
+	PasswordEncoder passwordEncoder() {
+		return new BCryptPasswordEncoder();
+	}
 
 	@Bean
 	SecurityFilterChain securityFilterChain(

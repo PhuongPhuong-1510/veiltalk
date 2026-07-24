@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 và P2-T02 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T04 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -86,9 +86,20 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/auth/JwtClaims.java` | Kiểu dữ liệu bất biến cho claims JWT đã xác thực |
 | `backend/src/main/java/com/veiltalk/auth/JwtAuthenticationFilter.java` | Đọc Bearer access token và thiết lập danh tính/role vào `SecurityContext` |
 | `backend/src/main/java/com/veiltalk/auth/SecurityConfig.java` | Security chain stateless, phân quyền public/protected, CORS, security headers và response 401 chuẩn |
+| `backend/src/main/java/com/veiltalk/auth/AuthController.java` | REST controller cho `POST /auth/register` |
+| `backend/src/main/java/com/veiltalk/auth/AuthService.java` | Nghiệp vụ đăng ký, BCrypt password, lưu user và cấp JWT |
+| `backend/src/main/java/com/veiltalk/auth/RegisterRequest.java` | DTO request và validation email/password/display name |
+| `backend/src/main/java/com/veiltalk/auth/RegisterResponse.java` | DTO response user và access/refresh token theo API mục 3.1 |
+| `backend/src/main/java/com/veiltalk/auth/LoginRequest.java` | DTO request đăng nhập và validation email/password |
+| `backend/src/main/java/com/veiltalk/auth/LoginResponse.java` | DTO response user, trạng thái avatar và tokens theo API mục 3.2 |
+| `backend/src/main/java/com/veiltalk/auth/ApiExceptionHandler.java` | Chuẩn hóa lỗi validation và conflict theo định dạng API |
+| `backend/src/main/java/com/veiltalk/auth/ConflictException.java` | Lỗi nghiệp vụ HTTP 409 |
+| `backend/src/main/java/com/veiltalk/auth/UnauthorizedException.java` | Lỗi nghiệp vụ HTTP 401 với thông báo đăng nhập chung |
 | `backend/src/test/java/com/veiltalk/auth/JwtServiceTests.java` | Unit test thời hạn, claims, chữ ký, loại token và cấu hình JWT |
 | `backend/src/test/java/com/veiltalk/auth/JwtAuthenticationFilterTests.java` | Unit test Bearer header, access/refresh token và token không hợp lệ |
 | `backend/src/test/java/com/veiltalk/auth/SecurityConfigTests.java` | MVC slice test quy tắc truy cập, response 401, CORS và security headers |
+| `backend/src/test/java/com/veiltalk/auth/AuthRegistrationIntegrationTests.java` | Integration test TC-01, TC-02, TC-03 và đăng ký lại email sau soft delete |
+| `backend/src/test/java/com/veiltalk/auth/AuthLoginIntegrationTests.java` | Integration test TC-04, TC-05, TC-06 và lưu SHA-256 hash của refresh token |
 
 ### Module nhân vật ảo
 
@@ -144,6 +155,21 @@ token lỗi không tạo authentication. `/auth/**`, `/actuator/health` và `/in
 public; các đường dẫn còn lại yêu cầu xác thực và trả lỗi `UNAUTHORIZED` theo định dạng API.
 Security chain đồng thời cấu hình CORS cho origin frontend, HSTS, `nosniff` và chống
 clickjacking. Toàn bộ 9 test riêng P2-T02 và 29 test Backend đều PASS.
+
+P2-T03 triển khai `POST /auth/register` qua controller mỏng và `AuthService`. Request được
+validate theo API mục 3.1; mật khẩu được băm bằng BCrypt trước khi lưu; response `201` chứa
+user, access token 15 phút và refresh token 7 ngày. Service dùng
+`findByEmailAndDeletedAtIsNull` nên chỉ email của tài khoản đang hoạt động trả `409`.
+Email của tài khoản soft delete được phép tạo user độc lập với UUID mới, không khôi phục
+hoặc liên kết dữ liệu cũ, phù hợp partial unique index `idx_users_email`. TC-01, TC-02,
+TC-03, test đăng ký lại sau soft delete và toàn bộ 33 test Backend đều PASS.
+
+P2-T04 triển khai `POST /auth/login`. `AuthService` chỉ tìm user chưa soft delete, xác minh
+mật khẩu bằng BCrypt và trả cùng một lỗi `401 UNAUTHORIZED` cho email không tồn tại hoặc
+mật khẩu sai để chống dò tài khoản. Đăng nhập thành công trả thông tin user, `has_avatar`
+và access/refresh token; refresh token được băm SHA-256 trước khi lưu vào
+`refresh_tokens`, cùng `user_id` và thời điểm hết hạn lấy từ JWT claims. TC-04, TC-05,
+TC-06 và toàn bộ 36 test Backend đều PASS.
 
 ## Signaling Server
 

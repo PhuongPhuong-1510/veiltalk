@@ -5,4 +5,6 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AvatarProfileRepository extends JpaRepository<AvatarProfile, UUID> {
+
+	boolean existsByUserId(UUID userId);
 }

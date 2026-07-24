@@ -143,7 +143,11 @@ HTTP Status Codes
 |-----------------|-------------|------------------------------------------------------------------------------------------------------------------------|
 | **201**         | Created     | Đăng ký thành công, tài khoản được tạo                                                                                 |
 | **400**         | Bad Request | Email không hợp lệ, mật khẩu không đủ mạnh, display_name trống                                                         |
-| **409**         | Conflict    | Email đã được đăng ký (lưu ý: chỉ trả về khi email đã tồn tại — không phân biệt với trường hợp email đã xóa tài khoản) |
+| **409**         | Conflict    | Email đang thuộc một tài khoản chưa bị xóa (`deleted_at IS NULL`)                                                     |
+
+Email của tài khoản đã soft delete không chặn đăng ký mới. Lần đăng ký sau tạo một user độc lập
+với UUID mới; không khôi phục hoặc liên kết dữ liệu của tài khoản cũ. Hành vi này đồng bộ với
+unique partial index `idx_users_email` trong DDD, chỉ áp dụng khi `deleted_at IS NULL`.
 
 ### 3.2. POST /auth/login
 
