@@ -32,20 +32,39 @@ public class MessageRealtimePublisher {
 	}
 
 	public void publishNewMessage(UUID recipientUserId, MessageResponse message) {
+		publish(
+				recipientUserId,
+				"NEW_MESSAGE",
+				message,
+				message.id());
+	}
+
+	public void publishStatusUpdate(UUID userId, MessageStatusResponse status) {
+		publish(
+				userId,
+				"MESSAGE_STATUS_UPDATE",
+				new MessageStatusEvent(status.id(), status.status()),
+				status.id());
+	}
+
+	private void publish(UUID userId, String type, Object data, UUID messageId) {
 		try {
 			String payload = objectMapper.writeValueAsString(
-					new RealtimeEvent("NEW_MESSAGE", message));
-			redisTemplate.convertAndSend(CHANNEL_PREFIX + recipientUserId, payload);
+					new RealtimeEvent(type, data));
+			redisTemplate.convertAndSend(CHANNEL_PREFIX + userId, payload);
 		} catch (Exception exception) {
 			meterRegistry.counter(FAILURE_METRIC).increment();
 			LOGGER.error(
 					"Realtime message publish failed for message {} and user {}; client must resync from history",
-					message.id(),
-					recipientUserId,
+					messageId,
+					userId,
 					exception);
 		}
 	}
 
-	private record RealtimeEvent(String type, MessageResponse data) {
+	private record RealtimeEvent(String type, Object data) {
+	}
+
+	private record MessageStatusEvent(UUID id, String status) {
 	}
 }

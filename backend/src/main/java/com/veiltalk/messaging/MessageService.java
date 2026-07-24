@@ -20,6 +20,8 @@ import com.veiltalk.auth.UnauthorizedException;
 import com.veiltalk.auth.UserRepository;
 import com.veiltalk.auth.ValidationException;
 
+import jakarta.persistence.EntityManager;
+
 @Service
 public class MessageService {
 
@@ -33,24 +35,31 @@ public class MessageService {
 	private static final String MESSAGE_ID_CONFLICT_MESSAGE =
 			"Message id already belongs to another sender or conversation";
 	private static final String INVALID_LIMIT_MESSAGE = "limit must be between 1 and 100";
+	private static final String MESSAGE_NOT_FOUND_MESSAGE = "Message not found";
+	private static final String MESSAGE_RECIPIENT_FORBIDDEN_MESSAGE =
+			"Only the message recipient can update its status";
+	private static final String STATUS_DOWNGRADE_MESSAGE = "Message status cannot move backwards";
 
 	private final ConversationRepository conversationRepository;
 	private final MessageRepository messageRepository;
 	private final UserRepository userRepository;
 	private final MessageRealtimePublisher realtimePublisher;
 	private final MessageCursorCodec cursorCodec;
+	private final EntityManager entityManager;
 
 	public MessageService(
 			ConversationRepository conversationRepository,
 			MessageRepository messageRepository,
 			UserRepository userRepository,
 			MessageRealtimePublisher realtimePublisher,
-			MessageCursorCodec cursorCodec) {
+			MessageCursorCodec cursorCodec,
+			EntityManager entityManager) {
 		this.conversationRepository = conversationRepository;
 		this.messageRepository = messageRepository;
 		this.userRepository = userRepository;
 		this.realtimePublisher = realtimePublisher;
 		this.cursorCodec = cursorCodec;
+		this.entityManager = entityManager;
 	}
 
 	@Transactional
@@ -134,6 +143,42 @@ public class MessageService {
 				hasMore);
 	}
 
+	@Transactional
+	public MessageStatusResponse updateStatus(
+			UUID authenticatedUserId,
+			UUID conversationId,
+			UUID messageId,
+			UpdateMessageStatusRequest request) {
+		requireActiveUser(authenticatedUserId);
+		Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+				.orElseThrow(() -> new NotFoundException(CONVERSATION_NOT_FOUND_MESSAGE));
+		if (!isMember(conversation, authenticatedUserId)) {
+			throw new ForbiddenException(CONVERSATION_FORBIDDEN_MESSAGE);
+		}
+		Message message = messageRepository.findActiveForUpdate(messageId, conversationId)
+				.orElseThrow(() -> new NotFoundException(MESSAGE_NOT_FOUND_MESSAGE));
+		if (message.getSenderId().equals(authenticatedUserId)) {
+			throw new ForbiddenException(MESSAGE_RECIPIENT_FORBIDDEN_MESSAGE);
+		}
+		MessageStatus requestedStatus = MessageStatus.fromDatabaseValue(request.status());
+		MessageStatus currentStatus = message.getStatus();
+		if (requestedStatus.ordinal() < currentStatus.ordinal()) {
+			throw new ValidationException(STATUS_DOWNGRADE_MESSAGE);
+		}
+		if (requestedStatus == currentStatus) {
+			return MessageStatusResponse.from(message);
+		}
+		message.setStatus(requestedStatus);
+		messageRepository.saveAndFlush(message);
+		entityManager.refresh(message);
+		MessageStatusResponse response = MessageStatusResponse.from(message);
+		registerAfterCommitStatusPublish(
+				conversation.getUserAId(),
+				conversation.getUserBId(),
+				response);
+		return response;
+	}
+
 	private MessageResponse requireMatchingIdempotencyScope(
 			Message message,
 			UUID conversationId,
@@ -169,6 +214,19 @@ public class MessageService {
 			@Override
 			public void afterCommit() {
 				realtimePublisher.publishNewMessage(recipientUserId, response);
+			}
+		});
+	}
+
+	private void registerAfterCommitStatusPublish(
+			UUID firstUserId,
+			UUID secondUserId,
+			MessageStatusResponse response) {
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() {
+				realtimePublisher.publishStatusUpdate(firstUserId, response);
+				realtimePublisher.publishStatusUpdate(secondUserId, response);
 			}
 		});
 	}

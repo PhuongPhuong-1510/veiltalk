@@ -8,9 +8,12 @@ import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 public interface MessageRepository extends JpaRepository<Message, UUID> {
 
@@ -28,6 +31,18 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 			@Param("senderId") UUID senderId,
 			@Param("content") String content,
 			@Param("clientTimestamp") Instant clientTimestamp);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+			SELECT message
+			FROM Message message
+			WHERE message.id = :messageId
+				AND message.conversationId = :conversationId
+				AND message.deletedAt IS NULL
+			""")
+	java.util.Optional<Message> findActiveForUpdate(
+			@Param("messageId") UUID messageId,
+			@Param("conversationId") UUID conversationId);
 
 	Slice<Message> findByConversationIdAndDeletedAtIsNullOrderByClientTimestampAsc(
 			UUID conversationId,

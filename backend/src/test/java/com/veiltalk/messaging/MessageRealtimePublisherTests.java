@@ -76,6 +76,64 @@ class MessageRealtimePublisherTests {
 		verify(failureCounter).increment();
 	}
 
+	@Test
+	void publishesStatusUpdateContract() throws Exception {
+		StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+		ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+		MeterRegistry meterRegistry = mock(MeterRegistry.class);
+		Counter failureCounter = mock(Counter.class);
+		when(meterRegistry.counter("messaging.redis.publish.failures")).thenReturn(failureCounter);
+		MessageRealtimePublisher publisher = new MessageRealtimePublisher(
+				redisTemplate,
+				objectMapper,
+				meterRegistry);
+		UUID userId = UUID.randomUUID();
+		MessageStatusResponse status = new MessageStatusResponse(
+				UUID.randomUUID(),
+				"read",
+				Instant.now());
+		ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+
+		publisher.publishStatusUpdate(userId, status);
+
+		verify(redisTemplate).convertAndSend(
+				org.mockito.ArgumentMatchers.eq("messaging:user:" + userId),
+				payloadCaptor.capture());
+		JsonNode payload = objectMapper.readTree(payloadCaptor.getValue());
+		assertThat(payload.get("type").asText()).isEqualTo("MESSAGE_STATUS_UPDATE");
+		assertThat(payload.get("data").get("id").asText()).isEqualTo(status.id().toString());
+		assertThat(payload.get("data").get("status").asText()).isEqualTo("read");
+		assertThat(payload.get("data").has("updated_at")).isFalse();
+	}
+
+	@Test
+	void statusPublishFailureIsBestEffortAndIncrementsMetric() throws Exception {
+		StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+		ObjectMapper objectMapper = mock(ObjectMapper.class);
+		MeterRegistry meterRegistry = mock(MeterRegistry.class);
+		Counter failureCounter = mock(Counter.class);
+		UUID userId = UUID.randomUUID();
+		MessageStatusResponse status = new MessageStatusResponse(
+				UUID.randomUUID(),
+				"read",
+				Instant.now());
+		when(objectMapper.writeValueAsString(org.mockito.ArgumentMatchers.any()))
+				.thenReturn("{\"type\":\"MESSAGE_STATUS_UPDATE\"}");
+		when(redisTemplate.convertAndSend(
+				"messaging:user:" + userId,
+				"{\"type\":\"MESSAGE_STATUS_UPDATE\"}"))
+				.thenThrow(new IllegalStateException("Redis unavailable"));
+		when(meterRegistry.counter("messaging.redis.publish.failures")).thenReturn(failureCounter);
+		MessageRealtimePublisher publisher = new MessageRealtimePublisher(
+				redisTemplate,
+				objectMapper,
+				meterRegistry);
+
+		assertThatCode(() -> publisher.publishStatusUpdate(userId, status))
+				.doesNotThrowAnyException();
+		verify(failureCounter).increment();
+	}
+
 	private MessageResponse sampleMessage() {
 		return new MessageResponse(
 				UUID.randomUUID(),

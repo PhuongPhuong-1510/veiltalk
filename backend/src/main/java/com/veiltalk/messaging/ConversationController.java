@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
@@ -84,5 +85,18 @@ public class ConversationController {
 				id,
 				cursor,
 				limit);
+	}
+
+	@PutMapping("/conversations/{id}/messages/{messageId}")
+	MessageStatusResponse updateMessageStatus(
+			Authentication authentication,
+			@PathVariable UUID id,
+			@PathVariable UUID messageId,
+			@Valid @RequestBody UpdateMessageStatusRequest request) {
+		return messageService.updateStatus(
+				(UUID) authentication.getPrincipal(),
+				id,
+				messageId,
+				request);
 	}
 }

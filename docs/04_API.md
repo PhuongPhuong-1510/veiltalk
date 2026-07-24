@@ -521,13 +521,21 @@ HTTP Status Codes
 
 ### 6.6. PUT /conversations/{id}/messages/{msgId}
 
-Cập nhật trạng thái tin nhắn (từ sent sang delivered hoặc read). Dùng bởi client nhận khi tin nhắn được đẩy tới và khi người dùng đọc tin.
+Cập nhật trạng thái tin nhắn. Chỉ recipient được phép gọi; sender và user ngoài conversation nhận 403. Message phải thuộc đúng conversation trên path và cả hai resource phải chưa soft-delete, nếu không trả 404.
 
 Request Body
 
 | **Field**  | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                     |
 |------------|----------|--------------|-------------------------------------------------------------------------------|
 | **status** | string   | Có           | Trạng thái mới: 'delivered' hoặc 'read' — không thể quay lại trạng thái trước |
+
+Các bước tăng hợp lệ: `sent → delivered`, `sent → read`, `delivered → read`. Gửi lại cùng trạng thái là idempotent: trả 200 nhưng không đổi `updated_at` và không publish lại. Trạng thái giảm trả `400 VALIDATION_ERROR`, không thay đổi dữ liệu.
+
+Response 200 OK
+
+{ "id": "uuid", "status": "read", "updated_at": "2026-06-21T10:31:00Z" }
+
+Khi trạng thái thực sự tăng, Backend chỉ publish sau khi transaction database commit thành công. Event `MESSAGE_STATUS_UPDATE` được gửi best-effort tới cả `messaging:user:{senderUserId}` và `messaging:user:{recipientUserId}` để đồng bộ nhiều phiên/thiết bị; client xử lý event idempotent. Lỗi Redis được ghi log/metric nhưng không rollback dữ liệu hoặc làm REST API thất bại. Việc đổi status không cập nhật `conversation.updated_at`.
 
 HTTP Status Codes
 
@@ -536,6 +544,7 @@ HTTP Status Codes
 | **200**         | OK          | Trạng thái đã cập nhật                                          |
 | **400**         | Bad Request | status không hợp lệ hoặc cố giảm trạng thái (ví dụ read → sent) |
 | **403**         | Forbidden   | User không phải người nhận của tin nhắn này                     |
+| **404**         | Not Found   | Conversation/message không tồn tại, đã soft-delete hoặc message không thuộc conversation |
 
 ## 7. Nhóm Videos
 

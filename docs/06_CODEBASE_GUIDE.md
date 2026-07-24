@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T16 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T17 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -177,11 +177,14 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/messaging/MessageCursorCodec.java` | Mã hóa/giải mã keyset cursor từ `client_timestamp` và message id |
 | `backend/src/main/java/com/veiltalk/messaging/MessageHistoryResponse.java` | DTO một message trong response lịch sử |
 | `backend/src/main/java/com/veiltalk/messaging/MessageListResponse.java` | DTO trang lịch sử với `prev_cursor` và `has_more` |
+| `backend/src/main/java/com/veiltalk/messaging/UpdateMessageStatusRequest.java` | DTO request cập nhật status, chỉ nhận `delivered` hoặc `read` |
+| `backend/src/main/java/com/veiltalk/messaging/MessageStatusResponse.java` | DTO response status message cùng `updated_at` |
 | `backend/src/test/java/com/veiltalk/messaging/ConversationCreateIntegrationTests.java` | Integration test TC-21–TC-22, validation, authentication và soft-delete |
 | `backend/src/test/java/com/veiltalk/messaging/ConversationQueryIntegrationTests.java` | Integration test TC-59–TC-60, cursor, membership và soft-delete |
 | `backend/src/test/java/com/veiltalk/messaging/MessageCreateIntegrationTests.java` | Integration test TC-23–TC-25, idempotency, collision, validation, membership và publish sau commit |
 | `backend/src/test/java/com/veiltalk/messaging/MessageRealtimePublisherTests.java` | Unit test channel/payload Redis và cơ chế best-effort khi publish lỗi |
 | `backend/src/test/java/com/veiltalk/messaging/MessageHistoryIntegrationTests.java` | Integration test TC-26, keyset cursor, tie-breaker, soft-delete, limit và quyền truy cập |
+| `backend/src/test/java/com/veiltalk/messaging/MessageStatusIntegrationTests.java` | Integration test TC-27–TC-28, transition, idempotency, quyền, 404 và publish sau commit |
 
 ### Module video
 
@@ -327,6 +330,15 @@ message/trang. Trang đầu lấy nhóm mới nhất bằng truy vấn giảm d�
 Truy vấn chỉ lấy message có `deleted_at IS NULL` và endpoint kiểm tra active session,
 conversation tồn tại cùng membership. TC-26 và các ca cursor/limit/quyền/soft-delete đều PASS.
 Toàn bộ 103 test Backend đều PASS.
+
+P2-T17 triển khai protected `PUT /conversations/{id}/messages/{messageId}`. Chỉ recipient
+được tăng status theo các bước `sent → delivered`, `sent → read`, `delivered → read`; sender
+và user ngoài conversation nhận 403. Resource thiếu/soft-delete hoặc message không thuộc đúng
+conversation nhận 404. Cùng status trả 200 nhưng không đổi `updated_at`/không publish; downgrade
+trả 400 và giữ nguyên dữ liệu. Update thực sự dùng pessimistic lock, không chạm
+`conversation.updated_at`, và chỉ sau DB commit mới publish `MESSAGE_STATUS_UPDATE` best-effort
+tới channel của cả sender lẫn recipient. Lỗi Redis được ghi log/metric và không làm API thất bại.
+TC-27–TC-28, các ca bổ sung trong phạm vi status và toàn bộ 112 test Backend đều PASS.
 
 ## Signaling Server
 
