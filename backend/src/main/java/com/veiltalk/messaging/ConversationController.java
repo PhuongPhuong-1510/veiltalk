@@ -72,4 +72,17 @@ public class ConversationController {
 				.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
 				.body(result.response());
 	}
+
+	@GetMapping("/conversations/{id}/messages")
+	MessageListResponse getMessages(
+			Authentication authentication,
+			@PathVariable UUID id,
+			@RequestParam(required = false) String cursor,
+			@RequestParam(defaultValue = "30") String limit) {
+		return messageService.getMessages(
+				(UUID) authentication.getPrincipal(),
+				id,
+				cursor,
+				limit);
+	}
 }

@@ -465,7 +465,7 @@ HTTP Status Codes
 
 ### 6.4. GET /conversations/{id}/messages
 
-Lịch sử tin nhắn của một conversation, sắp xếp theo client_timestamp tăng dần. Tương ứng FR-12. Cursor-based pagination để load tin nhắn cũ hơn (infinite scroll ngược lên).
+Lịch sử tin nhắn của một conversation. Trang đầu lấy các tin nhắn mới nhất; mỗi trang response sắp xếp theo `(client_timestamp ASC, id ASC)` để hiển thị theo thời gian. Cursor chứa cặp `(client_timestamp, id)` của biên cũ nhất và dùng để load các tin nhắn cũ hơn (infinite scroll ngược lên), tránh trùng/thiếu khi nhiều tin nhắn có cùng timestamp. Tương ứng FR-12.
 
 *Lý do response có hai timestamp (client_timestamp và created_at): client_timestamp là thứ tự gửi theo ý người dùng — dùng để hiển thị và sắp xếp tin nhắn; created_at là thứ tự server nhận — dùng để index DB và audit. Khi mạng không ổn định, hai giá trị này có thể lệch nhau. Client hiển thị theo client_timestamp, server index theo created_at. Đây là thiết kế có chủ đích, không phải dữ liệu trùng lặp.*
 
@@ -479,7 +479,7 @@ Query Parameters
 
 | **Tham số** | **Kiểu** | **Bắt buộc** | **Mô tả**                                              |
 |-------------|----------|--------------|--------------------------------------------------------|
-| **cursor**  | string   | Không        | Cursor để load tin nhắn cũ hơn (lấy từ response trước) |
+| **cursor**  | string   | Không        | `prev_cursor` để load tin nhắn cũ hơn (lấy từ response trước) |
 | **limit**   | integer  | Không        | Số tin nhắn mỗi trang, mặc định 30, tối đa 100         |
 
 Response 200 OK

@@ -34,6 +34,31 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 			Pageable pageable);
 
 	@Query(value = """
+			SELECT *
+			FROM messages
+			WHERE conversation_id = :conversationId
+				AND deleted_at IS NULL
+			ORDER BY client_timestamp DESC, id DESC
+			""", nativeQuery = true)
+	List<Message> findLatestActive(
+			@Param("conversationId") UUID conversationId,
+			Pageable pageable);
+
+	@Query(value = """
+			SELECT *
+			FROM messages
+			WHERE conversation_id = :conversationId
+				AND deleted_at IS NULL
+				AND (client_timestamp, id) < (:clientTimestamp, :messageId)
+			ORDER BY client_timestamp DESC, id DESC
+			""", nativeQuery = true)
+	List<Message> findActiveBefore(
+			@Param("conversationId") UUID conversationId,
+			@Param("clientTimestamp") Instant clientTimestamp,
+			@Param("messageId") UUID messageId,
+			Pageable pageable);
+
+	@Query(value = """
 			SELECT DISTINCT ON (conversation_id)
 				conversation_id AS conversationId,
 				content,

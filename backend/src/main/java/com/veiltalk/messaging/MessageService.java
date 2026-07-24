@@ -2,8 +2,12 @@ package com.veiltalk.messaging;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -28,21 +32,25 @@ public class MessageService {
 			"client_timestamp must be within 5 minutes of server time";
 	private static final String MESSAGE_ID_CONFLICT_MESSAGE =
 			"Message id already belongs to another sender or conversation";
+	private static final String INVALID_LIMIT_MESSAGE = "limit must be between 1 and 100";
 
 	private final ConversationRepository conversationRepository;
 	private final MessageRepository messageRepository;
 	private final UserRepository userRepository;
 	private final MessageRealtimePublisher realtimePublisher;
+	private final MessageCursorCodec cursorCodec;
 
 	public MessageService(
 			ConversationRepository conversationRepository,
 			MessageRepository messageRepository,
 			UserRepository userRepository,
-			MessageRealtimePublisher realtimePublisher) {
+			MessageRealtimePublisher realtimePublisher,
+			MessageCursorCodec cursorCodec) {
 		this.conversationRepository = conversationRepository;
 		this.messageRepository = messageRepository;
 		this.userRepository = userRepository;
 		this.realtimePublisher = realtimePublisher;
+		this.cursorCodec = cursorCodec;
 	}
 
 	@Transactional
@@ -88,6 +96,44 @@ public class MessageService {
 		return new CreateResult(response, created);
 	}
 
+	@Transactional(readOnly = true)
+	public MessageListResponse getMessages(
+			UUID authenticatedUserId,
+			UUID conversationId,
+			String encodedCursor,
+			String requestedLimit) {
+		requireActiveUser(authenticatedUserId);
+		Conversation conversation = conversationRepository.findByIdAndDeletedAtIsNull(conversationId)
+				.orElseThrow(() -> new NotFoundException(CONVERSATION_NOT_FOUND_MESSAGE));
+		if (!isMember(conversation, authenticatedUserId)) {
+			throw new ForbiddenException(CONVERSATION_FORBIDDEN_MESSAGE);
+		}
+		int limit = parseLimit(requestedLimit);
+		PageRequest page = PageRequest.of(0, limit + 1);
+		List<Message> fetched;
+		if (encodedCursor == null) {
+			fetched = messageRepository.findLatestActive(conversationId, page);
+		} else {
+			MessageCursorCodec.Cursor cursor = cursorCodec.decode(encodedCursor);
+			fetched = messageRepository.findActiveBefore(
+					conversationId,
+					cursor.clientTimestamp(),
+					cursor.id(),
+					page);
+		}
+		boolean hasMore = fetched.size() > limit;
+		List<Message> messages = new ArrayList<>(
+				hasMore ? fetched.subList(0, limit) : fetched);
+		String previousCursor = hasMore
+				? cursorCodec.encode(messages.get(messages.size() - 1))
+				: null;
+		Collections.reverse(messages);
+		return new MessageListResponse(
+				messages.stream().map(MessageHistoryResponse::from).toList(),
+				previousCursor,
+				hasMore);
+	}
+
 	private MessageResponse requireMatchingIdempotencyScope(
 			Message message,
 			UUID conversationId,
@@ -103,6 +149,18 @@ public class MessageService {
 		Duration difference = Duration.between(Instant.now(), clientTimestamp).abs();
 		if (difference.compareTo(MAX_CLIENT_CLOCK_SKEW) > 0) {
 			throw new ValidationException(INVALID_TIMESTAMP_MESSAGE);
+		}
+	}
+
+	private int parseLimit(String requestedLimit) {
+		try {
+			int limit = Integer.parseInt(requestedLimit);
+			if (limit < 1 || limit > 100) {
+				throw new ValidationException(INVALID_LIMIT_MESSAGE);
+			}
+			return limit;
+		} catch (NumberFormatException exception) {
+			throw new ValidationException(INVALID_LIMIT_MESSAGE);
 		}
 	}
 

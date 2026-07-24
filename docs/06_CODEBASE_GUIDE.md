@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T15 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T16 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -174,10 +174,14 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/messaging/MessageResponse.java` | DTO response message và dữ liệu realtime `NEW_MESSAGE` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageService.java` | Validate, insert idempotent và đăng ký publish realtime sau transaction commit |
 | `backend/src/main/java/com/veiltalk/messaging/MessageRealtimePublisher.java` | Publish best-effort đến Redis channel theo người nhận; ghi log/metric khi lỗi |
+| `backend/src/main/java/com/veiltalk/messaging/MessageCursorCodec.java` | Mã hóa/giải mã keyset cursor từ `client_timestamp` và message id |
+| `backend/src/main/java/com/veiltalk/messaging/MessageHistoryResponse.java` | DTO một message trong response lịch sử |
+| `backend/src/main/java/com/veiltalk/messaging/MessageListResponse.java` | DTO trang lịch sử với `prev_cursor` và `has_more` |
 | `backend/src/test/java/com/veiltalk/messaging/ConversationCreateIntegrationTests.java` | Integration test TC-21–TC-22, validation, authentication và soft-delete |
 | `backend/src/test/java/com/veiltalk/messaging/ConversationQueryIntegrationTests.java` | Integration test TC-59–TC-60, cursor, membership và soft-delete |
 | `backend/src/test/java/com/veiltalk/messaging/MessageCreateIntegrationTests.java` | Integration test TC-23–TC-25, idempotency, collision, validation, membership và publish sau commit |
 | `backend/src/test/java/com/veiltalk/messaging/MessageRealtimePublisherTests.java` | Unit test channel/payload Redis và cơ chế best-effort khi publish lỗi |
+| `backend/src/test/java/com/veiltalk/messaging/MessageHistoryIntegrationTests.java` | Integration test TC-26, keyset cursor, tie-breaker, soft-delete, limit và quyền truy cập |
 
 ### Module video
 
@@ -315,6 +319,14 @@ Redis Pub/Sub hiện là best-effort: lỗi publish được ghi log và metric
 `messaging.redis.publish.failures`, không làm API thất bại hay rollback message; client đồng bộ
 lại qua message history khi reconnect. Transactional outbox chưa thuộc phạm vi P2-T15. TC-23–TC-25,
 2 unit test publisher và toàn bộ 99 test Backend đều PASS.
+
+P2-T16 triển khai protected `GET /conversations/{id}/messages`, mặc định 30 và tối đa 100
+message/trang. Trang đầu lấy nhóm mới nhất bằng truy vấn giảm dần, sau đó đảo về
+`(client_timestamp ASC, id ASC)` trong response. `prev_cursor` dùng cặp
+`(client_timestamp, message_id)` để tải trang cũ hơn ổn định, kể cả khi timestamp trùng nhau.
+Truy vấn chỉ lấy message có `deleted_at IS NULL` và endpoint kiểm tra active session,
+conversation tồn tại cùng membership. TC-26 và các ca cursor/limit/quyền/soft-delete đều PASS.
+Toàn bộ 103 test Backend đều PASS.
 
 ## Signaling Server
 
