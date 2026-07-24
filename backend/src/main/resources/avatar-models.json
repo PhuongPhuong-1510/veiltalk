@@ -1,0 +1,52 @@
+{
+  "models": [
+    {
+      "id": "avatar_model_01",
+      "name": "Sakura — Anime",
+      "model_url": "https://cdn.veiltalk.example.com/models/avatar_model_01.glb",
+      "thumbnail_url": "https://cdn.veiltalk.example.com/models/thumbs/avatar_model_01.png",
+      "supported_customizations": ["hair_color", "eye_color", "outfit"],
+      "outfit_options": ["casual_01", "casual_02", "formal_01"]
+    },
+    {
+      "id": "avatar_model_02",
+      "name": "Ren — Anime",
+      "model_url": "https://cdn.veiltalk.example.com/models/avatar_model_02.glb",
+      "thumbnail_url": "https://cdn.veiltalk.example.com/models/thumbs/avatar_model_02.png",
+      "supported_customizations": ["hair_color", "eye_color", "outfit"],
+      "outfit_options": ["casual_01", "street_01", "formal_01"]
+    },
+    {
+      "id": "avatar_model_03",
+      "name": "Luna — Fantasy",
+      "model_url": "https://cdn.veiltalk.example.com/models/avatar_model_03.glb",
+      "thumbnail_url": "https://cdn.veiltalk.example.com/models/thumbs/avatar_model_03.png",
+      "supported_customizations": ["hair_color", "eye_color", "outfit"],
+      "outfit_options": ["adventure_01", "mage_01", "formal_02"]
+    },
+    {
+      "id": "avatar_model_04",
+      "name": "Kai — Fantasy",
+      "model_url": "https://cdn.veiltalk.example.com/models/avatar_model_04.glb",
+      "thumbnail_url": "https://cdn.veiltalk.example.com/models/thumbs/avatar_model_04.png",
+      "supported_customizations": ["hair_color", "eye_color", "outfit"],
+      "outfit_options": ["adventure_01", "knight_01", "formal_02"]
+    },
+    {
+      "id": "avatar_model_05",
+      "name": "Mia — Casual",
+      "model_url": "https://cdn.veiltalk.example.com/models/avatar_model_05.glb",
+      "thumbnail_url": "https://cdn.veiltalk.example.com/models/thumbs/avatar_model_05.png",
+      "supported_customizations": ["hair_color", "eye_color", "outfit"],
+      "outfit_options": ["casual_01", "sport_01", "street_01"]
+    },
+    {
+      "id": "avatar_model_06",
+      "name": "Noah — Casual",
+      "model_url": "https://cdn.veiltalk.example.com/models/avatar_model_06.glb",
+      "thumbnail_url": "https://cdn.veiltalk.example.com/models/thumbs/avatar_model_06.png",
+      "supported_customizations": ["hair_color", "eye_color", "outfit"],
+      "outfit_options": ["casual_02", "sport_01", "street_02"]
+    }
+  ]
+}

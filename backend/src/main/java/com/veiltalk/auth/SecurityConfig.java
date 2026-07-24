@@ -55,6 +55,7 @@ public class SecurityConfig {
 				}))
 				.authorizeHttpRequests(authorize -> authorize
 						.requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
+						.requestMatchers(HttpMethod.GET, "/avatars/models").permitAll()
 						.requestMatchers("/auth/**", "/actuator/health", "/internal/**").permitAll()
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.anyRequest().authenticated())

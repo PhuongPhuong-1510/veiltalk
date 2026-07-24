@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T09 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T10 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -137,6 +137,11 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 |---|---|
 | `backend/src/main/java/com/veiltalk/avatar/AvatarProfile.java` | Entity bảng `avatar_profiles`; `customizations` map JSONB |
 | `backend/src/main/java/com/veiltalk/avatar/AvatarProfileRepository.java` | Repository hồ sơ nhân vật ảo |
+| `backend/src/main/java/com/veiltalk/avatar/AvatarModel.java` | DTO bất biến cho một model catalog, ánh xạ các field JSON snake_case |
+| `backend/src/main/java/com/veiltalk/avatar/AvatarModelCatalogService.java` | Đọc và kiểm tra catalog model nội bộ từ classpath khi khởi động |
+| `backend/src/main/java/com/veiltalk/avatar/AvatarController.java` | REST controller public cho `GET /avatars/models` |
+| `backend/src/main/resources/avatar-models.json` | Catalog nội bộ gồm 6 model; không lưu database |
+| `backend/src/test/java/com/veiltalk/avatar/AvatarModelCatalogIntegrationTests.java` | Integration test TC-10 cho endpoint public và contract catalog |
 
 ### Module nhắn tin
 
@@ -240,6 +245,12 @@ hoặc không tồn tại đều trả cùng `{\"found\":false}`. User tìm th�
 `display_name`, không lộ email. Redis fixed-window limiter giới hạn 10 request/phút/user;
 request vượt ngưỡng trả `429` kèm `Retry-After`. TC-16–TC-19 cùng toàn bộ 70 test Backend
 PASS.
+
+P2-T10 triển khai public `GET /avatars/models`. Catalog gồm 6 model nằm trong
+`avatar-models.json`, được đọc và kiểm tra cấu trúc khi ứng dụng khởi động, không lưu
+database. Mỗi item trả `id`, `name`, `model_url`, `thumbnail_url`,
+`supported_customizations`, `outfit_options`; không trả `model_id`. TC-10, hồi quy
+SecurityConfig và toàn bộ 71 test Backend đều PASS.
 
 ## Signaling Server
 
