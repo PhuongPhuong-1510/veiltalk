@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
@@ -28,11 +29,14 @@ class AuthRegistrationIntegrationTests {
 	private UserRepository userRepository;
 
 	@Autowired
+	private RefreshTokenRepository refreshTokenRepository;
+
+	@Autowired
 	private PasswordEncoder passwordEncoder;
 
 	@Test
 	void tc01RegistersValidAccountAndReturnsTokens() throws Exception {
-		mockMvc.perform(registerRequest("tc01@example.com", "Secure123", "TC 01"))
+		MvcResult result = mockMvc.perform(registerRequest("tc01@example.com", "Secure123", "TC 01"))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.user.id").isNotEmpty())
 				.andExpect(jsonPath("$.user.email").value("tc01@example.com"))
@@ -41,11 +45,20 @@ class AuthRegistrationIntegrationTests {
 				.andExpect(jsonPath("$.user.created_at").isNotEmpty())
 				.andExpect(jsonPath("$.tokens.access_token").isNotEmpty())
 				.andExpect(jsonPath("$.tokens.refresh_token").isNotEmpty())
-				.andExpect(jsonPath("$.tokens.expires_in").value(900));
+				.andExpect(jsonPath("$.tokens.expires_in").value(900))
+				.andReturn();
 
 		User savedUser = userRepository.findByEmailAndDeletedAtIsNull("tc01@example.com").orElseThrow();
 		assertThat(savedUser.getPasswordHash()).isNotEqualTo("Secure123");
 		assertThat(passwordEncoder.matches("Secure123", savedUser.getPasswordHash())).isTrue();
+
+		String refreshToken = com.jayway.jsonpath.JsonPath.read(
+				result.getResponse().getContentAsString(),
+				"$.tokens.refresh_token");
+		RefreshToken storedToken = refreshTokenRepository.findAll().stream().findFirst().orElseThrow();
+		assertThat(storedToken.getUserId()).isEqualTo(savedUser.getId());
+		assertThat(storedToken.getTokenHash()).isNotEqualTo(refreshToken);
+		assertThat(storedToken.getRevokedAt()).isNull();
 	}
 
 	@Test

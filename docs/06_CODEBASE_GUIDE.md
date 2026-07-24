@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T04 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T05 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -81,10 +81,11 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/auth/UserRole.java` | Enum `USER`, `ADMIN` |
 | `backend/src/main/java/com/veiltalk/auth/UserRoleConverter.java` | Chuyển enum role sang giá trị PostgreSQL chữ thường |
 | `backend/src/main/java/com/veiltalk/auth/UserRepository.java` | Repository user; query email, discoverable và soft delete |
-| `backend/src/main/java/com/veiltalk/auth/RefreshTokenRepository.java` | Repository refresh token |
+| `backend/src/main/java/com/veiltalk/auth/RefreshTokenRepository.java` | Repository refresh token; lookup bằng SHA-256 token hash |
 | `backend/src/main/java/com/veiltalk/auth/JwtService.java` | Sinh, xác thực và đọc access/refresh JWT ký HS256 |
 | `backend/src/main/java/com/veiltalk/auth/JwtClaims.java` | Kiểu dữ liệu bất biến cho claims JWT đã xác thực |
-| `backend/src/main/java/com/veiltalk/auth/JwtAuthenticationFilter.java` | Đọc Bearer access token và thiết lập danh tính/role vào `SecurityContext` |
+| `backend/src/main/java/com/veiltalk/auth/JwtAuthenticationFilter.java` | Đọc Bearer access token, từ chối JTI bị blacklist và thiết lập danh tính/role vào `SecurityContext` |
+| `backend/src/main/java/com/veiltalk/auth/JwtBlacklistService.java` | Quản lý key Redis `jwt:blacklist:{jti}` với TTL còn lại của access token |
 | `backend/src/main/java/com/veiltalk/auth/SecurityConfig.java` | Security chain stateless, phân quyền public/protected, CORS, security headers và response 401 chuẩn |
 | `backend/src/main/java/com/veiltalk/auth/AuthController.java` | REST controller cho `POST /auth/register` |
 | `backend/src/main/java/com/veiltalk/auth/AuthService.java` | Nghiệp vụ đăng ký, BCrypt password, lưu user và cấp JWT |
@@ -92,6 +93,8 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/auth/RegisterResponse.java` | DTO response user và access/refresh token theo API mục 3.1 |
 | `backend/src/main/java/com/veiltalk/auth/LoginRequest.java` | DTO request đăng nhập và validation email/password |
 | `backend/src/main/java/com/veiltalk/auth/LoginResponse.java` | DTO response user, trạng thái avatar và tokens theo API mục 3.2 |
+| `backend/src/main/java/com/veiltalk/auth/RefreshTokenRequest.java` | DTO dùng chung cho request refresh/logout |
+| `backend/src/main/java/com/veiltalk/auth/RefreshResponse.java` | DTO access token mới theo API mục 3.3 |
 | `backend/src/main/java/com/veiltalk/auth/ApiExceptionHandler.java` | Chuẩn hóa lỗi validation và conflict theo định dạng API |
 | `backend/src/main/java/com/veiltalk/auth/ConflictException.java` | Lỗi nghiệp vụ HTTP 409 |
 | `backend/src/main/java/com/veiltalk/auth/UnauthorizedException.java` | Lỗi nghiệp vụ HTTP 401 với thông báo đăng nhập chung |
@@ -100,6 +103,7 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/test/java/com/veiltalk/auth/SecurityConfigTests.java` | MVC slice test quy tắc truy cập, response 401, CORS và security headers |
 | `backend/src/test/java/com/veiltalk/auth/AuthRegistrationIntegrationTests.java` | Integration test TC-01, TC-02, TC-03 và đăng ký lại email sau soft delete |
 | `backend/src/test/java/com/veiltalk/auth/AuthLoginIntegrationTests.java` | Integration test TC-04, TC-05, TC-06 và lưu SHA-256 hash của refresh token |
+| `backend/src/test/java/com/veiltalk/auth/AuthRefreshLogoutIntegrationTests.java` | Integration test TC-07, TC-08, TC-09, ownership, soft delete và Redis blacklist TTL |
 
 ### Module nhân vật ảo
 
@@ -170,6 +174,14 @@ mật khẩu sai để chống dò tài khoản. Đăng nhập thành công tr�
 và access/refresh token; refresh token được băm SHA-256 trước khi lưu vào
 `refresh_tokens`, cùng `user_id` và thời điểm hết hạn lấy từ JWT claims. TC-04, TC-05,
 TC-06 và toàn bộ 36 test Backend đều PASS.
+
+P2-T05 triển khai `POST /auth/refresh` và `POST /auth/logout`. Register và login dùng chung
+quy trình phát hành refresh token: chỉ trả token gốc cho client, lưu SHA-256 hash cùng
+user/thời hạn trong database. Refresh kiểm tra đồng thời JWT type, hash, `revoked_at`,
+`expires_at` và trạng thái soft delete của user. Logout chỉ chấp nhận cặp access/refresh
+token cùng user, đặt `revoked_at`, rồi blacklist access-token `jti` trong Redis với TTL
+bằng thời gian token còn lại. `JwtAuthenticationFilter` từ chối ngay JTI đã blacklist.
+TC-07, TC-08, TC-09, các ca ownership/soft delete và toàn bộ 43 test Backend đều PASS.
 
 ## Signaling Server
 

@@ -20,9 +20,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private static final String ACCESS_TOKEN_TYPE = "access";
 
 	private final JwtService jwtService;
+	private final JwtBlacklistService jwtBlacklistService;
 
-	public JwtAuthenticationFilter(JwtService jwtService) {
+	public JwtAuthenticationFilter(
+			JwtService jwtService,
+			JwtBlacklistService jwtBlacklistService) {
 		this.jwtService = jwtService;
+		this.jwtBlacklistService = jwtBlacklistService;
 	}
 
 	@Override
@@ -53,7 +57,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			JwtClaims claims = jwtService.extractClaims(token);
 			if (!ACCESS_TOKEN_TYPE.equals(claims.type())
 					|| claims.subject() == null
-					|| claims.role() == null) {
+					|| claims.role() == null
+					|| jwtBlacklistService.isBlacklisted(claims.jwtId())) {
 				return;
 			}
 

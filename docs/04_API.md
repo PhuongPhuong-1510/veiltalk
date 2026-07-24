@@ -149,6 +149,9 @@ Email của tài khoản đã soft delete không chặn đăng ký mới. Lần 
 với UUID mới; không khôi phục hoặc liên kết dữ liệu của tài khoản cũ. Hành vi này đồng bộ với
 unique partial index `idx_users_email` trong DDD, chỉ áp dụng khi `deleted_at IS NULL`.
 
+Refresh token trả về chỉ xuất hiện ở dạng nguyên gốc trong response cho client. Backend lưu
+SHA-256 hash cùng `user_id`, `expires_at` và `revoked_at = NULL` trong bảng `refresh_tokens`.
+
 ### 3.2. POST /auth/login
 
 Đăng nhập bằng email và mật khẩu. Tương ứng FR-02 (SRS mục 3.1). Thông báo lỗi không phân biệt email sai hay mật khẩu sai — tránh user enumeration.
@@ -164,6 +167,9 @@ Response 200 OK
 
 { "user": { "id": "uuid", "email": "user@example.com", "display_name": "Nguyễn Văn A", "role": "user", "has_avatar": true }, "tokens": { "access_token": "eyJhbGc...", "refresh_token": "eyJhbGc...", "expires_in": 900 } }
 
+Refresh token được phát hành và lưu hash theo cùng quy trình với đăng ký; token nguyên gốc
+không được lưu trong database.
+
 HTTP Status Codes
 
 | **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                                                |
@@ -174,6 +180,10 @@ HTTP Status Codes
 ### 3.3. POST /auth/refresh
 
 Dùng refresh token còn hạn để lấy access token mới mà không cần đăng nhập lại.
+
+Backend chỉ chấp nhận token có JWT hợp lệ và `type = refresh`, SHA-256 hash tồn tại trong
+`refresh_tokens`, `revoked_at IS NULL`, `expires_at` còn hạn và user sở hữu token chưa bị
+soft delete.
 
 Request Body
 
@@ -194,7 +204,13 @@ HTTP Status Codes
 
 ### 3.4. POST /auth/logout
 
-Thu hồi refresh token hiện tại. Access token sẽ tiếp tục hợp lệ đến khi hết hạn tự nhiên (tối đa 15 phút) — đây là đặc tính của JWT stateless, được giảm thiểu bởi thời hạn ngắn của access token.
+Thu hồi refresh token hiện tại và làm access token đang dùng mất hiệu lực ngay. Backend đặt
+`revoked_at` cho refresh token, sau đó lưu `jti` của access token vào Redis theo key
+`jwt:blacklist:{jti}`. TTL của key bằng chính thời gian còn lại đến claim `exp`, không cố
+định 15 phút. Mọi request sau đó dùng access token này bị filter từ chối.
+
+Refresh token trong request phải còn hợp lệ và thuộc cùng user với claim `sub` của access
+token trong header `Authorization`.
 
 Request Body
 
@@ -207,7 +223,7 @@ HTTP Status Codes
 | **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                             |
 |-----------------|--------------|---------------------------------------------------|
 | **204**         | No Content   | Đăng xuất thành công, refresh token đã bị thu hồi |
-| **401**         | Unauthorized | Access token không hợp lệ hoặc hết hạn            |
+| **401**         | Unauthorized | Access token không hợp lệ/hết hạn, refresh token không hợp lệ, hoặc hai token không thuộc cùng user |
 
 ## 4. Nhóm User & Profile
 

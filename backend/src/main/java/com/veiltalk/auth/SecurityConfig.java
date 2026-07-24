@@ -38,7 +38,8 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain securityFilterChain(
 			HttpSecurity http,
-			JwtService jwtService) throws Exception {
+			JwtService jwtService,
+			JwtBlacklistService jwtBlacklistService) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
@@ -52,6 +53,7 @@ public class SecurityConfig {
 					response.getWriter().write(UNAUTHORIZED_RESPONSE);
 				}))
 				.authorizeHttpRequests(authorize -> authorize
+						.requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
 						.requestMatchers("/auth/**", "/actuator/health", "/internal/**").permitAll()
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.anyRequest().authenticated())
@@ -62,7 +64,7 @@ public class SecurityConfig {
 								.includeSubDomains(true)
 								.maxAgeInSeconds(HSTS_MAX_AGE_SECONDS)))
 				.addFilterBefore(
-						new JwtAuthenticationFilter(jwtService),
+						new JwtAuthenticationFilter(jwtService, jwtBlacklistService),
 						UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();

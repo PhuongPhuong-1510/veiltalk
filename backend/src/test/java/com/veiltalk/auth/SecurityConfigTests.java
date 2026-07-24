@@ -2,6 +2,7 @@ package com.veiltalk.auth;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -38,6 +39,9 @@ class SecurityConfigTests {
 	@MockitoBean
 	private JwtService jwtService;
 
+	@MockitoBean
+	private JwtBlacklistService jwtBlacklistService;
+
 	@Test
 	void publicRoutesDoNotRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/auth/test"))
@@ -46,6 +50,12 @@ class SecurityConfigTests {
 				.andExpect(status().isOk());
 		mockMvc.perform(get("/internal/test"))
 				.andExpect(status().isOk());
+	}
+
+	@Test
+	void logoutRequiresAuthenticationAlthoughOtherAuthRoutesArePublic() throws Exception {
+		mockMvc.perform(post("/auth/logout"))
+				.andExpect(status().isUnauthorized());
 	}
 
 	@Test

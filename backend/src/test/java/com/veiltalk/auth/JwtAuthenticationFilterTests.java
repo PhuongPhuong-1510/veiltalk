@@ -26,6 +26,9 @@ class JwtAuthenticationFilterTests {
 	@Mock
 	private JwtService jwtService;
 
+	@Mock
+	private JwtBlacklistService jwtBlacklistService;
+
 	@AfterEach
 	void clearSecurityContext() {
 		SecurityContextHolder.clearContext();
@@ -52,6 +55,23 @@ class JwtAuthenticationFilterTests {
 		assertThat(authentication.getAuthorities())
 				.extracting("authority")
 				.containsExactly("ROLE_ADMIN");
+	}
+
+	@Test
+	void blacklistedAccessTokenDoesNotCreateAuthentication() throws Exception {
+		JwtClaims claims = new JwtClaims(
+				USER_ID,
+				UserRole.ADMIN,
+				"access",
+				JWT_ID,
+				Instant.parse("2026-07-24T12:00:00Z"),
+				Instant.parse("2026-07-24T12:15:00Z"));
+		when(jwtService.extractClaims("revoked-token")).thenReturn(claims);
+		when(jwtBlacklistService.isBlacklisted(JWT_ID)).thenReturn(true);
+
+		runFilter(requestWithAuthorization("Bearer revoked-token"));
+
+		assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
 	}
 
 	@Test
@@ -97,7 +117,7 @@ class JwtAuthenticationFilterTests {
 	}
 
 	private void runFilter(MockHttpServletRequest request) throws Exception {
-		var filter = new JwtAuthenticationFilter(jwtService);
+		var filter = new JwtAuthenticationFilter(jwtService, jwtBlacklistService);
 		filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
 	}
 }
