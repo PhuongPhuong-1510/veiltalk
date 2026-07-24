@@ -1,0 +1,807 @@
+TRƯỜNG ĐẠI HỌC CÔNG NGHỆ — ĐHQGHN
+
+Khoa Công nghệ Thông tin
+
+**TÀI LIỆU THIẾT KẾ API**
+
+*(API Design Document — ADD)*
+
+**VEILTALK**
+
+Đặc tả REST API cho hệ thống giao tiếp qua nhân vật ảo
+
+Phiên bản tài liệu: 1.0
+
+Trạng thái: Bản nháp (Draft)
+
+Ngày cập nhật: 21/06/2026
+
+Người soạn thảo: Lê Thị Tú Phương — MSSV 23020695
+
+Lớp: K68 — Khoa Công nghệ Thông tin
+
+Mục lục
+
+## 1. Giới thiệu
+
+### 1.1. Mục đích tài liệu
+
+Tài liệu này đặc tả chi tiết toàn bộ REST API của hệ thống VeilTalk, bao gồm: danh sách endpoint, định dạng request/response, mã trạng thái HTTP, quy tắc xác thực, và giới hạn truy cập. Tài liệu này là tài liệu bổ trợ cho SAD v1.0 (mục 4.3 — Backend API tham chiếu tài liệu này) và được soạn nhất quán với SRS v1.0 (yêu cầu chức năng), DDD v1.0 (schema database), và các quyết định kiến trúc đã được thiết lập.
+
+### 1.2. Quy ước chung
+
+- Base URL: https://veiltalk.example.com/api — tất cả endpoint đều có tiền tố này.
+
+- Định dạng dữ liệu: JSON cho tất cả request body và response body (Content-Type: application/json).
+
+- Xác thực: Bearer JWT trong header Authorization: Bearer \<access_token\>. Các endpoint không yêu cầu xác thực được đánh dấu rõ trong bảng tổng quan.
+
+- Thời hạn token: access token 15 phút, refresh token 7 ngày (nhất quán với SAD mục 4.3).
+
+- Múi giờ: tất cả timestamp trả về theo định dạng ISO 8601 UTC (ví dụ: 2026-06-21T10:30:00Z).
+
+- Phân trang: endpoint trả về danh sách dùng cursor-based pagination với tham số cursor và limit (mặc định 20).
+
+- Soft delete: dữ liệu đã xóa (deleted_at IS NOT NULL) không bao giờ được trả về trong response thông thường.
+
+- CORS: chỉ cho phép origin của client domain — nhất quán với NFR-32 và SAD mục 9.1.
+
+### 1.3. Tài liệu liên quan
+
+- SRS v1.0 — yêu cầu chức năng FR-01 đến FR-22.
+
+- SAD v1.0 — mục 4.3 Backend API, mục 9 Bảo mật.
+
+- DDD v1.0 — schema bảng database tương ứng với từng entity trong API.
+
+## 2. Tổng quan Endpoint
+
+### 2.1. Nhóm Authentication
+
+| **Method** | **Endpoint**   | **Mô tả**                                      | **Auth** |
+|------------|----------------|------------------------------------------------|----------|
+| **POST**   | /auth/register | Đăng ký tài khoản mới (FR-01)                  | Không    |
+| **POST**   | /auth/login    | Đăng nhập, nhận access + refresh token (FR-02) | Không    |
+| **POST**   | /auth/refresh  | Làm mới access token bằng refresh token        | Không    |
+| **POST**   | /auth/logout   | Thu hồi refresh token, đăng xuất               | Có       |
+
+### 2.2. Nhóm User & Profile
+
+| **Method** | **Endpoint**       | **Mô tả**                                                 | **Auth** |
+|------------|--------------------|-----------------------------------------------------------|----------|
+| **GET**    | /users/me          | Lấy thông tin hồ sơ của bản thân (FR-03)                  | Có       |
+| **PUT**    | /users/me          | Cập nhật tên hiển thị, ảnh đại diện (FR-03)               | Có       |
+| **GET**    | /users/me/settings | Lấy cài đặt tài khoản (discoverable, thông báo...)        | Có       |
+| **PUT**    | /users/me/settings | Cập nhật cài đặt tài khoản (FR-22 — bật/tắt discoverable) | Có       |
+| **DELETE** | /users/me          | Yêu cầu xóa tài khoản, soft delete (NFR-27)               | Có       |
+| **POST**   | /users/search      | Tìm kiếm người dùng theo email opt-in (FR-22)             | Có       |
+
+### 2.3. Nhóm Avatar
+
+| **Method** | **Endpoint**      | **Mô tả**                                                    | **Auth** |
+|------------|-------------------|--------------------------------------------------------------|----------|
+| **GET**    | /avatars/me       | Lấy hồ sơ nhân vật ảo của bản thân (FR-04)                   | Có       |
+| **PUT**    | /avatars/me       | Tạo hoặc cập nhật nhân vật ảo (FR-04)                        | Có       |
+| **GET**    | /avatars/{userId} | Lấy metadata nhân vật ảo của user khác (FR-04, call session) | Có       |
+
+### 2.4. Nhóm Conversations & Messages
+
+| **Method** | **Endpoint**                         | **Mô tả**                                           | **Auth** |
+|------------|--------------------------------------|-----------------------------------------------------|----------|
+| **POST**   | /conversations                       | Tạo hoặc lấy conversation 1-1 với user khác (FR-22) | Có       |
+| **GET**    | /conversations                       | Danh sách cuộc trò chuyện gần nhất của user         | Có       |
+| **GET**    | /conversations/{id}                  | Chi tiết một cuộc trò chuyện                        | Có       |
+| **GET**    | /conversations/{id}/messages         | Lịch sử tin nhắn theo cursor (FR-12)                | Có       |
+| **POST**   | /conversations/{id}/messages         | Gửi tin nhắn mới (FR-11)                            | Có       |
+| **PUT**    | /conversations/{id}/messages/{msgId} | Cập nhật trạng thái tin nhắn (delivered/read)       | Có       |
+
+### 2.5. Nhóm Videos
+
+*Flow quay và lưu video dùng MinIO multipart upload: client upload từng chunk trực tiếp lên MinIO qua presigned URL, MinIO gửi webhook về Backend khi upload hoàn tất. Client không có quyền tự khai báo trạng thái video.*
+
+| **Method** | **Endpoint**             | **Mô tả**                                                                | **Auth** |
+|------------|--------------------------|--------------------------------------------------------------------------|----------|
+| **GET**    | /videos                  | Danh sách video trong thư viện cá nhân (FR-17)                           | Có       |
+| **POST**   | /videos                  | Khởi tạo multipart upload, nhận presigned URL cho chunk đầu tiên (FR-16) | Có       |
+| **GET**    | /videos/{id}             | Chi tiết một video, kèm presigned URL để phát                            | Có       |
+| **PUT**    | /videos/{id}             | Đổi tên video (FR-17)                                                    | Có       |
+| **DELETE** | /videos/{id}             | Xóa video, soft delete (FR-17)                                           | Có       |
+| **POST**   | /videos/{id}/chunks      | Lấy presigned URL cho chunk tiếp theo trong phiên quay                   | Có       |
+| **POST**   | /videos/{id}/finalize    | Hoàn tất phiên quay, trigger MinIO complete multipart upload             | Có       |
+| **POST**   | /videos/{id}/abort       | Hủy phiên quay đang dở, dọn dẹp chunks trên MinIO                        | Có       |
+| **POST**   | /internal/videos/webhook | MinIO webhook callback — chỉ nhận từ MinIO (signed), không phải client   | Internal |
+
+### 2.6. Nhóm Metrics (Observability)
+
+| **Method** | **Endpoint**    | **Mô tả**                                                 | **Auth** |
+|------------|-----------------|-----------------------------------------------------------|----------|
+| **POST**   | /metrics/client | Gửi số liệu hiệu năng từ client (NFR-22: latency, fps...) | Có       |
+
+## 3. Nhóm Authentication
+
+*Tất cả endpoint trong nhóm này không yêu cầu Authorization header. JWT được trả về sau đăng nhập thành công và dùng cho mọi endpoint có Auth = Có.*
+
+### 3.1. POST /auth/register
+
+Đăng ký tài khoản mới. Tương ứng FR-01 (SRS mục 3.1).
+
+Request Body
+
+| **Field**        | **Kiểu** | **Bắt buộc** | **Mô tả**                                               |
+|------------------|----------|--------------|---------------------------------------------------------|
+| **email**        | string   | Có           | Địa chỉ email — phải là email hợp lệ, chưa được đăng ký |
+| **password**     | string   | Có           | Mật khẩu — tối thiểu 8 ký tự, ít nhất 1 chữ hoa và 1 số |
+| **display_name** | string   | Có           | Tên hiển thị — 1-100 ký tự                              |
+
+Response 201 Created
+
+{ "user": { "id": "uuid", "email": "user@example.com", "display_name": "Nguyễn Văn A", "role": "user", "created_at": "2026-06-21T10:00:00Z" }, "tokens": { "access_token": "eyJhbGc...", "refresh_token": "eyJhbGc...", "expires_in": 900 } }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa** | **Trường hợp cụ thể**                                                                                                  |
+|-----------------|-------------|------------------------------------------------------------------------------------------------------------------------|
+| **201**         | Created     | Đăng ký thành công, tài khoản được tạo                                                                                 |
+| **400**         | Bad Request | Email không hợp lệ, mật khẩu không đủ mạnh, display_name trống                                                         |
+| **409**         | Conflict    | Email đã được đăng ký (lưu ý: chỉ trả về khi email đã tồn tại — không phân biệt với trường hợp email đã xóa tài khoản) |
+
+### 3.2. POST /auth/login
+
+Đăng nhập bằng email và mật khẩu. Tương ứng FR-02 (SRS mục 3.1). Thông báo lỗi không phân biệt email sai hay mật khẩu sai — tránh user enumeration.
+
+Request Body
+
+| **Field**    | **Kiểu** | **Bắt buộc** | **Mô tả**                |
+|--------------|----------|--------------|--------------------------|
+| **email**    | string   | Có           | Địa chỉ email đã đăng ký |
+| **password** | string   | Có           | Mật khẩu                 |
+
+Response 200 OK
+
+{ "user": { "id": "uuid", "email": "user@example.com", "display_name": "Nguyễn Văn A", "role": "user", "has_avatar": true }, "tokens": { "access_token": "eyJhbGc...", "refresh_token": "eyJhbGc...", "expires_in": 900 } }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                                                |
+|-----------------|--------------|--------------------------------------------------------------------------------------|
+| **200**         | OK           | Đăng nhập thành công                                                                 |
+| **401**         | Unauthorized | Email hoặc mật khẩu không đúng — cùng một response body, không tiết lộ field nào sai |
+
+### 3.3. POST /auth/refresh
+
+Dùng refresh token còn hạn để lấy access token mới mà không cần đăng nhập lại.
+
+Request Body
+
+| **Field**         | **Kiểu** | **Bắt buộc** | **Mô tả**                                    |
+|-------------------|----------|--------------|----------------------------------------------|
+| **refresh_token** | string   | Có           | Refresh token còn hạn (7 ngày kể từ lúc cấp) |
+
+Response 200 OK
+
+{ "access_token": "eyJhbGc...", "expires_in": 900 }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                                               |
+|-----------------|--------------|-------------------------------------------------------------------------------------|
+| **200**         | OK           | Access token mới được cấp                                                           |
+| **401**         | Unauthorized | Refresh token hết hạn, đã bị thu hồi, hoặc không hợp lệ — client phải đăng nhập lại |
+
+### 3.4. POST /auth/logout
+
+Thu hồi refresh token hiện tại. Access token sẽ tiếp tục hợp lệ đến khi hết hạn tự nhiên (tối đa 15 phút) — đây là đặc tính của JWT stateless, được giảm thiểu bởi thời hạn ngắn của access token.
+
+Request Body
+
+| **Field**         | **Kiểu** | **Bắt buộc** | **Mô tả**                 |
+|-------------------|----------|--------------|---------------------------|
+| **refresh_token** | string   | Có           | Refresh token cần thu hồi |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                             |
+|-----------------|--------------|---------------------------------------------------|
+| **204**         | No Content   | Đăng xuất thành công, refresh token đã bị thu hồi |
+| **401**         | Unauthorized | Access token không hợp lệ hoặc hết hạn            |
+
+## 4. Nhóm User & Profile
+
+### 4.1. GET /users/me
+
+Lấy thông tin hồ sơ của chính user đang đăng nhập. Tương ứng FR-03.
+
+Response 200 OK
+
+{ "id": "uuid", "email": "user@example.com", "display_name": "Nguyễn Văn A", "avatar_url": "https://cdn.example.com/avatars/user.jpg", "role": "user", "has_avatar": true, "created_at": "2026-06-21T10:00:00Z" }
+
+### 4.2. PUT /users/me
+
+Cập nhật tên hiển thị hoặc ảnh đại diện ứng dụng. Tương ứng FR-03. Tất cả field đều tùy chọn — chỉ gửi field cần thay đổi.
+
+Request Body
+
+| **Field**        | **Kiểu**     | **Bắt buộc** | **Mô tả**                                          |
+|------------------|--------------|--------------|----------------------------------------------------|
+| **display_name** | string       | Không        | Tên hiển thị mới — 1-100 ký tự                     |
+| **avatar_url**   | string\|null | Không        | URL ảnh đại diện mới; gửi null để xóa ảnh đại diện |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                 |
+|-----------------|--------------|---------------------------------------|
+| **200**         | OK           | Hồ sơ được cập nhật, trả về hồ sơ mới |
+| **400**         | Bad Request  | display_name rỗng hoặc vượt 100 ký tự |
+| **401**         | Unauthorized | Token không hợp lệ                    |
+
+### 4.3. GET /users/me/settings
+
+Lấy cài đặt tài khoản, bao gồm trạng thái tùy chọn discoverable phục vụ FR-22.
+
+Response 200 OK
+
+{ "discoverable": false, "email_notifications": true, "theme": "system" // theme: "dark" \| "light" \| "system" (mặc định "system") // Lưu server-side để đồng bộ cross-device (không dùng localStorage) }
+
+### 4.4. PUT /users/me/settings
+
+Cập nhật cài đặt tài khoản. Quan trọng nhất là discoverable — khi tắt (false, mặc định), user không thể bị tìm thấy qua POST /users/search (FR-22).
+
+Request Body
+
+| **Field**               | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                                                                                        |
+|-------------------------|----------|--------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| **discoverable**        | boolean  | Không        | true = cho phép người khác tìm thấy qua email; false = ẩn (mặc định)                                                                             |
+| **email_notifications** | boolean  | Không        | Bật/tắt thông báo email                                                                                                                          |
+| **theme**               | string   | Không        | 'dark' \| 'light' \| 'system' — preference lưu server-side để đồng bộ cross-device, không dùng localStorage (nhất quán với UI/UX Design mục 7.3) |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                     |
+|-----------------|--------------|-------------------------------------------|
+| **200**         | OK           | Cài đặt được cập nhật, trả về cài đặt mới |
+| **401**         | Unauthorized | Token không hợp lệ                        |
+
+### 4.5. DELETE /users/me
+
+Yêu cầu xóa tài khoản — soft delete ngay lập tức (NFR-27). Background job dọn dẹp dữ liệu thật sau 30 ngày. Khi account bị soft delete: tất cả phiên quay video đang ở trạng thái recording được abort ngay lập tức (Backend gọi MinIO AbortMultipartUpload) để không để lại orphan data trên storage.
+
+Request Body
+
+| **Field**    | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                    |
+|--------------|----------|--------------|------------------------------------------------------------------------------|
+| **password** | string   | Có           | Mật khẩu hiện tại để xác nhận — tránh xóa nhầm do truy cập token bị đánh cắp |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                                                     |
+|-----------------|--------------|-------------------------------------------------------------------------------------------|
+| **204**         | No Content   | Tài khoản đã được đánh dấu xóa (deleted_at = NOW()); tất cả token bị thu hồi ngay lập tức |
+| **401**         | Unauthorized | Token không hợp lệ hoặc mật khẩu xác nhận sai                                             |
+
+### 4.6. POST /users/search
+
+Tìm kiếm người dùng theo email chính xác. Chỉ trả về kết quả khi user đích đã bật discoverable. Tương ứng FR-22. Rate limit: 10 request/phút/tài khoản (NFR-32) — vượt ngưỡng trả về 429.
+
+Request Body
+
+| **Field** | **Kiểu** | **Bắt buộc** | **Mô tả**                                    |
+|-----------|----------|--------------|----------------------------------------------|
+| **email** | string   | Có           | Địa chỉ email cần tìm — phải là email hợp lệ |
+
+Response 200 OK — Tìm thấy
+
+{ "found": true, "user": { "id": "uuid", "display_name": "Nguyễn Văn B" } }
+
+Response 200 OK — Không tìm thấy (hoặc user chưa bật discoverable)
+
+{ "found": false }
+
+*Lưu ý: cả hai trường hợp (email không tồn tại / tồn tại nhưng discoverable = false) đều trả về 200 với found: false — tránh user enumeration, nhất quán với chống tấn công STRIDE-I trong SAD mục 9.4.*
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**       | **Trường hợp cụ thể**                                                                        |
+|-----------------|-------------------|----------------------------------------------------------------------------------------------|
+| **200**         | OK                | Trả về kết quả tìm kiếm (found: true hoặc false) — không dùng 404 để tránh tiết lộ thông tin |
+| **400**         | Bad Request       | Email không đúng định dạng                                                                   |
+| **401**         | Unauthorized      | Token không hợp lệ                                                                           |
+| **429**         | Too Many Requests | Vượt rate limit 10 req/phút; header Retry-After ghi số giây cần chờ                          |
+
+## 5. Nhóm Avatar
+
+*Endpoint avatar phục vụ FR-04 — lưu và lấy thông tin nhân vật ảo. Nhất quán với bảng avatar_profiles trong DDD và cơ chế tải GLB phía nhận được mô tả trong SAD mục 4.1.2 và flow 5.1 bước 3b.*
+
+### 5.1. GET /avatars/models
+
+Lấy danh sách model nhân vật ảo dựng sẵn của hệ thống. Client gọi endpoint này ở màn hình SCR-07 (Chọn model). Đây là endpoint public — không cần xác thực để cho phép xem trước trước khi đăng ký.
+
+Response 200 OK
+
+{ "models": \[ { "id": "avatar_model_01", "name": "Sakura — Anime", "thumbnail_url": "https://cdn.example.com/models/thumbs/avatar_model_01.png", "model_url": "https://cdn.example.com/models/avatar_model_01.glb", "supported_customizations": \["hair_color", "eye_color", "outfit"\], "outfit_options": \["casual_01", "casual_02", "formal_01"\] } \] }
+
+*model_url trong response này là URL được server kiểm soát — client dùng để tải preview. Khi lưu avatar, client chỉ gửi model_id, server tự tra model_url từ catalog nội bộ (mục 5.2).*
+
+### 5.2. GET /avatars/me
+
+Lấy hồ sơ nhân vật ảo của chính user.
+
+Response 200 OK
+
+{ "id": "uuid", "user_id": "uuid", "model_id": "avatar_model_01", "model_url": "https://cdn.example.com/models/avatar_model_01.glb", "customizations": { "hair_color": "#8B4513", "outfit": "casual_01", "eye_color": "#4169E1" }, "created_at": "2026-06-21T10:00:00Z", "updated_at": "2026-06-21T10:00:00Z" }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                 |
+|-----------------|--------------|-------------------------------------------------------|
+| **200**         | OK           | Hồ sơ nhân vật ảo tồn tại                             |
+| **404**         | Not Found    | User chưa thiết lập nhân vật ảo (chưa hoàn tất UC-03) |
+| **401**         | Unauthorized | Token không hợp lệ                                    |
+
+### 5.3. PUT /avatars/me
+
+Tạo hoặc cập nhật nhân vật ảo. Upsert. Tương ứng FR-04 và UC-03. Client chỉ gửi model_id — server tự tra model_url từ catalog nội bộ dựa trên model_id. Client không được phép gửi model_url để tránh lỗ hổng: client gửi model_id hợp lệ kèm model_url tùy ý trỏ về file GLB bên ngoài hệ thống.
+
+Request Body
+
+| **Field**          | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                                                         |
+|--------------------|----------|--------------|-------------------------------------------------------------------------------------------------------------------|
+| **model_id**       | string   | Có           | ID của model dựng sẵn (lấy từ GET /avatars/models) — server validate và tra model_url tương ứng từ catalog nội bộ |
+| **customizations** | object   | Không        | Các tùy chỉnh dạng JSON (màu tóc, trang phục...) — phải nằm trong danh sách supported_customizations của model đó |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                                                       |
+|-----------------|--------------|---------------------------------------------------------------------------------------------|
+| **200**         | OK           | Nhân vật ảo đã được cập nhật                                                                |
+| **201**         | Created      | Nhân vật ảo đã được tạo mới (lần đầu thiết lập)                                             |
+| **400**         | Bad Request  | model_id không thuộc danh sách model hợp lệ, hoặc customizations chứa key không được hỗ trợ |
+| **401**         | Unauthorized | Token không hợp lệ                                                                          |
+
+### 5.4. GET /avatars/{userId}
+
+Lấy metadata nhân vật ảo của một user cụ thể. Client B gọi endpoint này ở bước 3b của flow thiết lập cuộc gọi (SAD mục 5.1) để tải đúng model GLB của người gọi.
+
+*Lưu ý authorization: endpoint này KHÔNG bị ảnh hưởng bởi tùy chọn discoverable. Lý do: chỉ được gọi trong ngữ cảnh cuộc gọi đang thiết lập — B đã chấp nhận cuộc gọi từ A, tức là B đã đồng ý giao tiếp với A. Discoverable chỉ kiểm soát khả năng bị tìm thấy qua /users/search.*
+
+*Lưu ý anti-enumeration: cả hai trường hợp (userId không tồn tại VÀ userId tồn tại nhưng chưa có avatar) đều trả về 404 với cùng một response body — tránh kẻ tấn công dùng endpoint này để kiểm tra UUID nào là user hợp lệ.*
+
+Response 200 OK
+
+{ "user_id": "uuid", "model_id": "avatar_model_02", "model_url": "https://cdn.example.com/models/avatar_model_02.glb", "customizations": { "hair_color": "#000000", "outfit": "formal_01" } }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                                                                                                                             |
+|-----------------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **200**         | OK           | Avatar metadata trả về thành công                                                                                                                                 |
+| **404**         | Not Found    | User không tồn tại HOẶC chưa thiết lập avatar — response body giống hệt nhau cho cả hai trường hợp để tránh enumeration; client dùng avatar mặc định của hệ thống |
+| **401**         | Unauthorized | Token không hợp lệ                                                                                                                                                |
+
+## 6. Nhóm Conversations & Messages
+
+### 6.1. POST /conversations
+
+Tạo hoặc lấy conversation 1-1 với một user khác. Idempotent: nếu conversation giữa hai user đã tồn tại thì trả về conversation đó thay vì tạo mới — nhất quán với logic idx_conv_pair (LEAST/GREATEST) trong DDD. Endpoint này được gọi sau bước 4 của UC-05/FR-22 (SRS): user tìm thấy người dùng khác và bấm 'Nhắn tin'.
+
+Request Body
+
+| **Field**         | **Kiểu** | **Bắt buộc** | **Mô tả**                                                     |
+|-------------------|----------|--------------|---------------------------------------------------------------|
+| **other_user_id** | UUID     | Có           | ID của user muốn bắt đầu trò chuyện — không thể là chính mình |
+
+Response 201 Created (conversation mới) hoặc 200 OK (đã tồn tại)
+
+{ "id": "uuid", "other_user": { "id": "uuid", "display_name": "Nguyễn Văn B", "avatar_url": null }, "created_at": "2026-06-21T10:00:00Z", "updated_at": "2026-06-21T10:00:00Z" }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**  | **Trường hợp cụ thể**                                |
+|-----------------|--------------|------------------------------------------------------|
+| **201**         | Created      | Conversation mới được tạo                            |
+| **200**         | OK           | Conversation đã tồn tại, trả về conversation hiện có |
+| **400**         | Bad Request  | other_user_id là chính mình, hoặc UUID không hợp lệ  |
+| **404**         | Not Found    | User đích không tồn tại                              |
+| **401**         | Unauthorized | Token không hợp lệ                                   |
+
+### 6.2. GET /conversations
+
+Danh sách cuộc trò chuyện gần nhất của user, sắp xếp theo updated_at giảm dần (tin nhắn mới nhất lên đầu). Dùng cursor-based pagination.
+
+Query Parameters
+
+| **Tham số** | **Kiểu** | **Bắt buộc** | **Mô tả**                                          |
+|-------------|----------|--------------|----------------------------------------------------|
+| **cursor**  | string   | Không        | Cursor của trang tiếp theo (lấy từ response trước) |
+| **limit**   | integer  | Không        | Số conversation mỗi trang, mặc định 20, tối đa 50  |
+
+Response 200 OK
+
+{ "data": \[ { "id": "uuid", "other_user": { "id": "uuid", "display_name": "Nguyễn Văn B", "avatar_url": null }, "last_message": { "content": "Xin chào!", "sender_id": "uuid", "client_timestamp": "2026-06-21T10:30:00Z", "status": "delivered" }, "updated_at": "2026-06-21T10:30:00Z" } \], "next_cursor": "eyJpZCI6InV1aWQiLCJ0IjoiMTcyMCJ9", "has_more": true }
+
+### 6.3. GET /conversations/{id}
+
+Lấy chi tiết một cuộc trò chuyện. Hữu ích khi client cần reload thông tin conversation sau khi nhận notification.
+
+Response 200 OK
+
+{ "id": "uuid", "other_user": { "id": "uuid", "display_name": "Nguyễn Văn B", "avatar_url": null }, "last_message": { "content": "Xin chào!", "sender_id": "uuid", "client_timestamp": "2026-06-21T10:30:00Z", "status": "read" }, "created_at": "2026-06-21T09:00:00Z", "updated_at": "2026-06-21T10:30:00Z" }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa** | **Trường hợp cụ thể**                           |
+|-----------------|-------------|-------------------------------------------------|
+| **200**         | OK          | Chi tiết conversation                           |
+| **403**         | Forbidden   | User không phải thành viên của conversation này |
+| **404**         | Not Found   | Conversation không tồn tại                      |
+
+### 6.4. GET /conversations/{id}/messages
+
+Lịch sử tin nhắn của một conversation, sắp xếp theo client_timestamp tăng dần. Tương ứng FR-12. Cursor-based pagination để load tin nhắn cũ hơn (infinite scroll ngược lên).
+
+*Lý do response có hai timestamp (client_timestamp và created_at): client_timestamp là thứ tự gửi theo ý người dùng — dùng để hiển thị và sắp xếp tin nhắn; created_at là thứ tự server nhận — dùng để index DB và audit. Khi mạng không ổn định, hai giá trị này có thể lệch nhau. Client hiển thị theo client_timestamp, server index theo created_at. Đây là thiết kế có chủ đích, không phải dữ liệu trùng lặp.*
+
+Path Parameter
+
+| **Tham số** | **Kiểu** | **Bắt buộc** | **Mô tả**                                                          |
+|-------------|----------|--------------|--------------------------------------------------------------------|
+| **id**      | UUID     | Có           | ID của conversation — user phải là thành viên của conversation này |
+
+Query Parameters
+
+| **Tham số** | **Kiểu** | **Bắt buộc** | **Mô tả**                                              |
+|-------------|----------|--------------|--------------------------------------------------------|
+| **cursor**  | string   | Không        | Cursor để load tin nhắn cũ hơn (lấy từ response trước) |
+| **limit**   | integer  | Không        | Số tin nhắn mỗi trang, mặc định 30, tối đa 100         |
+
+Response 200 OK
+
+{ "data": \[ { "id": "uuid", "sender_id": "uuid", "content": "Xin chào!", "status": "read", "client_timestamp": "2026-06-21T10:30:00Z", "created_at": "2026-06-21T10:30:01Z" } \], "prev_cursor": "eyJpZCI6InV1aWQiLCJ0IjoiMTcxMCJ9", "has_more": false }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa** | **Trường hợp cụ thể**                           |
+|-----------------|-------------|-------------------------------------------------|
+| **200**         | OK          | Danh sách tin nhắn trả về thành công            |
+| **403**         | Forbidden   | User không phải thành viên của conversation này |
+| **404**         | Not Found   | Conversation không tồn tại                      |
+
+### 6.5. POST /conversations/{id}/messages
+
+Gửi tin nhắn mới vào conversation. Tương ứng FR-11. Message ID do client sinh (UUID v4) và gửi kèm để đảm bảo idempotency (NFR-24): nếu mạng đứt client gửi lại, server dùng ON CONFLICT DO NOTHING theo message ID.
+
+Request Body
+
+| **Field**            | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                                                   |
+|----------------------|----------|--------------|-------------------------------------------------------------------------------------------------------------|
+| **id**               | UUID     | Có           | UUID do client sinh trước khi gửi — idempotency key (NFR-24, DDD bảng messages)                             |
+| **content**          | string   | Có           | Nội dung tin nhắn — không rỗng, tối đa 4000 ký tự                                                           |
+| **client_timestamp** | string   | Có           | Timestamp ISO 8601 thời điểm gửi theo đồng hồ client — phải trong khoảng ±5 phút so với server time (DD-04) |
+
+Response 201 Created (tin nhắn mới) hoặc 200 OK (tin nhắn trùng — idempotent)
+
+{ "id": "uuid", "conversation_id": "uuid", "sender_id": "uuid", "content": "Xin chào!", "status": "sent", "client_timestamp": "2026-06-21T10:30:00Z", "created_at": "2026-06-21T10:30:01Z" }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa** | **Trường hợp cụ thể**                                                               |
+|-----------------|-------------|-------------------------------------------------------------------------------------|
+| **201**         | Created     | Tin nhắn mới được tạo thành công                                                    |
+| **200**         | OK          | Tin nhắn với ID này đã tồn tại (gửi trùng) — trả về tin nhắn gốc, không tạo bản sao |
+| **400**         | Bad Request | content rỗng hoặc quá dài; client_timestamp lệch quá ±5 phút                        |
+| **403**         | Forbidden   | User không phải thành viên của conversation                                         |
+
+### 6.6. PUT /conversations/{id}/messages/{msgId}
+
+Cập nhật trạng thái tin nhắn (từ sent sang delivered hoặc read). Dùng bởi client nhận khi tin nhắn được đẩy tới và khi người dùng đọc tin.
+
+Request Body
+
+| **Field**  | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                     |
+|------------|----------|--------------|-------------------------------------------------------------------------------|
+| **status** | string   | Có           | Trạng thái mới: 'delivered' hoặc 'read' — không thể quay lại trạng thái trước |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa** | **Trường hợp cụ thể**                                           |
+|-----------------|-------------|-----------------------------------------------------------------|
+| **200**         | OK          | Trạng thái đã cập nhật                                          |
+| **400**         | Bad Request | status không hợp lệ hoặc cố giảm trạng thái (ví dụ read → sent) |
+| **403**         | Forbidden   | User không phải người nhận của tin nhắn này                     |
+
+## 7. Nhóm Videos
+
+*Kiến trúc lưu trữ video: MinIO (self-hosted S3-compatible, chạy Docker container riêng) làm Media Storage. Video được upload theo cơ chế multipart: client chia video thành các chunk, upload từng chunk trực tiếp lên MinIO qua presigned URL — Backend không làm trung gian cho dữ liệu video, chỉ điều phối metadata và URL. Khi upload hoàn tất, MinIO gửi webhook về Backend để cập nhật trạng thái — client không tự khai báo trạng thái. Cơ chế này hỗ trợ NFR-26: nếu browser crash giữa chừng, các chunk đã upload vẫn còn trên MinIO; user có thể tiếp tục khi quay lại.*
+
+### 7.1. GET /videos
+
+Danh sách video trong thư viện cá nhân. Tương ứng FR-17. storage_used_bytes chỉ tính video có status = ready. Video ở trạng thái recording (đang quay) CÓ xuất hiện trong danh sách — client dùng để hiển thị 'đang quay' và cho phép resume nếu bị gián đoạn.
+
+Query Parameters
+
+| **Tham số** | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                      |
+|-------------|----------|--------------|--------------------------------------------------------------------------------|
+| **cursor**  | string   | Không        | Cursor pagination                                                              |
+| **limit**   | integer  | Không        | Mặc định 20, tối đa 50                                                         |
+| **status**  | string   | Không        | Lọc theo trạng thái: recording/processing/ready/failed (bốn trạng thái hợp lệ) |
+
+Response 200 OK
+
+{ "data": \[ { "id": "uuid", "title": "Demo avatar 21/06", "status": "ready", "duration_secs": 120, "file_size_bytes": 15728640, "format": "mp4", "created_at": "2026-06-21T10:00:00Z" } \], "storage_used_bytes": 52428800, "storage_limit_bytes": 2147483648, "next_cursor": null, "has_more": false }
+
+*storage_used_bytes tính tổng file_size_bytes của các video có status = ready — video đang processing hoặc failed không tính vào quota. Khi video failed, không cần giải phóng quota vì chưa từng tính.*
+
+### 7.2. POST /videos
+
+Khởi tạo phiên quay video: tạo bản ghi metadata + khởi tạo MinIO multipart upload. Trả về upload_id và presigned URL cho chunk đầu tiên. Tương ứng FR-16. Server chỉ kiểm tra quota ước tính ở bước này, không tính vào quota thật cho đến khi finalize thành công.
+
+Request Body
+
+| **Field**                | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                                       |
+|--------------------------|----------|--------------|-------------------------------------------------------------------------------------------------|
+| **title**                | string   | Có           | Tên video — mặc định từ client là timestamp, có thể đổi sau                                     |
+| **estimated_size_bytes** | integer  | Có           | Kích thước ước tính (bytes) — server kiểm tra còn đủ dung lượng ước tính không (NFR-19)         |
+| **chunk_size_bytes**     | integer  | Có           | Kích thước mỗi chunk (bytes) — tối thiểu 5MB theo MinIO multipart requirement, khuyến nghị 10MB |
+| **format**               | string   | Không        | Định dạng file, mặc định 'mp4' (NFR-18)                                                         |
+
+Response 201 Created
+
+{ "id": "uuid", "title": "Demo avatar 21/06", "status": "recording", "upload_id": "minio-multipart-upload-id", "first_chunk_url": "https://minio.internal/veiltalk/videos/uuid/part1?X-Amz-Signature=...", "part_number": 1, "created_at": "2026-06-21T10:00:00Z" }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**          | **Trường hợp cụ thể**                                             |
+|-----------------|----------------------|-------------------------------------------------------------------|
+| **201**         | Created              | Phiên quay khởi tạo thành công, first_chunk_url sẵn sàng          |
+| **400**         | Bad Request          | estimated_size_bytes hoặc chunk_size_bytes không hợp lệ           |
+| **507**         | Insufficient Storage | Dung lượng tài khoản không đủ để chứa ước tính video này (NFR-19) |
+| **401**         | Unauthorized         | Token không hợp lệ                                                |
+
+### 7.3. POST /videos/{id}/chunks
+
+Lấy presigned URL cho chunk tiếp theo trong phiên quay đang diễn ra. Client gọi endpoint này sau khi PUT thành công chunk trước lên MinIO.
+
+Request Body
+
+| **Field**         | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                                                                                                                                                                                                         |
+|-------------------|----------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **upload_id**     | string   | Có           | MinIO multipart upload ID (nhận từ POST /videos)                                                                                                                                                                                                                  |
+| **part_number**   | integer  | Có           | Số thứ tự chunk tiếp theo (bắt đầu từ 2)                                                                                                                                                                                                                          |
+| **etag_previous** | string   | Có           | ETag MinIO trả về khi PUT chunk trước. Backend lưu danh sách ETag theo thứ tự part_number để dùng lại ở bước finalize — MinIO CompleteMultipartUpload yêu cầu đủ ETag của tất cả part theo đúng thứ tự. Backend không gọi lại MinIO để verify từng ETag riêng lẻ. |
+
+Response 200 OK
+
+{ "chunk_url": "https://minio.internal/veiltalk/videos/uuid/part2?X-Amz-Signature=...", "part_number": 2, "expires_in": 3600 }
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**          | **Trường hợp cụ thể**                                                                                                     |
+|-----------------|----------------------|---------------------------------------------------------------------------------------------------------------------------|
+| **200**         | OK                   | Presigned URL cho chunk tiếp theo                                                                                         |
+| **400**         | Bad Request          | upload_id không hợp lệ, part_number không đúng thứ tự, hoặc etag_previous không khớp                                      |
+| **403**         | Forbidden            | Video không thuộc về user này                                                                                             |
+| **404**         | Not Found            | Video không tồn tại hoặc phiên upload đã hết hạn                                                                          |
+| **507**         | Insufficient Storage | Dung lượng thực đã vượt 2GB khi tính chunk mới — server từ chối cấp URL tiếp theo; client nên gọi POST /videos/{id}/abort |
+
+### 7.4. POST /videos/{id}/finalize
+
+Hoàn tất phiên quay: Backend gọi MinIO CompleteMultipartUpload với danh sách ETag các part. MinIO gộp các part thành file hoàn chỉnh, sau đó gửi webhook tới Backend để cập nhật status từ recording → ready và tính dung lượng thực vào quota.
+
+Request Body
+
+| **Field**         | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                                     |
+|-------------------|----------|--------------|-----------------------------------------------------------------------------------------------|
+| **upload_id**     | string   | Có           | MinIO multipart upload ID                                                                     |
+| **parts**         | array    | Có           | Danh sách {part_number, etag} của tất cả chunk đã upload — dùng để MinIO verify tính toàn vẹn |
+| **duration_secs** | integer  | Có           | Thời lượng video thực tế đo được phía client                                                  |
+
+Response 202 Accepted
+
+{ "id": "uuid", "status": "processing", "message": "Upload hoàn tất, đang xử lý. Trạng thái sẽ cập nhật qua MinIO webhook." }
+
+*202 Accepted thay vì 200 OK vì quá trình MinIO complete và webhook là bất đồng bộ — client dùng polling GET /videos/{id} để biết khi video chuyển sang ready (không nhắc WebSocket vì chưa định nghĩa message type tương ứng).*
+
+*Fallback nếu MinIO webhook không bao giờ đến: Backend có background job chạy mỗi 5 phút, kiểm tra tất cả video ở trạng thái processing quá 10 phút mà không có webhook — đánh dấu failed và abort multipart upload trên MinIO. Điều này ngăn video bị kẹt mãi ở processing.*
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**          | **Trường hợp cụ thể**                                                                  |
+|-----------------|----------------------|----------------------------------------------------------------------------------------|
+| **202**         | Accepted             | Finalize request được nhận, đang xử lý bất đồng bộ                                     |
+| **400**         | Bad Request          | parts không đầy đủ hoặc etag không khớp với những gì MinIO ghi nhận                    |
+| **403**         | Forbidden            | Video không thuộc về user này                                                          |
+| **409**         | Conflict             | Video đã ở trạng thái ready hoặc đã được finalize trước đó                             |
+| **507**         | Insufficient Storage | Dung lượng thực tế khi finalize vượt 2GB — upload bị từ chối, video chuyển sang failed |
+
+### 7.5. POST /videos/{id}/abort
+
+Hủy phiên quay đang dở. Backend gọi MinIO AbortMultipartUpload để dọn sạch các chunk đã upload. Video record bị xóa. Không ảnh hưởng quota vì video chưa ở trạng thái ready.
+
+Request Body
+
+| **Field**     | **Kiểu** | **Bắt buộc** | **Mô tả**                         |
+|---------------|----------|--------------|-----------------------------------|
+| **upload_id** | string   | Có           | MinIO multipart upload ID cần hủy |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa** | **Trường hợp cụ thể**                           |
+|-----------------|-------------|-------------------------------------------------|
+| **204**         | No Content  | Phiên upload đã được hủy, chunks đã dọn sạch    |
+| **403**         | Forbidden   | Video không thuộc về user này                   |
+| **404**         | Not Found   | Video không tồn tại hoặc upload_id không hợp lệ |
+
+### 7.6. POST /internal/videos/webhook
+
+Webhook endpoint — chỉ nhận request từ MinIO, không phải từ client. MinIO gửi notification này sau khi CompleteMultipartUpload hoàn tất. Backend xác thực chữ ký MinIO trong header trước khi xử lý.
+
+*Endpoint này được đặt ở /internal/ và không có trong CORS policy — không thể gọi từ trình duyệt. Authentication bằng shared secret (HMAC signature) giữa MinIO và Backend, không dùng JWT.*
+
+Request từ MinIO (tự động)
+
+{ "EventName": "s3:ObjectCreated:CompleteMultipartUpload", "Records": \[{ "s3": { "bucket": { "name": "veiltalk" }, "object": { "key": "videos/uuid/demo.mp4", "size": 15728640, "eTag": "abc123" } } }\] }
+
+Backend xử lý: tìm video record theo storage_path, cập nhật status = ready, file_size_bytes = object.size, tính dung lượng thực vào storage_used_bytes của user.
+
+### 7.7. GET /videos/{id}
+
+Lấy chi tiết một video kèm presigned URL để phát. URL này có thời hạn 1 giờ.
+
+Response 200 OK — video ready
+
+{ "id": "uuid", "title": "Demo avatar 21/06", "status": "ready", "duration_secs": 120, "file_size_bytes": 15728640, "format": "mp4", "view_url": "https://minio.internal/veiltalk/videos/uuid/demo.mp4?X-Amz-Expires=3600&...", "created_at": "2026-06-21T10:00:00Z", "updated_at": "2026-06-21T10:05:00Z" }
+
+Response 200 OK — video failed (upload lỗi)
+
+{ "id": "uuid", "title": "Demo avatar 21/06", "status": "failed", "duration_secs": null, "file_size_bytes": 0, "format": "mp4", "view_url": null, "created_at": "2026-06-21T10:00:00Z", "updated_at": "2026-06-21T10:02:00Z" }
+
+*Khi status = failed: view_url luôn là null, client không nên cố phát. Video failed không tính vào storage_used_bytes. User có thể xóa video failed để dọn dẹp thư viện.*
+
+### 7.8. PUT /videos/{id}
+
+Đổi tên video. Tương ứng FR-17.
+
+Request Body
+
+| **Field** | **Kiểu** | **Bắt buộc** | **Mô tả**             |
+|-----------|----------|--------------|-----------------------|
+| **title** | string   | Có           | Tên mới — 1-255 ký tự |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa** | **Trường hợp cụ thể**                          |
+|-----------------|-------------|------------------------------------------------|
+| **200**         | OK          | Tên đã được cập nhật, trả về video với tên mới |
+| **400**         | Bad Request | title rỗng hoặc quá dài                        |
+| **403**         | Forbidden   | Video không thuộc về user này                  |
+| **404**         | Not Found   | Video không tồn tại                            |
+
+### 7.9. DELETE /videos/{id}
+
+Xóa video, soft delete (deleted_at = NOW()). Tương ứng FR-17. Nếu video có status = ready, storage_used_bytes của user giảm ngay lập tức. Background job dọn dẹp file MinIO sau.
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa** | **Trường hợp cụ thể**         |
+|-----------------|-------------|-------------------------------|
+| **204**         | No Content  | Video đã được đánh dấu xóa    |
+| **403**         | Forbidden   | Video không thuộc về user này |
+| **404**         | Not Found   | Video không tồn tại           |
+
+## 8. Nhóm Metrics
+
+### 8.1. POST /metrics/client
+
+Nhận số liệu hiệu năng từ client để hệ thống theo dõi việc tuân thủ NFR-01, NFR-02, NFR-03 trong môi trường thực (NFR-22). Client gửi định kỳ mỗi 5 giây khi đang trong cuộc gọi. Rate limit: tối đa 1 request/3 giây/user — client gửi quá nhanh do lỗi sẽ nhận 429 và dừng gửi trong khoảng thời gian Retry-After.
+
+Request Body
+
+| **Field**               | **Kiểu** | **Bắt buộc** | **Mô tả**                                                               |
+|-------------------------|----------|--------------|-------------------------------------------------------------------------|
+| **session_type**        | string   | Có           | 'call' hoặc 'preview' (xem trước avatar)                                |
+| **tracking_latency_ms** | integer  | Không        | Độ trễ tracking-to-render trung bình trong cửa sổ vừa rồi (ms) — NFR-01 |
+| **fps**                 | number   | Không        | Frame rate trung bình (fps) — NFR-02                                    |
+| **webrtc_rtt_ms**       | integer  | Không        | Round-trip time WebRTC (ms) — NFR-03, chỉ khi session_type = call       |
+| **timestamp**           | string   | Có           | Thời điểm đo ISO 8601                                                   |
+
+HTTP Status Codes
+
+| **HTTP Status** | **Ý nghĩa**       | **Trường hợp cụ thể**                                                |
+|-----------------|-------------------|----------------------------------------------------------------------|
+| **204**         | No Content        | Metrics được nhận và lưu thành công                                  |
+| **400**         | Bad Request       | Thiếu trường bắt buộc hoặc giá trị không hợp lệ                      |
+| **401**         | Unauthorized      | Token không hợp lệ                                                   |
+| **429**         | Too Many Requests | Vượt rate limit 1 req/3 giây; header Retry-After ghi số giây cần chờ |
+
+## 9. Xử lý Lỗi Chung
+
+### 9.1. Định dạng response lỗi
+
+Tất cả response lỗi (4xx, 5xx) đều trả về JSON theo định dạng nhất quán sau:
+
+{ "error": { "code": "VALIDATION_ERROR", "message": "display_name không được để trống", "details": { "field": "display_name", "constraint": "required" } } }
+
+*Lưu ý: message được thiết kế để đọc được bởi developer, không phải hiển thị trực tiếp cho end user — client có trách nhiệm dịch sang thông báo thân thiện hơn khi cần.*
+
+### 9.2. Mã lỗi (error.code)
+
+| **Mã lỗi**                 | **HTTP Status** | **Ý nghĩa**                                                                                                                                     |
+|----------------------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| **VALIDATION_ERROR**       | 400             | Input không hợp lệ (format, range, required)                                                                                                    |
+| **UNAUTHORIZED**           | 401             | Token thiếu, hết hạn, hoặc không hợp lệ                                                                                                         |
+| **FORBIDDEN**              | 403             | Đã xác thực nhưng không có quyền thực hiện hành động                                                                                            |
+| **NOT_FOUND**              | 404             | Resource không tồn tại hoặc đã bị xóa                                                                                                           |
+| **CONFLICT**               | 409             | Vi phạm unique constraint (email đã tồn tại, ID trùng...)                                                                                       |
+| **RATE_LIMITED**           | 429             | Vượt giới hạn tần suất request; xem header Retry-After                                                                                          |
+| **STORAGE_QUOTA_EXCEEDED** | 507             | Không đủ dung lượng lưu trữ (NFR-19) — 507 Insufficient Storage theo RFC 4918, chính xác hơn 409 Conflict vì đây không phải xung đột tài nguyên |
+| **INTERNAL_ERROR**         | 500             | Lỗi nội bộ server không mong đợi — đã được ghi log (NFR-21)                                                                                     |
+
+### 9.3. Header bảo mật
+
+Tất cả response đều có các header sau (nhất quán với NFR-32 và SAD mục 9.1):
+
+| **Header**                      | **Giá trị**                         | **Mục đích**                          |
+|---------------------------------|-------------------------------------|---------------------------------------|
+| **Strict-Transport-Security**   | max-age=31536000; includeSubDomains | HSTS — buộc trình duyệt dùng HTTPS    |
+| **Access-Control-Allow-Origin** | https://app.veiltalk.example.com    | CORS — chỉ cho phép origin của client |
+| **X-Content-Type-Options**      | nosniff                             | Ngăn MIME type sniffing               |
+| **X-Frame-Options**             | DENY                                | Ngăn clickjacking                     |
+
+## 10. WebSocket API
+
+Ngoài REST API, hệ thống có hai kênh WebSocket độc lập. Phần này đặc tả ngắn gọn để đủ làm căn cứ cài đặt — hai kênh này không phải REST nhưng thuộc về Backend API nên được đưa vào tài liệu này (nhất quán với SAD mục 4.1.4 ghi rõ 'hai WebSocket song song').
+
+### 10.1. Kênh Messaging WebSocket
+
+URL: wss://veiltalk.example.com/ws/messaging
+
+Mục đích: đẩy tin nhắn thời gian thực tới client (FR-11, NFR-14). Client kết nối sau khi đăng nhập và giữ kết nối trong suốt phiên làm việc.
+
+Xác thực
+
+- Gửi JWT trong query parameter khi kết nối: wss://...?token=\<access_token\>
+
+- Server từ chối kết nối (HTTP 401) nếu token không hợp lệ hoặc hết hạn.
+
+Message từ server → client
+
+{ "type": "NEW_MESSAGE", "data": { "id": "uuid", "conversation_id": "uuid", "sender_id": "uuid", "content": "Xin chào!", "client_timestamp": "2026-06-21T10:30:00Z" } }
+
+{ "type": "MESSAGE_STATUS_UPDATE", "data": { "id": "uuid", "status": "delivered" } }
+
+{ "type": "CALL_INCOMING", "data": { "caller_id": "uuid", "caller_display_name": "Nguyễn Văn A", "call_session_id": "uuid" } // B nhận message này qua Messaging WS → hiện SCR-15 (incoming call screen) // → B kết nối Signaling WS → gửi CALL_ANSWER hoặc CALL_REJECT }
+
+*Lưu ý về CALL_INCOMING: đây là cơ chế giải quyết vấn đề 'B biết có cuộc gọi đến bằng cách nào'. B luôn duy trì kết nối Messaging WebSocket (thường trực) → khi A gọi, Signaling Server relay CALL_OFFER đến A và đồng thời Backend gửi CALL_INCOMING qua Messaging WS đến B → B kết nối Signaling WS để xử lý cuộc gọi. Điều này giải thích tại sao hai WebSocket phải tồn tại song song (SAD mục 4.1.4).*
+
+{ "type": "PING" } // Server gửi mỗi 30 giây, client phải trả PONG
+
+Message từ client → server
+
+{ "type": "TYPING", "data": { "conversation_id": "uuid" } // Client gửi khi bắt đầu gõ, gửi lại mỗi 2 giây nếu vẫn đang gõ }
+
+{ "type": "TYPING_STOP", "data": { "conversation_id": "uuid" } // Client gửi khi dừng gõ (sau 3 giây không gõ thêm, hoặc gửi tin nhắn) // Server relay tới người nhận để ẩn "Đang soạn tin..." indicator }
+
+{ "type": "PONG" } // Client phải trả PONG khi nhận PING
+
+### 10.2. Kênh Signaling WebSocket
+
+URL: wss://veiltalk.example.com/ws/signaling
+
+Mục đích: trao đổi SDP offer/answer và ICE candidate để thiết lập kết nối WebRTC P2P (SAD mục 4.2). Kênh này tách biệt hoàn toàn với Messaging WebSocket về mục đích và vòng đời.
+
+*Vòng đời kết nối: client kết nối Signaling WebSocket chỉ khi bắt đầu quá trình gọi (bấm nút gọi hoặc nhận thông báo có cuộc gọi đến). Sau khi RTCPeerConnection chuyển trạng thái ICE 'connected' (hoặc thất bại), client ngắt kết nối Signaling WebSocket — không duy trì thường trực. Signaling Server dọn dẹp phiên sau 30 giây không có activity (SAD mục 4.2).*
+
+Xác thực
+
+- JWT bắt buộc trong WebSocket handshake — Signaling Server validate chữ ký trước khi relay (SAD mục 4.2, bổ sung từ lần review SAD).
+
+Message types
+
+| **Type**          | **Hướng**          | **Payload chính**   | **Mô tả**                            |
+|-------------------|--------------------|---------------------|--------------------------------------|
+| **CALL_OFFER**    | A → Server → B     | sdp, target_user_id | A gửi SDP offer, Server relay tới B  |
+| **CALL_ANSWER**   | B → Server → A     | sdp                 | B gửi SDP answer, Server relay tới A |
+| **ICE_CANDIDATE** | A/B → Server → B/A | candidate, sdp_mid  | Trao đổi ICE candidate hai chiều     |
+| **CALL_REJECT**   | B → Server → A     | reason              | B từ chối cuộc gọi                   |
+| **CALL_END**      | A/B → Server → B/A | \-                  | Kết thúc cuộc gọi, giải phóng phiên  |
+
+*— Hết tài liệu —*

@@ -1,0 +1,56 @@
+# ===== Bí mật — TUYỆT ĐỐI không commit =====
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ===== Java / Spring Boot =====
+target/
+build/
+*.class
+*.jar
+*.war
+!**/src/main/**/*.jar
+.mvn/wrapper/maven-wrapper.jar
+
+# ===== Node / Frontend =====
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.classpath
+.project
+.settings/
+
+# ===== Hệ điều hành =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Dữ liệu chạy thật =====
+data/
+uploads/
+minio-data/
+postgres-data/
+*.log
+
+# ===== Model 3D lớn (dùng Git LFS nếu cần) =====
+# *.vrm
+# *.glb
+
+# ===== File tạm =====
+*.tmp
+*.bak
+*~
