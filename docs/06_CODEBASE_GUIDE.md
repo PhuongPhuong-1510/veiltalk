@@ -45,6 +45,12 @@ P0-T07 đã xác minh ba service nền tảng:
 P1-T01 đã tạo schema bằng Flyway V1 khi Backend khởi động. PostgreSQL có 6 bảng ứng
 dụng và bảng lịch sử `flyway_schema_history`; không dùng Docker init script.
 
+P1-T02 đã đối chiếu schema thực tế với DDD mục 3, 5 và 6: đủ 6 bảng/50 cột,
+6 primary key, 7 foreign key, 5 CHECK constraint, 13 index khai báo, hàm
+`update_updated_at()` và 5 trigger. Các kiểm tra riêng cho
+`users.is_discoverable DEFAULT FALSE`, trạng thái video `recording` và unique partial
+index `idx_users_email` đều đạt.
+
 ## Backend
 
 | Đường dẫn | Nội dung |
