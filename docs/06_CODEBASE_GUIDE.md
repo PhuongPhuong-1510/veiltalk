@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đã hoàn thành P1-T03 — Flyway quản lý và tái tạo ổn định schema từ V1.**
+> **Trạng thái: đã hoàn thành P1-T04 — schema V1 đã có đầy đủ JPA entity mapping.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -64,7 +64,7 @@ P1-T02 và database kiểm thử đã được xóa sau khi kiểm tra.
 | `backend/mvnw`, `backend/mvnw.cmd` | Maven Wrapper scripts |
 | `backend/.mvn/wrapper/maven-wrapper.properties` | Maven Wrapper 3.3.4, Maven 3.9.16 |
 | `backend/src/main/java/com/veiltalk/BackendApplication.java` | Điểm khởi động Spring Boot |
-| `backend/src/main/resources/application.yml` | Cấu hình datasource PostgreSQL bằng biến môi trường và Flyway tại `classpath:db/migration`; không baseline database mới |
+| `backend/src/main/resources/application.yml` | Cấu hình datasource, Flyway và Hibernate `ddl-auto: validate` để kiểm tra entity mapping với schema |
 | `backend/src/main/resources/db/migration/V1__initial_schema.sql` | Migration khởi tạo đúng theo DDD mục 6: 6 bảng, index, constraint và trigger |
 | `backend/src/test/java/com/veiltalk/BackendApplicationTests.java` | Smoke test khởi tạo Spring context |
 
@@ -73,9 +73,40 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 6 bảng ứng dụng và một bản ghi V1 thành công trong `flyway_schema_history`.
 
 ### Module xác thực
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `backend/src/main/java/com/veiltalk/auth/User.java` | Entity bảng `users` |
+| `backend/src/main/java/com/veiltalk/auth/RefreshToken.java` | Entity bảng `refresh_tokens` |
+| `backend/src/main/java/com/veiltalk/auth/UserRole.java` | Enum `USER`, `ADMIN` |
+| `backend/src/main/java/com/veiltalk/auth/UserRoleConverter.java` | Chuyển enum role sang giá trị PostgreSQL chữ thường |
+
 ### Module nhân vật ảo
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `backend/src/main/java/com/veiltalk/avatar/AvatarProfile.java` | Entity bảng `avatar_profiles`; `customizations` map JSONB |
+
 ### Module nhắn tin
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `backend/src/main/java/com/veiltalk/messaging/Conversation.java` | Entity bảng `conversations` |
+| `backend/src/main/java/com/veiltalk/messaging/Message.java` | Entity bảng `messages` |
+| `backend/src/main/java/com/veiltalk/messaging/MessageStatus.java` | Enum `SENT`, `DELIVERED`, `READ` |
+| `backend/src/main/java/com/veiltalk/messaging/MessageStatusConverter.java` | Chuyển enum message sang giá trị PostgreSQL chữ thường |
+
 ### Module video
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `backend/src/main/java/com/veiltalk/video/Video.java` | Entity bảng `videos`, gồm `updated_at` và mặc định `RECORDING` |
+| `backend/src/main/java/com/veiltalk/video/VideoStatus.java` | Enum `RECORDING`, `PROCESSING`, `READY`, `FAILED` |
+| `backend/src/main/java/com/veiltalk/video/VideoStatusConverter.java` | Chuyển enum video sang giá trị PostgreSQL chữ thường |
+
+P1-T04 dùng `@Convert` rõ ràng trên từng field enum, không dùng `@Enumerated`. Test
+converter bao phủ hai chiều Java ↔ giá trị database, annotation mapping và persist/read
+thực tế qua PostgreSQL trong transaction rollback. Toàn bộ 8 test PASS.
 
 ## Signaling Server
 

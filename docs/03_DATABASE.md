@@ -173,9 +173,10 @@ Lưu metadata của video đã quay — không lưu file binary trong database (
 | **storage_path**    | VARCHAR(500)     | NO        |               |                   | Đường dẫn file trên Media Storage (relative path hoặc object key) — backend dùng để tạo presigned URL khi user muốn xem |
 | **file_size_bytes** | BIGINT           | NO        |               |                   | Kích thước file tính bằng byte — dùng để kiểm tra tổng dung lượng user còn dưới 2GB (NFR-19)                            |
 | **duration_secs**   | INTEGER          | YES       |               | NULL              | Thời lượng video (giây) — nullable vì chỉ có sau khi xử lý xong                                                         |
-| **status**          | VARCHAR(20)      | NO        |               | 'processing'      | Trạng thái: 'processing' (đang ghép đoạn), 'ready' (xem được), 'failed' (lỗi lưu — NFR-26)                              |
+| **status**          | VARCHAR(20)      | NO        |               | 'recording'       | Trạng thái: 'recording' (phiên quay đang diễn ra), 'processing' (đã finalize, chờ xử lý), 'ready' (xem được), 'failed' (lỗi upload hoặc xử lý) |
 | **format**          | VARCHAR(10)      | NO        |               | 'mp4'             | Định dạng file xuất ra — mặc định mp4 (NFR-18), để ngỏ cho tương lai                                                    |
 | **created_at**      | TIMESTAMPTZ      | NO        |               | NOW()             | Thời điểm bắt đầu quay                                                                                                  |
+| **updated_at**      | TIMESTAMPTZ      | NO        |               | NOW()             | Thời điểm cập nhật gần nhất — được cập nhật tự động bởi trigger `trg_videos_updated_at`                                |
 | **deleted_at**      | TIMESTAMPTZ      | YES       |               | NULL              | Soft delete — nullable; có giá trị khi user xóa video (FR-17) hoặc xóa tài khoản (NFR-27)                               |
 
 **Index:**
