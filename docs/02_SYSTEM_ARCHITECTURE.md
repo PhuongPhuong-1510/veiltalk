@@ -201,6 +201,8 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 - Vai trò 1 — Pub/Sub cho Messaging Service: khi Backend chạy nhiều instance (mục 10.3), tin nhắn cần được đẩy tới đúng instance đang giữ kết nối WebSocket của người nhận; Redis Pub/Sub giải quyết bài toán này mà không cần các instance biết về nhau trực tiếp.
 
+  Message mới chỉ được publish sau khi transaction database commit thành công, đến channel `messaging:user:{recipientUserId}` với event `{"type":"NEW_MESSAGE","data":{message response fields}}`. Redis Pub/Sub là kênh realtime best-effort: lỗi publish không rollback dữ liệu hay làm REST API thất bại; client đồng bộ lại qua message history khi reconnect. Transactional outbox chưa được triển khai trong P2-T15.
+
 - Vai trò 2 — Token blacklist: lưu tạm các JWT đã bị thu hồi (đăng xuất) cho đến khi token hết hạn tự nhiên, tránh phải tra Database cho mỗi request.
 
 ### 4.6. STUN/TURN Server

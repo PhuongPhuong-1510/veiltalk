@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T14 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T15 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -159,7 +159,7 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/messaging/Message.java` | Entity bảng `messages` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageStatus.java` | Enum `SENT`, `DELIVERED`, `READ` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageStatusConverter.java` | Chuyển enum message sang giá trị PostgreSQL chữ thường |
-| `backend/src/main/java/com/veiltalk/messaging/ConversationController.java` | REST controller tạo, liệt kê và lấy chi tiết conversation 1-1 |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationController.java` | REST controller tạo/liệt kê/lấy chi tiết conversation và gửi message |
 | `backend/src/main/java/com/veiltalk/messaging/ConversationService.java` | Tạo idempotent, cursor pagination, dựng metadata user còn lại và last message |
 | `backend/src/main/java/com/veiltalk/messaging/CreateConversationRequest.java` | DTO request `POST /conversations` |
 | `backend/src/main/java/com/veiltalk/messaging/ConversationResponse.java` | DTO conversation cùng metadata công khai của user còn lại |
@@ -168,10 +168,16 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/messaging/ConversationDetailResponse.java` | DTO chi tiết conversation |
 | `backend/src/main/java/com/veiltalk/messaging/ConversationLastMessageResponse.java` | DTO metadata tin nhắn mới nhất |
 | `backend/src/main/java/com/veiltalk/messaging/ConversationCursorCodec.java` | Mã hóa/giải mã cursor Base64URL từ updated_at và conversation id |
-| `backend/src/main/java/com/veiltalk/messaging/ConversationRepository.java` | Insert idempotent và truy vấn keyset pagination theo cặp `(updated_at, id)` |
-| `backend/src/main/java/com/veiltalk/messaging/MessageRepository.java` | Lịch sử dạng `Slice` và batch query last message không bị soft delete |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationRepository.java` | Insert idempotent, cập nhật `updated_at` khi có message mới và truy vấn keyset pagination |
+| `backend/src/main/java/com/veiltalk/messaging/MessageRepository.java` | Insert message idempotent, lịch sử dạng `Slice` và batch query last message không bị soft delete |
+| `backend/src/main/java/com/veiltalk/messaging/CreateMessageRequest.java` | DTO request `POST /conversations/{id}/messages` |
+| `backend/src/main/java/com/veiltalk/messaging/MessageResponse.java` | DTO response message và dữ liệu realtime `NEW_MESSAGE` |
+| `backend/src/main/java/com/veiltalk/messaging/MessageService.java` | Validate, insert idempotent và đăng ký publish realtime sau transaction commit |
+| `backend/src/main/java/com/veiltalk/messaging/MessageRealtimePublisher.java` | Publish best-effort đến Redis channel theo người nhận; ghi log/metric khi lỗi |
 | `backend/src/test/java/com/veiltalk/messaging/ConversationCreateIntegrationTests.java` | Integration test TC-21–TC-22, validation, authentication và soft-delete |
 | `backend/src/test/java/com/veiltalk/messaging/ConversationQueryIntegrationTests.java` | Integration test TC-59–TC-60, cursor, membership và soft-delete |
+| `backend/src/test/java/com/veiltalk/messaging/MessageCreateIntegrationTests.java` | Integration test TC-23–TC-25, idempotency, collision, validation, membership và publish sau commit |
+| `backend/src/test/java/com/veiltalk/messaging/MessageRealtimePublisherTests.java` | Unit test channel/payload Redis và cơ chế best-effort khi publish lỗi |
 
 ### Module video
 
@@ -298,6 +304,17 @@ lệ từ 1 đến 50. Endpoint chi tiết kiểm tra membership, trả `403 FOR
 ngoài và `404 NOT_FOUND` cho conversation không tồn tại/đã soft delete. Do TC-26 đã
 thuộc P2-T16, TC-59–TC-60 được nối sau ID lớn nhất để kiểm thử đúng P2-T14. Các ca
 cursor/limit/session/soft-delete và toàn bộ 92 test Backend đều PASS.
+
+P2-T15 triển khai protected `POST /conversations/{id}/messages`. UUID do client cấp là
+idempotency key: cùng UUID, sender và conversation trả lại message gốc với `200`, không cập nhật
+`conversation.updated_at` và không publish lại; UUID thuộc sender hoặc conversation khác trả
+`409 CONFLICT`. Chỉ insert mới cập nhật `conversation.updated_at` và đăng ký publish
+`NEW_MESSAGE` sau khi transaction database commit thành công. Realtime dùng Redis channel
+`messaging:user:{recipientUserId}` với payload `{"type":"NEW_MESSAGE","data":{...}}`.
+Redis Pub/Sub hiện là best-effort: lỗi publish được ghi log và metric
+`messaging.redis.publish.failures`, không làm API thất bại hay rollback message; client đồng bộ
+lại qua message history khi reconnect. Transactional outbox chưa thuộc phạm vi P2-T15. TC-23–TC-25,
+2 unit test publisher và toàn bộ 99 test Backend đều PASS.
 
 ## Signaling Server
 

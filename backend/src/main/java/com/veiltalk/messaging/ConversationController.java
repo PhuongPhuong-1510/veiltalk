@@ -18,9 +18,13 @@ import jakarta.validation.Valid;
 public class ConversationController {
 
 	private final ConversationService conversationService;
+	private final MessageService messageService;
 
-	public ConversationController(ConversationService conversationService) {
+	public ConversationController(
+			ConversationService conversationService,
+			MessageService messageService) {
 		this.conversationService = conversationService;
+		this.messageService = messageService;
 	}
 
 	@PostMapping("/conversations")
@@ -53,5 +57,19 @@ public class ConversationController {
 		return conversationService.getConversation(
 				(UUID) authentication.getPrincipal(),
 				id);
+	}
+
+	@PostMapping("/conversations/{id}/messages")
+	ResponseEntity<MessageResponse> createMessage(
+			Authentication authentication,
+			@PathVariable UUID id,
+			@Valid @RequestBody CreateMessageRequest request) {
+		MessageService.CreateResult result = messageService.create(
+				(UUID) authentication.getPrincipal(),
+				id,
+				request);
+		return ResponseEntity
+				.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+				.body(result.response());
 	}
 }

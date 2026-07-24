@@ -59,6 +59,15 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
 
 	@Modifying
 	@Query(value = """
+			UPDATE conversations
+			SET updated_at = NOW()
+			WHERE id = :conversationId
+				AND deleted_at IS NULL
+			""", nativeQuery = true)
+	int touchUpdatedAt(@Param("conversationId") UUID conversationId);
+
+	@Modifying
+	@Query(value = """
 			INSERT INTO conversations (id, user_a_id, user_b_id)
 			VALUES (:id, :userAId, :userBId)
 			ON CONFLICT DO NOTHING
