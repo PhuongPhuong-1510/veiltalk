@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đã hoàn thành Phase 1 — PostgreSQL/Flyway/JPA/Redis đã được xác minh.**
+> **Trạng thái: đang thực hiện Phase 2 — P2-T01 và P2-T02 đã hoàn thành.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -84,7 +84,11 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/auth/RefreshTokenRepository.java` | Repository refresh token |
 | `backend/src/main/java/com/veiltalk/auth/JwtService.java` | Sinh, xác thực và đọc access/refresh JWT ký HS256 |
 | `backend/src/main/java/com/veiltalk/auth/JwtClaims.java` | Kiểu dữ liệu bất biến cho claims JWT đã xác thực |
+| `backend/src/main/java/com/veiltalk/auth/JwtAuthenticationFilter.java` | Đọc Bearer access token và thiết lập danh tính/role vào `SecurityContext` |
+| `backend/src/main/java/com/veiltalk/auth/SecurityConfig.java` | Security chain stateless, phân quyền public/protected, CORS, security headers và response 401 chuẩn |
 | `backend/src/test/java/com/veiltalk/auth/JwtServiceTests.java` | Unit test thời hạn, claims, chữ ký, loại token và cấu hình JWT |
+| `backend/src/test/java/com/veiltalk/auth/JwtAuthenticationFilterTests.java` | Unit test Bearer header, access/refresh token và token không hợp lệ |
+| `backend/src/test/java/com/veiltalk/auth/SecurityConfigTests.java` | MVC slice test quy tắc truy cập, response 401, CORS và security headers |
 
 ### Module nhân vật ảo
 
@@ -133,6 +137,13 @@ HMAC-SHA256 và Jackson để xử lý JSON. Access token chứa `sub`, `role`, 
 hết hạn sau 7 ngày. Secret và thời hạn lấy từ `JWT_SECRET`, `JWT_ACCESS_EXPIRY`,
 `JWT_REFRESH_EXPIRY`. Validation khóa thuật toán HS256, kiểm tra chữ ký constant-time,
 thời hạn, cấu trúc claims và phân biệt access/refresh token. Toàn bộ 8 unit test JWT PASS.
+
+P2-T02 bổ sung Spring Security stateless. `JwtAuthenticationFilter` chỉ chấp nhận Bearer
+access token hợp lệ, đưa UUID người dùng và role vào `SecurityContext`; refresh token và
+token lỗi không tạo authentication. `/auth/**`, `/actuator/health` và `/internal/**` là
+public; các đường dẫn còn lại yêu cầu xác thực và trả lỗi `UNAUTHORIZED` theo định dạng API.
+Security chain đồng thời cấu hình CORS cho origin frontend, HSTS, `nosniff` và chống
+clickjacking. Toàn bộ 9 test riêng P2-T02 và 29 test Backend đều PASS.
 
 ## Signaling Server
 
