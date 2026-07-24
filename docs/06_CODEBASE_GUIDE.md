@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đã hoàn thành P1-T04 — schema V1 đã có đầy đủ JPA entity mapping.**
+> **Trạng thái: đã hoàn thành P1-T05 — schema V1 đã có đầy đủ JPA entity và repository.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -80,12 +80,15 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/auth/RefreshToken.java` | Entity bảng `refresh_tokens` |
 | `backend/src/main/java/com/veiltalk/auth/UserRole.java` | Enum `USER`, `ADMIN` |
 | `backend/src/main/java/com/veiltalk/auth/UserRoleConverter.java` | Chuyển enum role sang giá trị PostgreSQL chữ thường |
+| `backend/src/main/java/com/veiltalk/auth/UserRepository.java` | Repository user; query email, discoverable và soft delete |
+| `backend/src/main/java/com/veiltalk/auth/RefreshTokenRepository.java` | Repository refresh token |
 
 ### Module nhân vật ảo
 
 | Đường dẫn | Nội dung |
 |---|---|
 | `backend/src/main/java/com/veiltalk/avatar/AvatarProfile.java` | Entity bảng `avatar_profiles`; `customizations` map JSONB |
+| `backend/src/main/java/com/veiltalk/avatar/AvatarProfileRepository.java` | Repository hồ sơ nhân vật ảo |
 
 ### Module nhắn tin
 
@@ -95,6 +98,8 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/messaging/Message.java` | Entity bảng `messages` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageStatus.java` | Enum `SENT`, `DELIVERED`, `READ` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageStatusConverter.java` | Chuyển enum message sang giá trị PostgreSQL chữ thường |
+| `backend/src/main/java/com/veiltalk/messaging/ConversationRepository.java` | Repository cuộc trò chuyện |
+| `backend/src/main/java/com/veiltalk/messaging/MessageRepository.java` | Repository tin nhắn; trả lịch sử dạng `Slice` theo thời gian tăng dần và loại soft delete |
 
 ### Module video
 
@@ -103,10 +108,16 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/video/Video.java` | Entity bảng `videos`, gồm `updated_at` và mặc định `RECORDING` |
 | `backend/src/main/java/com/veiltalk/video/VideoStatus.java` | Enum `RECORDING`, `PROCESSING`, `READY`, `FAILED` |
 | `backend/src/main/java/com/veiltalk/video/VideoStatusConverter.java` | Chuyển enum video sang giá trị PostgreSQL chữ thường |
+| `backend/src/main/java/com/veiltalk/video/VideoRepository.java` | Repository video |
 
 P1-T04 dùng `@Convert` rõ ràng trên từng field enum, không dùng `@Enumerated`. Test
 converter bao phủ hai chiều Java ↔ giá trị database, annotation mapping và persist/read
 thực tế qua PostgreSQL trong transaction rollback. Toàn bộ 8 test PASS.
+
+P1-T05 bổ sung 6 `JpaRepository` theo package tính năng. Integration test xác minh
+query user tôn trọng `is_discoverable`/`deleted_at`, query message loại soft delete,
+sắp xếp `client_timestamp ASC` và phân trang bằng `Slice`. Toàn bộ 11 test PASS và dữ
+liệu test được rollback.
 
 ## Signaling Server
 
