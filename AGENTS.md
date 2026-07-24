@@ -31,6 +31,7 @@
 | Viết test, test case TC-xx | `docs/07_DEVELOPMENT_AND_TESTING.md` |
 | Docker, biến môi trường, triển khai | `docs/08_DEPLOYMENT_AND_OPERATIONS.md` |
 | Đo hiệu năng | `docs/10_PERFORMANCE.md` |
+| Soát code, review pull request | `docs/REVIEW_CHECKLIST.md` |
 
 **KHÔNG đọc hết tất cả.** Chỉ đọc file liên quan tới task đang làm. Mỗi task trong `09_ROADMAP_AND_TASKS.md` có cột "Tài liệu tham chiếu" — dùng nó.
 

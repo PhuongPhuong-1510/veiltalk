@@ -1,70 +1,8 @@
 # Bộ lệnh làm việc với AI — VeilTalk
 
-Mở file này bên cạnh khi làm. Chép nguyên câu, thay mã task cho đúng.
+**File này dành cho BẠN, không phải cho AI.** Mở bên cạnh khi làm việc, chép nguyên câu, thay mã task cho đúng.
 
----
-
-## PHẦN 0 — Chuẩn bị (làm một lần)
-
-### 0.1 Dựng repo
-
-```bash
-mkdir veiltalk && cd veiltalk
-git init
-mkdir -p docs/_source docs/runbooks docs/screenshots
-mkdir -p backend frontend signaling
-# copy 9 file .docx vào docs/_source/
-```
-
-### 0.2 Bảo AI tạo bộ tài liệu
-
-> Trong `docs/_source/` có 9 file .docx là tài liệu thiết kế của dự án.
->
-> Chuyển từng file sang markdown theo ánh xạ dưới đây. **Giữ nguyên toàn bộ nội dung, không tóm tắt, không lược bỏ, không gộp, không tách.** Chỉ đổi định dạng và tên file.
->
-> - VeilTalk_SRS.docx → docs/01_PRODUCT_REQUIREMENTS.md
-> - VeilTalk_SAD_final.docx → docs/02_SYSTEM_ARCHITECTURE.md
-> - VeilTalk_DDD.docx → docs/03_DATABASE.md
-> - VeilTalk_API.docx → docs/04_API.md
-> - VeilTalk_UIUX.docx → docs/05_UI_UX.md
-> - VeilTalk_TestPlan.docx → docs/07_DEVELOPMENT_AND_TESTING.md
-> - VeilTalk_Deploy.docx → docs/08_DEPLOYMENT_AND_OPERATIONS.md
-> - VeilTalk_TaskList__1_.docx → docs/09_ROADMAP_AND_TASKS.md
-> - VeilTalk_PerfReport.docx → docs/10_PERFORMANCE.md
->
-> Làm từng file một, xong file nào báo file đó.
-
-### 0.3 Kiểm chứng không mất nội dung
-
-> Đối chiếu bản .docx gốc và bản .md vừa tạo. Đếm và báo cáo:
->
-> - Số mã FR-xx (phải có FR-01 đến FR-22)
-> - Số mã NFR-xx (phải có NFR-01 đến NFR-32)
-> - Số mã TC-xx (phải có TC-01 đến TC-58)
-> - Số mã SCR-xx (phải có SCR-01 đến SCR-21)
-> - Số mã task (phải có 78)
-> - Số bảng trong mỗi file
->
-> Nếu có mã nào thiếu, chỉ rõ file nào và vị trí nào.
-
-### 0.4 Tạo file điều khiển
-
-> Tạo `AGENTS.md` ở gốc repo. Nội dung gồm:
-> - Dự án là gì (1 đoạn ngắn)
-> - Ngăn xếp công nghệ
-> - Lệnh chạy build / test / dev
-> - Quy ước code
-> - Ràng buộc không được vi phạm (lấy từ NFR trong docs/01)
-> - **Bảng chỉ đường**: task loại nào thì đọc file nào
-> - Quy tắc cập nhật docs sau khi sửa code
->
-> Giữ dưới 150 dòng — file này được đọc lại mỗi phiên.
->
-> Sau đó tạo `CLAUDE.md` chỉ chứa một dòng: `@AGENTS.md`
->
-> Tạo `docs/00_PROJECT_CONTEXT.md`: dự án làm cho ai, giải quyết vấn đề gì, bảng thuật ngữ, tổng quan công nghệ. Lấy nội dung từ docs/01 mục 1.
->
-> Tạo `docs/06_CODEBASE_GUIDE.md` với khung rỗng, ghi chú "sẽ điền dần khi có code".
+File tương ứng dành cho AI là `AGENTS.md` ở gốc repo.
 
 ---
 
@@ -72,7 +10,7 @@ mkdir -p backend frontend signaling
 
 ### Lệnh 1 — Giao task
 
-*(Bật plan mode trước: Shift+Tab hai lần)*
+*(Bật Plan mode trước: Shift + Tab)*
 
 > Làm task **P2-T14**.
 >
@@ -85,11 +23,14 @@ mkdir -p backend frontend signaling
 Nếu ổn:
 > Kế hoạch được. Làm đi.
 
-Nếu có chỗ chưa hiểu:
+Nếu chưa hiểu:
 > Giải thích rõ hơn bước 3 — tại sao lại làm như vậy, có cách nào khác không?
 
 Nếu sai:
 > Bước 2 sai. Theo `docs/04_API.md` mục 3.2 thì phải [X]. Sửa kế hoạch lại.
+
+Nếu nó đi quá xa:
+> Bước 5 và 6 nằm ngoài phạm vi task này. Bỏ đi.
 
 ### Lệnh 3 — Sau khi code xong
 
@@ -103,19 +44,15 @@ Nếu sai:
 
 > Giải thích file [tên file] như đang dạy người mới học. Nói rõ tại sao cần từng phần, và nếu hội đồng hỏi "tại sao chọn cách này" thì trả lời thế nào.
 
-### Lệnh 5 — Review chéo (chạy bằng Codex hoặc Copilot)
+### Lệnh 5 — Soát chéo (chạy bằng Codex hoặc Copilot, KHÔNG dùng lại phiên đã viết code)
 
-> Review code trong [thư mục]. Kiểm tra:
-> - Có khớp đặc tả trong `docs/04_API.md` không
-> - Lỗ hổng bảo mật
-> - Xử lý lỗi thiếu chỗ nào
-> - Chỗ nào khó bảo trì
+> Đọc `docs/REVIEW_CHECKLIST.md`. Soát toàn bộ thay đổi trong nhánh [tên nhánh] theo checklist đó.
 >
-> Chỉ báo cáo, đừng sửa.
+> Với mỗi vấn đề: ghi rõ file, dòng, mục checklist bị vi phạm, mức độ nghiêm trọng. Chỉ báo cáo, không sửa gì.
 
 ### Lệnh 6 — Commit
 
-> Commit với message theo chuẩn conventional commits, ghi rõ mã task.
+> Commit theo chuẩn conventional commits, ghi rõ mã task trong message.
 
 ---
 
@@ -133,7 +70,7 @@ Nếu sai:
 >
 > Chưa viết code.
 
-### Cuối phase — rà soát
+### Cuối phase — rà soát nhất quán
 
 > Đọc `docs/01_PRODUCT_REQUIREMENTS.md`, `docs/04_API.md`, `docs/03_DATABASE.md` và toàn bộ code đã viết trong phase này.
 >
@@ -149,7 +86,7 @@ Nếu sai:
 
 ### AI hiểu sai lặp lại
 
-Đóng phiên, mở phiên mới. Rồi:
+Đóng phiên, mở phiên mới. Rồi dạy hệ thống thay vì sửa từng lần:
 
 > Ghi vào `AGENTS.md` quy tắc: [điều vừa bị hiểu sai]. Đặt vào mục quy ước code.
 
@@ -185,7 +122,7 @@ Nếu sai:
 >
 > Chạy 60 giây, báo min / trung bình / p95 / max. Điền kết quả vào `docs/10_PERFORMANCE.md`.
 
-### Kiểm tra ràng buộc riêng tư
+### Kiểm tra ràng buộc riêng tư (chạy trước mỗi lần merge vào main)
 
 > Rà toàn bộ code frontend. Xác nhận không có chỗ nào gửi khung hình webcam hoặc ảnh khuôn mặt ra khỏi trình duyệt. Chỉ được truyền skeleton data và audio. Đây là NFR-06, không được vi phạm.
 
@@ -201,9 +138,27 @@ Nếu sai:
 
 - **Một phiên = một task.** Xong thì đóng.
 - **Sửa cùng một lỗi hai lần** → đóng phiên, mở mới.
-- **Luôn plan mode** với task từ 2 giờ trở lên.
+- **Plan mode + Effort cao** cho lúc nghĩ. **Manual** cho lúc thực thi.
 - **Không tin "đã xong"** nếu chưa thấy test chạy xanh.
+- **Người viết code không được là người soát code.**
 - **Mỗi phase tự viết tay ít nhất một task** — để hiểu thật.
 - **Chụp màn hình khi vừa làm xong**, đừng đợi lúc bảo vệ.
 - **Hỏi "tại sao"** ít nhất một lần mỗi task.
 - Phát hiện AI hiểu sai điều gì → **ghi ngay vào AGENTS.md**.
+
+---
+
+## Số liệu tham chiếu
+
+Đã kiểm chứng bằng máy trên bản .docx gốc:
+
+| Loại mã | Số lượng | Nằm ở file |
+|---|---|---|
+| FR-01 → FR-32 | 32 | `01_PRODUCT_REQUIREMENTS.md` |
+| NFR-01 → NFR-32 | 32 | `01_PRODUCT_REQUIREMENTS.md` |
+| SCR-01 → SCR-21 | 21 | `05_UI_UX.md` |
+| TC-01 → TC-58 | 58 | `07_DEVELOPMENT_AND_TESTING.md` |
+| Task Pn-Txx | 83 | `09_ROADMAP_AND_TASKS.md` |
+
+Phân bố task: P0=7, P1=6, P2=26, P3=4, P4=24, P5=6, P6=5, P7=5.
+Tổng ước tính trong tài liệu: ~280–320 giờ.
