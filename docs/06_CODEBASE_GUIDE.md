@@ -23,6 +23,7 @@ Các thư mục ứng dụng và hạ tầng hiện chứa `.gitkeep` để Git 
 | File | Nội dung hiện tại |
 |---|---|
 | `.env.example` | Template biến môi trường, không chứa secret thật |
+| `.env` | Cấu hình môi trường cục bộ đã tạo; chứa secret, bị Git ignore và không được commit |
 | `docker-compose.yml` | 7 service: backend, signaling, frontend, postgres, redis, minio, nginx; dùng mạng `internal-net` và volume persistent cho PostgreSQL/MinIO |
 | `Makefile` | Shortcut `up`, `down`, `logs`, `migrate` |
 | `.gitignore` | Quy tắc bỏ qua file môi trường, output build và file cục bộ |
@@ -91,4 +92,6 @@ P0-T05 đã được xác minh bằng `npm run build` và `npm run lint`.
 
 ## Chỗ dễ nhầm
 
-*(ghi lại khi gặp — thứ mà đọc code không thấy ngay)*
+- `docker-compose.yml` mount `infra/postgres/init.sql`, nhưng file này chưa tồn tại vì
+  thuộc P1-T01. Đây là blocker tiềm năng khi khởi động PostgreSQL ở P0-T07; cần quyết
+  định cách xử lý trước khi chạy task đó, không tạo SQL sớm trong P0-T06.
