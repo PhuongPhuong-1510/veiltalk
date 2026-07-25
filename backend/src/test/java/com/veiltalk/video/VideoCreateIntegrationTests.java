@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,6 +52,9 @@ class VideoCreateIntegrationTests {
 	@MockitoBean
 	private VideoMultipartStorage multipartStorage;
 
+	@MockitoBean
+	private VideoUploadSessionStore sessionStore;
+
 	private User user;
 	private String token;
 
@@ -85,6 +89,9 @@ class VideoCreateIntegrationTests {
 		assertThat(videos).hasSize(1);
 		assertThat(videos.get(0).getStatus()).isEqualTo(VideoStatus.RECORDING);
 		assertThat(videos.get(0).getUserId()).isEqualTo(user.getId());
+		// T20 phải gieo phiên multipart để T21 tích lũy ETag.
+		verify(sessionStore).createSession(
+				videos.get(0).getId(), UPLOAD_ID, user.getId(), 5_242_880L);
 	}
 
 	@Test

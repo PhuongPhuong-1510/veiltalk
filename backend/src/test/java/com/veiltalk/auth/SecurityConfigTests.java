@@ -56,6 +56,12 @@ class SecurityConfigTests {
 	}
 
 	@Test
+	void messagingWebSocketHandshakePathDoesNotRequireBearerHeader() throws Exception {
+		mockMvc.perform(get("/ws/messaging"))
+				.andExpect(status().isOk());
+	}
+
+	@Test
 	void logoutRequiresAuthenticationAlthoughOtherAuthRoutesArePublic() throws Exception {
 		mockMvc.perform(post("/auth/logout"))
 				.andExpect(status().isUnauthorized());
@@ -105,6 +111,21 @@ class SecurityConfigTests {
 				.andExpect(header().string(
 						"Access-Control-Allow-Origin",
 						"https://app.veiltalk.example.com"));
+
+		mockMvc.perform(get("/auth/test")
+						.header("Origin", "http://localhost:5173"))
+				.andExpect(status().isOk())
+				.andExpect(header().string(
+						"Access-Control-Allow-Origin",
+						"http://localhost:5173"));
+	}
+
+	@Test
+	void disallowedOriginDoesNotReceiveCorsAllowHeader() throws Exception {
+		mockMvc.perform(get("/auth/test")
+						.header("Origin", "https://evil.example.com"))
+				.andExpect(status().isForbidden())
+				.andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
 	}
 
 	private JwtClaims accessClaims() {
@@ -130,7 +151,7 @@ class SecurityConfigTests {
 	@RestController
 	public static class TestController {
 
-		@GetMapping({"/auth/test", "/actuator/health", "/internal/test", "/protected"})
+		@GetMapping({"/auth/test", "/actuator/health", "/internal/test", "/protected", "/ws/messaging"})
 		String ok() {
 			return "ok";
 		}

@@ -182,6 +182,7 @@ Phân biệt lỗi môi trường thường gặp:
 | **TC-35** | **Xóa video**                     | Video status=ready                               | DELETE /videos/{id}                                                           | HTTP 204; GET /videos/{id} → 404; storage_used_bytes giảm                                         | FR-17           |
 | **TC-36** | **Video failed — view_url null**  | Video status=failed                              | GET /videos/{id}                                                              | HTTP 200, view_url=null, status='failed'                                                          | ADD 7.7         |
 | **TC-37** | **Xóa tài khoản abort recording — thực hiện tại P2-T24** | P2-T19–P2-T22 hoàn thành; user đang có video status=recording | DELETE /users/me với password đúng | HTTP 204 và token bị revoke ngay; video recording được abort trên MinIO. Nếu abort lỗi, cleanup job bền vững retry mà không rollback soft delete | ADD 4.5, ADD 7.5 |
+| **TC-69** | **MinIO client và presigned URL end-to-end** | MinIO thật đang chạy; đặt đủ `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` và `MINIO_INTEGRATION_TEST=true` | Khởi tạo `MinioClient`; tạo bucket test tên random khác bucket chính; sinh presigned PUT để upload dữ liệu mẫu; xác minh object; sinh presigned GET và tải lại; xóa object rồi bucket | Bind đúng bốn biến; bean khởi tạo; PUT/GET trả dữ liệu nguyên vẹn; cleanup thành công; access key/secret không xuất hiện trong log. Nếu không bật integration test thì test được skip rõ ràng, nhưng skipped không được tính là PASS khi nghiệm thu P2-T19 | P2-T19 |
 
 ## 3. Ca Kiểm thử Bảo mật
 
@@ -203,10 +204,18 @@ Phân biệt lỗi môi trường thường gặp:
 | **TC-ID** | **Tiêu đề**                           | **Điều kiện tiên quyết**         | **Bước thực hiện**                                                         | **Kết quả mong đợi**                                    | **Ref**   |
 |-----------|---------------------------------------|----------------------------------|----------------------------------------------------------------------------|---------------------------------------------------------|-----------|
 | **TC-46** | **Messaging WS kết nối hợp lệ**       | Đã đăng nhập                     | Kết nối wss://.../ws/messaging?token=\<valid_jwt\>                         | Kết nối thành công, nhận PING trong vòng 30 giây        | SAD 4.1.4 |
-| **TC-47** | **Messaging WS token không hợp lệ**   | Server đang chạy                 | Kết nối wss://.../ws/messaging?token=invalid                               | Server đóng kết nối ngay, HTTP 401 hoặc close code 4001 | SAD 4.1.4 |
+| **TC-47** | **Messaging WS từ chối xác thực không hợp lệ** | Server đang chạy | Lần lượt kết nối wss://.../ws/messaging khi thiếu token, token sai/hết hạn, refresh token, access token đã blacklist/global-revoke và token của user soft-delete | Mỗi handshake bị từ chối bằng HTTP 401 trước khi upgrade; không dùng close code 4001 | SAD 4.1.4 |
 | **TC-48** | **Signaling WS kết nối hợp lệ**       | Đã đăng nhập                     | Kết nối wss://.../ws/signaling?token=\<valid_jwt\>                         | Kết nối thành công                                      | SAD 4.2   |
 | **TC-49** | **Signaling WS từ chối không có JWT** | Server đang chạy                 | Kết nối wss://.../ws/signaling không có token                              | Server đóng kết nối — SAD mục 4.2 bảo mật               | SAD 4.2   |
-| **TC-50** | **TYPING indicator**                  | Hai user trong cùng conversation | User A gõ → gửi {type:TYPING, conversation_id} → User B nhận {type:TYPING} | User B nhận message type TYPING trong \< 500ms          | ADD 10.1  |
+| **TC-50** | **TYPING indicator**                  | Hai user trong cùng conversation active | A gửi `{type:TYPING,data:{conversation_id}}`, sau đó `TYPING_STOP` | B nhận đúng hai event trong \< 500ms; A không nhận echo; không đổi `conversation.updated_at` | ADD 10.1  |
+| **TC-61** | **Messaging WS heartbeat timeout** | Có access token hợp lệ, socket đã kết nối | Không gửi PONG cho hai PING liên tiếp | Server đóng đúng connection bằng code 4003 và dọn registry/task; connection khác không bị ảnh hưởng | API 10.1 |
+| **TC-62** | **Messaging WS token hết hạn hoặc bị thu hồi giữa phiên** | Socket kết nối bằng access token hợp lệ | Lần lượt chờ token hết hạn, blacklist JTI và global-revoke user trong khi socket đang mở | Server đóng connection bằng code 4002 tại expiry timer hoặc heartbeat kế tiếp | API 10.1 |
+| **TC-63** | **Messaging WS nhiều tab cùng user** | Một user có hai socket hợp lệ | Mở hai connection, đóng connection thứ nhất rồi tiếp tục PING/PONG trên connection thứ hai | Registry giữ hai session độc lập; connection thứ hai vẫn hoạt động sau khi connection thứ nhất đóng | SAD 4.1.4 |
+| **TC-64** | **NEW_MESSAGE qua Redis tới nhiều tab recipient** | Hai user có conversation; recipient mở hai socket | Sender POST message trên một Backend instance | Cả hai socket recipient nhận cùng `NEW_MESSAGE`; `data` khớp đầy đủ response REST và sender không nhận event này | FR-11 |
+| **TC-65** | **MESSAGE_STATUS_UPDATE qua Redis tới hai phía** | Message `sent`; sender và recipient đang mở socket | Recipient PUT status thành `read` | Mọi socket local của sender và recipient nhận `{type:MESSAGE_STATUS_UPDATE,data:{id,status:read}}` | FR-11 |
+| **TC-66** | **Redis subscriber lỗi và tự phục hồi** | WebSocket đang mở; Redis subscriber hoạt động | Làm Redis gián đoạn rồi khởi động lại và publish event hợp lệ | Socket không bị đóng; health subscriber `UP→DEGRADED→UP`; realtime tiếp tục sau reconnect, event bị lỡ phục hồi qua history | NFR-14 |
+| **TC-67** | **Messaging WS ERROR và policy violation** | Socket hợp lệ đang mở | Lần lượt gửi JSON hỏng, type không hỗ trợ và `conversation_id` không phải UUID | Mỗi frame nhận `ERROR` đúng code; sau ERROR thứ ba server đóng đúng connection bằng 1008 | API 10.1 |
+| **TC-68** | **Messaging WS frame vượt giới hạn** | Socket hợp lệ đang mở | Gửi một text frame lớn hơn 32 KiB | Server đóng đúng connection bằng code 1009; không xử lý hoặc relay payload | API 10.1 |
 
 ### 4.2. Hiệu năng Avatar Tracking (NFR-01, NFR-02)
 
@@ -238,7 +247,7 @@ Các TC này được đo chi tiết trong Performance Test Report. Dưới đâ
 | **FR-04 — Nhân vật ảo**                | TC-10 đến TC-15                                            |
 | **FR-05/06 — Bảo mật danh tính**       | TC-14 (không lộ email), TC-44 (webhook auth), TC-45 (CORS) |
 | **FR-09 — Xử lý tracking lost**        | TC-51 (kiểm tra avatar freeze)                             |
-| **FR-11 — Gửi tin nhắn**               | TC-23, TC-24, TC-25, TC-59, TC-60                          |
+| **FR-11 — Gửi tin nhắn**               | TC-23, TC-24, TC-25, TC-59, TC-60, TC-64, TC-65            |
 | **FR-12 — Lịch sử tin nhắn**           | TC-26, TC-27, TC-28                                        |
 | **FR-13/14 — Gọi video, WebRTC**       | TC-48, TC-49, TC-53, TC-54, TC-56                          |
 | **FR-16 — Quay video**                 | TC-29, TC-30, TC-31, TC-32, TC-33                          |

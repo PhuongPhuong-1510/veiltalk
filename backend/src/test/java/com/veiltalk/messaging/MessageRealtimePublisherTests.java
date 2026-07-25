@@ -134,6 +134,42 @@ class MessageRealtimePublisherTests {
 		verify(failureCounter).increment();
 	}
 
+	@Test
+	void publishesTypingContractsWithoutChangingExistingEvents() throws Exception {
+		StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+		ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+		MeterRegistry meterRegistry = mock(MeterRegistry.class);
+		Counter failureCounter = mock(Counter.class);
+		when(meterRegistry.counter("messaging.redis.publish.failures")).thenReturn(failureCounter);
+		MessageRealtimePublisher publisher = new MessageRealtimePublisher(
+				redisTemplate,
+				objectMapper,
+				meterRegistry);
+		UUID recipientUserId = UUID.randomUUID();
+		UUID conversationId = UUID.randomUUID();
+		ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+
+		publisher.publishTyping(recipientUserId, "TYPING", conversationId);
+		publisher.publishTyping(recipientUserId, "TYPING_STOP", conversationId);
+
+		verify(redisTemplate, org.mockito.Mockito.times(2)).convertAndSend(
+				org.mockito.ArgumentMatchers.eq("messaging:user:" + recipientUserId),
+				payloadCaptor.capture());
+		assertThat(payloadCaptor.getAllValues()).extracting(payload -> {
+			try {
+				return objectMapper.readTree(payload).path("type").asText();
+			}
+			catch (Exception exception) {
+				throw new IllegalStateException(exception);
+			}
+		}).containsExactly("TYPING", "TYPING_STOP");
+		for (String payload : payloadCaptor.getAllValues()) {
+			JsonNode event = objectMapper.readTree(payload);
+			assertThat(event.path("data").path("conversation_id").asText())
+					.isEqualTo(conversationId.toString());
+		}
+	}
+
 	private MessageResponse sampleMessage() {
 		return new MessageResponse(
 				UUID.randomUUID(),

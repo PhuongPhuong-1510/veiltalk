@@ -1,8 +1,10 @@
 package com.veiltalk.auth;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -25,7 +27,6 @@ import jakarta.servlet.http.HttpServletResponse;
 @Configuration
 public class SecurityConfig {
 
-	private static final String CLIENT_ORIGIN = "https://app.veiltalk.example.com";
 	private static final long HSTS_MAX_AGE_SECONDS = 31_536_000;
 	private static final String UNAUTHORIZED_RESPONSE =
 			"{\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication is required\",\"details\":{}}}";
@@ -56,7 +57,7 @@ public class SecurityConfig {
 				.authorizeHttpRequests(authorize -> authorize
 						.requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
 						.requestMatchers(HttpMethod.GET, "/avatars/models").permitAll()
-						.requestMatchers("/auth/**", "/actuator/health", "/internal/**").permitAll()
+						.requestMatchers("/auth/**", "/actuator/health", "/internal/**", "/ws/messaging").permitAll()
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.anyRequest().authenticated())
 				.headers(headers -> headers
@@ -76,9 +77,14 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	CorsConfigurationSource corsConfigurationSource() {
+	CorsConfigurationSource corsConfigurationSource(
+			@Value("${app.cors.allowed-origins}") String configuredOrigins) {
 		CorsConfiguration configuration = new CorsConfiguration();
-		configuration.setAllowedOrigins(List.of(CLIENT_ORIGIN));
+		configuration.setAllowedOrigins(Arrays.stream(configuredOrigins.split(","))
+				.map(String::trim)
+				.filter(origin -> !origin.isEmpty())
+				.distinct()
+				.toList());
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE));
 

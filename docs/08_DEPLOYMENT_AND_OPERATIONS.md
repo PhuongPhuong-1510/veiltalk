@@ -113,6 +113,10 @@ VIDEO_STORAGE_LIMIT_BYTES=2147483648 \# Hạn mức quota mỗi tài khoản, m�
 
 CORS_ALLOWED_ORIGINS=http://localhost:5173,https://app.veiltalk.example.com
 
+Danh sách phải chứa origin đầy đủ của từng frontend được phép mở Messaging WebSocket;
+không dùng wildcard. Vì access token nằm trong query handshake, reverse proxy/access log
+phải redaction hoặc bỏ query string của `/ws/messaging`; production chỉ dùng `wss://`.
+
 \# Signaling
 
 SIGNALING_JWT_SECRET=\<same-as-JWT_SECRET\>
@@ -247,7 +251,13 @@ MinIO cần được cấu hình để gửi bucket notification về Backend kh
 | **Signaling JWT validation fail**                        | JWT_SECRET trong .env của backend và signaling khác nhau — đảm bảo cùng giá trị                                                                                  |
 | **Video mãi ở trạng thái processing**                    | MinIO webhook không đến Backend — kiểm tra log backend: docker compose logs backend \| grep webhook. Background job sẽ đánh dấu failed sau 10 phút (ADD mục 7.4) |
 | **CORS error từ frontend**                               | CORS_ALLOWED_ORIGINS chưa thêm origin của frontend — thêm vào .env và restart backend                                                                            |
+| **JWT xuất hiện trong access/debug log**                 | Không ghi query string của `/ws/messaging`; giữ hai logger WebSocket/DispatcherServlet đã khóa ở INFO và cấu hình reverse proxy redaction query trước production |
 | **Redis connection fail**                                | Redis container chưa start — docker compose up -d redis rồi restart backend                                                                                      |
+| **Metric `messaging.websocket.auth.recheck.failures` tăng** | Redis lỗi tạm thời khi heartbeat kiểm tra blacklist/global revoke; socket hiện tại được giữ và backend thử lại ở heartbeat kế tiếp — kiểm tra Redis health/log, không cần buộc client reconnect |
+| **Health `messagingRedisSubscriber` = `DEGRADED`** | Redis listener mất kết nối hoặc nhận event malformed; socket được giữ, Lettuce tự reconnect — theo dõi `messaging.redis.subscribe.failures`, kiểm tra Redis và để client resync message history |
+| **Metric `messaging.websocket.delivery.failures` tăng** | Một WebSocket session local lỗi I/O/send buffer; backend đóng riêng session bằng 1011 và tiếp tục fan-out các session khác — client reconnect và resync history |
+| **Messaging WS nhận nhiều `ERROR` rồi đóng 1008** | Client gửi JSON/schema/type sai hoặc typing không có quyền ba lần trong cùng connection — sửa client theo contract `data.conversation_id`, sau đó reconnect |
+| **Messaging WS đóng 1009** | Client gửi text frame vượt 32 KiB — không retry nguyên payload; giảm kích thước và kiểm tra client serialization |
 
 ## 7. Checklist Triển khai Lần đầu
 

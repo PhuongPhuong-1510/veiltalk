@@ -13,15 +13,17 @@ import io.minio.http.Method;
 @Component
 public class MinioMultipartStorage implements VideoMultipartStorage {
 
-	// Presigned part URL hết hạn sau 1 giờ — khớp expires_in mô tả ở API mục 7.3.
-	private static final int PRESIGN_EXPIRY_SECONDS = 3600;
-
 	private final MinioAsyncClient minioAsyncClient;
 	private final MinioProperties minioProperties;
+	private final VideoProperties videoProperties;
 
-	MinioMultipartStorage(MinioAsyncClient minioAsyncClient, MinioProperties minioProperties) {
+	MinioMultipartStorage(
+			MinioAsyncClient minioAsyncClient,
+			MinioProperties minioProperties,
+			VideoProperties videoProperties) {
 		this.minioAsyncClient = minioAsyncClient;
 		this.minioProperties = minioProperties;
+		this.videoProperties = videoProperties;
 	}
 
 	@Override
@@ -56,7 +58,7 @@ public class MinioMultipartStorage implements VideoMultipartStorage {
 					.extraQueryParams(Map.of(
 							"uploadId", uploadId,
 							"partNumber", String.valueOf(partNumber)))
-					.expiry(PRESIGN_EXPIRY_SECONDS, TimeUnit.SECONDS)
+					.expiry((int) videoProperties.presignedUrlExpirySeconds(), TimeUnit.SECONDS)
 					.build());
 		} catch (Exception exception) {
 			throw new VideoStorageException("Không thể tạo presigned URL cho part", exception);

@@ -173,7 +173,18 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/messaging/CreateMessageRequest.java` | DTO request `POST /conversations/{id}/messages` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageResponse.java` | DTO response message và dữ liệu realtime `NEW_MESSAGE` |
 | `backend/src/main/java/com/veiltalk/messaging/MessageService.java` | Validate, insert idempotent và đăng ký publish realtime sau transaction commit |
-| `backend/src/main/java/com/veiltalk/messaging/MessageRealtimePublisher.java` | Publish best-effort đến Redis channel theo người nhận; ghi log/metric khi lỗi |
+| `backend/src/main/java/com/veiltalk/messaging/MessageRealtimePublisher.java` | Publish best-effort message/status/typing đến Redis channel theo người nhận; ghi log/metric khi lỗi |
+| `backend/src/main/java/com/veiltalk/messaging/MessagingWebSocketConfig.java` | Đăng ký raw WebSocket `/ws/messaging`, allowed origins và text frame limit 32 KiB |
+| `backend/src/main/java/com/veiltalk/messaging/MessagingWebSocketLifecycleConfig.java` | Cấp scheduler riêng và UTC clock cho heartbeat/token expiry của Messaging WebSocket |
+| `backend/src/main/java/com/veiltalk/messaging/WebSocketAuthHandshakeInterceptor.java` | Xác thực access JWT query token, blacklist/global revoke và user active trước khi upgrade |
+| `backend/src/main/java/com/veiltalk/messaging/MessagingWebSocketHandler.java` | Quản lý vòng đời, PONG, typing, ERROR và policy close 1008 của connection |
+| `backend/src/main/java/com/veiltalk/messaging/MessagingTypingService.java` | Kiểm conversation active/membership và relay typing tới user còn lại, không lưu DB |
+| `backend/src/main/java/com/veiltalk/messaging/WebSocketSessionRegistry.java` | Registry thread-safe hỗ trợ nhiều session/user, concurrent send và dọn task/session độc lập |
+| `backend/src/main/java/com/veiltalk/messaging/WebSocketKeepAliveScheduler.java` | Gửi PING, theo dõi PONG, đóng token hết hạn/thu hồi và recheck Redis best-effort |
+| `backend/src/main/java/com/veiltalk/messaging/RedisMessagingListenerConfig.java` | Static PSUBSCRIBE `messaging:user:*` một lần trên mỗi Backend instance |
+| `backend/src/main/java/com/veiltalk/messaging/MessagingRedisSubscriber.java` | Validate Redis envelope và fan-out nguyên văn tới mọi WebSocket session local của recipient |
+| `backend/src/main/java/com/veiltalk/messaging/MessagingRedisSubscriberHealthIndicator.java` | Health component `UP`/`DEGRADED` cho Redis realtime subscriber |
+| `backend/src/main/java/com/veiltalk/messaging/MessagingRedisConnectionMonitor.java` | Theo dõi Lettuce disconnect/reconnect để cập nhật subscriber metric và health |
 | `backend/src/main/java/com/veiltalk/messaging/MessageCursorCodec.java` | Mã hóa/giải mã keyset cursor từ `client_timestamp` và message id |
 | `backend/src/main/java/com/veiltalk/messaging/MessageHistoryResponse.java` | DTO một message trong response lịch sử |
 | `backend/src/main/java/com/veiltalk/messaging/MessageListResponse.java` | DTO trang lịch sử với `prev_cursor` và `has_more` |
@@ -185,6 +196,17 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/test/java/com/veiltalk/messaging/MessageRealtimePublisherTests.java` | Unit test channel/payload Redis và cơ chế best-effort khi publish lỗi |
 | `backend/src/test/java/com/veiltalk/messaging/MessageHistoryIntegrationTests.java` | Integration test TC-26, keyset cursor, tie-breaker, soft-delete, limit và quyền truy cập |
 | `backend/src/test/java/com/veiltalk/messaging/MessageStatusIntegrationTests.java` | Integration test TC-27–TC-28, transition, idempotency, quyền, 404 và publish sau commit |
+| `backend/src/test/java/com/veiltalk/messaging/WebSocketAuthHandshakeInterceptorTests.java` | Unit test claims, query token, blacklist/revoke và active-user check của handshake |
+| `backend/src/test/java/com/veiltalk/messaging/MessagingWebSocketConfigTests.java` | Unit test chuẩn hóa allowed origins và từ chối cấu hình rỗng/wildcard |
+| `backend/src/test/java/com/veiltalk/auth/MessagingWebSocketHandshakeIntegrationTests.java` | WebSocket upgrade thật: access token hợp lệ nhận 101 và các biến thể TC-47 nhận 401 |
+| `backend/src/test/java/com/veiltalk/messaging/WebSocketSessionRegistryTests.java` | Unit test nhiều session/user, concurrent decorator và cleanup chính xác |
+| `backend/src/test/java/com/veiltalk/messaging/WebSocketKeepAliveSchedulerTests.java` | Unit test PING/PONG, close 4002/4003, hủy task và Redis recheck failure metric |
+| `backend/src/test/java/com/veiltalk/messaging/MessagingWebSocketLifecycleIntegrationTests.java` | WebSocket thật cho TC-46, TC-61–TC-63: heartbeat, token expiry/revoke và nhiều tab |
+| `backend/src/test/java/com/veiltalk/messaging/MessagingRedisSubscriberTests.java` | Unit test fan-out, malformed event, health/metric, `CALL_INCOMING` readiness và lỗi một session |
+| `backend/src/test/java/com/veiltalk/messaging/MessagingWebSocketDeliveryIntegrationTests.java` | TC-64–TC-66 qua REST, DB commit, Redis và WebSocket thật |
+| `backend/src/test/java/com/veiltalk/messaging/MessagingWebSocketTypingIntegrationTests.java` | TC-50, TC-67–TC-68: typing relay, anti-enumeration, ERROR và close 1008/1009 |
+| `docs/runbooks/P2-T18-step3-multi-instance-verification.md` | Bằng chứng manual hai Backend instance và Redis restart của Bước 3 |
+| `docs/runbooks/P2-T18-end-to-end-verification.md` | Bằng chứng regression cuối cho toàn bộ phạm vi P2-T18 |
 
 ### Module video
 
@@ -194,17 +216,26 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/video/VideoStatus.java` | Enum `RECORDING`, `PROCESSING`, `READY`, `FAILED` |
 | `backend/src/main/java/com/veiltalk/video/VideoStatusConverter.java` | Chuyển enum video sang giá trị PostgreSQL chữ thường |
 | `backend/src/main/java/com/veiltalk/video/VideoRepository.java` | Repository video |
+| `backend/src/main/java/com/veiltalk/video/MinioProperties.java` | Bind `MINIO_ENDPOINT`, access key, secret key và bucket chính |
 | `backend/src/main/java/com/veiltalk/video/VideoProperties.java` | Bind `video.storage-limit-bytes` — hạn mức quota mỗi tài khoản (NFR-19) |
 | `backend/src/main/java/com/veiltalk/video/MinioConfig.java` | Khởi tạo `MinioClient` và `MinioAsyncClient` (multipart); không log credentials |
-| `backend/src/main/java/com/veiltalk/video/VideoController.java` | `POST /videos` — khởi tạo multipart upload (P2-T20) |
-| `backend/src/main/java/com/veiltalk/video/VideoService.java` | Quota check + tạo record recording + createMultipartUpload + presign part 1 |
+| `backend/src/main/java/com/veiltalk/video/VideoController.java` | `POST /videos` (P2-T20) + `POST /videos/{id}/chunks` (P2-T21) |
+| `backend/src/main/java/com/veiltalk/video/VideoService.java` | `initiateUpload` (quota + record recording + createMultipartUpload + presign part 1 + gieo phiên Redis) và `requestNextChunk` (ownership + reserve part + presign part kế) |
 | `backend/src/main/java/com/veiltalk/video/CreateVideoRequest.java` / `CreateVideoResponse.java` | DTO request/response cho `POST /videos` |
+| `backend/src/main/java/com/veiltalk/video/ChunkUrlRequest.java` / `ChunkUrlResponse.java` | DTO request/response cho `POST /videos/{id}/chunks` (P2-T21) |
+| `backend/src/main/java/com/veiltalk/video/VideoUploadSessionStore.java` | Interface state phiên multipart (createSession, reserveNextPart → enum ReserveResult) |
+| `backend/src/main/java/com/veiltalk/video/RedisVideoUploadSessionStore.java` | Impl Redis: hash `video:upload:{videoId}`; reserveNextPart nguyên tử bằng Lua (thứ tự + idempotency + quota) |
 | `backend/src/main/java/com/veiltalk/video/VideoMultipartStorage.java` | Interface bọc MinIO multipart (createMultipartUpload, presignPartUrl) — dùng lại P2-T21/T22 |
-| `backend/src/main/java/com/veiltalk/video/MinioMultipartStorage.java` | Impl thật qua `MinioAsyncClient`; presign PUT kèm `uploadId`/`partNumber` |
+| `backend/src/main/java/com/veiltalk/video/MinioMultipartStorage.java` | Impl thật qua `MinioAsyncClient`; presign PUT kèm `uploadId`/`partNumber`, TTL từ `video.presigned-url-expiry-seconds` |
+| `backend/src/main/java/com/veiltalk/video/VideoProperties.java` | Bind `video.*`: storage-limit-bytes, upload-session-ttl-seconds, presigned-url-expiry-seconds |
 | `backend/src/main/java/com/veiltalk/video/StorageQuotaExceededException.java` | Quota vượt → HTTP 507 `STORAGE_QUOTA_EXCEEDED` (xử lý ở `ApiExceptionHandler`) |
 | `backend/src/main/java/com/veiltalk/video/VideoStorageException.java` | Lỗi hạ tầng MinIO (unchecked) — mặc định trả 500 |
-| `backend/src/test/java/com/veiltalk/video/VideoCreateIntegrationTests.java` | TC-29, TC-33 + 400/401 (mock `VideoMultipartStorage`) |
-| `backend/src/test/java/com/veiltalk/video/VideoMultipartPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: PUT part thật → nhận ETag, chứng minh presign part đúng |
+| `backend/src/test/java/com/veiltalk/video/MinioClientIntegrationTests.java` | TC-69 với bucket random, presigned PUT/GET thật và cleanup |
+| `backend/src/test/java/com/veiltalk/video/MinioSdkCompatibilityTests.java` | Spike bảo vệ public low-level multipart API cần cho P2-T20–P2-T22 |
+| `backend/src/test/java/com/veiltalk/video/VideoCreateIntegrationTests.java` | TC-29, TC-33 + 400/401 (mock `VideoMultipartStorage` + `VideoUploadSessionStore`) |
+| `backend/src/test/java/com/veiltalk/video/VideoChunkIntegrationTests.java` | TC-30 + 400/403/404/507/retry cho `/chunks`, Redis thật (Lua chạy thật) |
+| `backend/src/test/java/com/veiltalk/video/VideoMultipartPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: PUT part 1 thật → nhận ETag, chứng minh presign part đúng |
+| `backend/src/test/java/com/veiltalk/video/VideoMultipartChunkPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: nối part 1 → PUT part 2 thật, hai ETag khác nhau (nền cho T22) |
 
 P1-T04 dùng `@Convert` rõ ràng trên từng field enum, không dùng `@Enumerated`. Test
 converter bao phủ hai chiều Java ↔ giá trị database, annotation mapping và persist/read
@@ -350,6 +381,52 @@ trả 400 và giữ nguyên dữ liệu. Update thực sự dùng pessimistic lo
 `conversation.updated_at`, và chỉ sau DB commit mới publish `MESSAGE_STATUS_UPDATE` best-effort
 tới channel của cả sender lẫn recipient. Lỗi Redis được ghi log/metric và không làm API thất bại.
 TC-27–TC-28, các ca bổ sung trong phạm vi status và toàn bộ 112 test Backend đều PASS.
+
+P2-T18 Bước 1 đăng ký `/ws/messaging` với raw Spring WebSocket. Security chain cho phép
+request handshake đi tới interceptor riêng; interceptor chỉ chấp nhận access token hợp lệ,
+chưa blacklist/global-revoke và thuộc user chưa soft-delete, sau đó lưu claims cần thiết vào
+session attributes. Handshake lỗi trả HTTP 401 trước upgrade. Allowed origins lấy từ
+`CORS_ALLOWED_ORIGINS`; text frame limit là 32 KiB để bao phủ envelope message tối đa.
+Hai logger framework có thể in URI/session đầy đủ bị khóa ở INFO để không lộ JWT query token.
+
+P2-T18 Bước 2 bổ sung registry in-memory theo `userId → nhiều session`, bọc từng session
+bằng concurrent-send decorator và dọn đúng session/task khi đóng. Server gửi `PING` ngay khi
+kết nối rồi mỗi 30 giây; hai lần liên tiếp không có `PONG` đóng code 4003. Timer hết hạn và
+blacklist/global-revocation recheck đóng code 4002. Redis recheck lỗi không đóng socket:
+backend ghi exception, tăng metric `messaging.websocket.auth.recheck.failures` và thử lại ở
+heartbeat sau.
+
+P2-T18 Bước 3 static-subscribe `messaging:user:*` trên từng Backend instance. Redis envelope
+hợp lệ được fan-out nguyên văn tới mọi session local của user lấy từ channel; `NEW_MESSAGE`
+giữ đủ các field của `MessageResponse`, còn `MESSAGE_STATUS_UPDATE` giữ `{id,status}`.
+`CALL_INCOMING` đã sẵn đường pass-through, nhưng endpoint phát event vẫn thuộc P3-T04.
+Redis/listener lỗi giữ nguyên WebSocket, tăng `messaging.redis.subscribe.failures` và chuyển
+health `messagingRedisSubscriber` sang `DEGRADED`; Lettuce reconnect và event hợp lệ kế tiếp
+đưa health về `UP`. Lỗi gửi một session tăng `messaging.websocket.delivery.failures`, đóng
+riêng session đó bằng 1011 và không chặn các session còn lại.
+
+P2-T18 Bước 4 xử lý inbound `PONG`, `TYPING` và `TYPING_STOP`. Typing yêu cầu
+`data.conversation_id`, conversation active và sender là thành viên; chỉ recipient nhận event
+qua Redis, sender không nhận echo và `conversation.updated_at` không đổi. Missing,
+soft-delete và non-member dùng cùng `ERROR/FORBIDDEN`. JSON/schema sai trả
+`VALIDATION_ERROR`, type lạ trả `UNSUPPORTED_EVENT`; lỗi lần thứ ba đóng riêng connection
+bằng 1008. Container giới hạn text frame 32 KiB và đóng 1009 khi vượt ngưỡng.
+
+P2-T18 có regression guard cho test isolation: bean cấu hình giới hạn text frame chỉ được
+tạo khi `ServletContext` thật có Jakarta `ServerContainer`. MockMvc context không có
+container sẽ bỏ qua riêng bean này; đăng ký handler và nghiệp vụ WebSocket không thay đổi.
+
+P2-T19 dùng `io.minio:minio:8.5.17`, resolve OkHttp 4.12.0 và không override Kotlin do
+Spring Boot quản lý. `MinioClient` bind cấu hình từ environment. TC-69 chỉ chạy khi đặt
+`MINIO_INTEGRATION_TEST=true`; test tạo bucket random tách biệt `MINIO_BUCKET`, upload và
+tải dữ liệu thật qua presigned URL rồi xóa object/bucket. Khi nghiệm thu P2-T19, TC-69 đã
+chạy với MinIO thật, không skip; toàn bộ 155 test Backend PASS.
+
+MinIO 8.5.17 công khai low-level multipart qua `MinioAsyncClient`:
+`createMultipartUploadAsync`, `uploadPartAsync`, `completeMultipartUploadAsync` và
+`abortMultipartUploadAsync`. P2-T19 không triển khai multipart. Trước P2-T20 phải spike
+cách dùng các public async API này; không phụ thuộc tùy tiện vào protected/internal API
+hoặc tạo adapter kế thừa `MinioClient`.
 
 ## Signaling Server
 

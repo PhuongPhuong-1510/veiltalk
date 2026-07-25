@@ -203,6 +203,17 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
   Message mới chỉ được publish sau khi transaction database commit thành công, đến channel `messaging:user:{recipientUserId}` với event `{"type":"NEW_MESSAGE","data":{message response fields}}`. Redis Pub/Sub là kênh realtime best-effort: lỗi publish không rollback dữ liệu hay làm REST API thất bại; client đồng bộ lại qua message history khi reconnect. Transactional outbox chưa được triển khai trong P2-T15.
 
+  Mỗi Backend instance thực hiện một static pattern subscription `messaging:user:*`. Khi nhận
+  event, instance tách `userId` từ channel và chỉ fan-out tới các WebSocket session local của
+  user đó. Vì mọi instance cùng subscribe pattern, event vẫn tới đúng instance dù REST request
+  được xử lý ở instance khác. Subscriber lỗi không đóng socket; backend ghi log/metric, báo
+  health `DEGRADED` và để Redis client tự reconnect.
+
+  `TYPING`/`TYPING_STOP` là event tạm thời: Backend kiểm tra conversation active và membership,
+  xác định user còn lại rồi publish cùng channel pattern để relay xuyên instance. Typing không
+  lưu database, không replay và không gửi lại chính sender. Client gửi payload sai nhận
+  `ERROR`; vi phạm lần thứ ba trong cùng connection bị đóng code 1008.
+
 - Vai trò 2 — Token blacklist: lưu tạm các JWT đã bị thu hồi (đăng xuất) cho đến khi token hết hạn tự nhiên, tránh phải tra Database cho mỗi request.
 
 ### 4.6. STUN/TURN Server

@@ -618,7 +618,9 @@ HTTP Status Codes
 | **400**         | Bad Request          | upload_id không hợp lệ, part_number không đúng thứ tự, hoặc etag_previous không khớp                                      |
 | **403**         | Forbidden            | Video không thuộc về user này                                                                                             |
 | **404**         | Not Found            | Video không tồn tại hoặc phiên upload đã hết hạn                                                                          |
-| **507**         | Insufficient Storage | Dung lượng thực đã vượt 2GB khi tính chunk mới — server từ chối cấp URL tiếp theo; client nên gọi POST /videos/{id}/abort |
+| **507**         | Insufficient Storage | Ước lượng bảo thủ (readyBytes + part_number × chunk_size_bytes) đã vượt 2GB khi cấp chunk mới — server từ chối cấp URL tiếp theo; client nên gọi POST /videos/{id}/abort. Dung lượng thực chỉ được chốt ở webhook (mục 7.6). |
+
+*Backend lưu state phiên trong Redis (`video:upload:{videoId}`, TTL refresh mỗi thao tác): upload_id, chunk_size_bytes, con trỏ next_part_number tường minh và các ETag theo part. Việc kiểm tra thứ tự + idempotency + quota + cập nhật con trỏ chạy nguyên tử bằng một Lua script (tránh race giữa các request đồng thời). ETag của một request part_number = K thuộc về part K-1 (part vừa PUT xong). Idempotency: gọi lại đúng part cũ với đúng ETag → cấp lại URL, không nhân đôi ETag; đúng part cũ nhưng ETag khác → 400; part_number nhảy cóc → 400.*
 
 ### 7.4. POST /videos/{id}/finalize
 
@@ -798,11 +800,34 @@ Xác thực
 
 - Gửi JWT trong query parameter khi kết nối: wss://...?token=\<access_token\>
 
-- Server từ chối kết nối (HTTP 401) nếu token không hợp lệ hoặc hết hạn.
+- Chỉ chấp nhận access token. Server từ chối handshake bằng HTTP 401, không upgrade
+  WebSocket, nếu token thiếu, sai chữ ký, hết hạn, là refresh token, đã bị blacklist,
+  bị thu hồi toàn bộ theo user, hoặc user không còn hoạt động/đã soft-delete.
+
+- Origin của client phải nằm trong `CORS_ALLOWED_ORIGINS`; không chấp nhận wildcard.
+
+- Access token trong query là dữ liệu nhạy cảm. Backend và reverse proxy không được ghi
+  nguyên query URI vào log. Production bắt buộc dùng `wss://`.
+
+Giới hạn và đóng kết nối
+
+- Text frame tối đa 32 KiB. Mức này lớn hơn envelope `NEW_MESSAGE` chứa content tối đa
+  4000 ký tự, kể cả trường hợp JSON phải escape toàn bộ. Frame lớn hơn giới hạn bị đóng
+  bằng code 1009.
+
+| **Code** | **Ý nghĩa** |
+|----------|-------------|
+| **1000** | Client đóng kết nối bình thường |
+| **1001** | Backend graceful shutdown/restart |
+| **1008** | Client vi phạm contract lần thứ 3 trong cùng connection |
+| **1009** | Text frame vượt giới hạn 32 KiB |
+| **1011** | Lỗi I/O session hoặc lỗi server không thể phục hồi |
+| **4002** | Access token hết hạn hoặc bị thu hồi trong khi socket đang mở |
+| **4003** | Không nhận PONG cho hai lần PING liên tiếp |
 
 Message từ server → client
 
-{ "type": "NEW_MESSAGE", "data": { "id": "uuid", "conversation_id": "uuid", "sender_id": "uuid", "content": "Xin chào!", "client_timestamp": "2026-06-21T10:30:00Z" } }
+{ "type": "NEW_MESSAGE", "data": { "id": "uuid", "conversation_id": "uuid", "sender_id": "uuid", "content": "Xin chào!", "status": "sent", "client_timestamp": "2026-06-21T10:30:00Z", "created_at": "2026-06-21T10:30:01Z" } }
 
 { "type": "MESSAGE_STATUS_UPDATE", "data": { "id": "uuid", "status": "delivered" } }
 
@@ -810,7 +835,9 @@ Message từ server → client
 
 *Lưu ý về CALL_INCOMING: đây là cơ chế giải quyết vấn đề 'B biết có cuộc gọi đến bằng cách nào'. B luôn duy trì kết nối Messaging WebSocket (thường trực) → khi A gọi, Signaling Server relay CALL_OFFER đến A và đồng thời Backend gửi CALL_INCOMING qua Messaging WS đến B → B kết nối Signaling WS để xử lý cuộc gọi. Điều này giải thích tại sao hai WebSocket phải tồn tại song song (SAD mục 4.1.4).*
 
-{ "type": "PING" } // Server gửi mỗi 30 giây, client phải trả PONG
+{ "type": "PING" } // Server gửi ngay sau khi kết nối và sau đó mỗi 30 giây, client phải trả PONG
+
+{ "type": "ERROR", "data": { "code": "VALIDATION_ERROR", "message": "Invalid WebSocket event payload" } }
 
 Message từ client → server
 
@@ -819,6 +846,37 @@ Message từ client → server
 { "type": "TYPING_STOP", "data": { "conversation_id": "uuid" } // Client gửi khi dừng gõ (sau 3 giây không gõ thêm, hoặc gửi tin nhắn) // Server relay tới người nhận để ẩn "Đang soạn tin..." indicator }
 
 { "type": "PONG" } // Client phải trả PONG khi nhận PING
+
+`TYPING`/`TYPING_STOP` chỉ hợp lệ khi sender là thành viên của conversation active.
+Conversation không tồn tại, đã soft-delete hoặc sender không phải thành viên đều nhận cùng
+`ERROR` code `FORBIDDEN`, không tiết lộ tài nguyên có tồn tại hay không. Event được publish
+tới user còn lại, không gửi lại chính sender, không lưu database và không replay khi reconnect.
+
+JSON hỏng, thiếu/sai kiểu `data.conversation_id` trả `ERROR` code `VALIDATION_ERROR`; type
+không hỗ trợ trả `UNSUPPORTED_EVENT`. Hai vi phạm đầu giữ connection. Vi phạm lần thứ ba
+vẫn nhận `ERROR` rồi connection đóng code 1008. Bộ đếm thuộc từng connection và không ảnh
+hưởng tab/thiết bị khác.
+
+Mỗi `PONG` hợp lệ đặt lại bộ đếm heartbeat. Nếu không nhận `PONG` cho hai lần `PING`
+liên tiếp, server đóng connection bằng code 4003 (xấp xỉ 60 giây với chu kỳ mặc định).
+Mỗi chu kỳ server đồng thời kiểm tra blacklist/global revocation; token hết hạn hoặc bị
+thu hồi làm connection đóng bằng code 4002. Nếu Redis lỗi trong lúc kiểm tra lại, server
+giữ connection, ghi log lỗi và tăng metric
+`messaging.websocket.auth.recheck.failures`, rồi thử lại ở chu kỳ kế tiếp.
+
+Một user có thể có nhiều connection đồng thời (nhiều tab/thiết bị). Đóng một connection
+chỉ dọn đúng connection đó, không làm gián đoạn các connection còn lại của cùng user.
+
+Mỗi Backend instance static-subscribe Redis pattern `messaging:user:*`. Subscriber chỉ chấp
+nhận envelope `NEW_MESSAGE`, `MESSAGE_STATUS_UPDATE`, `CALL_INCOMING`, `TYPING` hoặc
+`TYPING_STOP`, tách recipient `userId` từ channel và chuyển nguyên envelope tới mọi
+connection local của user. Lỗi
+subscriber/Redis không đóng WebSocket; backend tăng metric
+`messaging.redis.subscribe.failures`, đặt health component `messagingRedisSubscriber` thành
+`DEGRADED` và tự phục hồi subscription khi Redis kết nối lại. Lỗi gửi riêng một connection
+tăng `messaging.websocket.delivery.failures` và đóng connection đó bằng code 1011, không
+chặn fan-out tới connection khác. Event Pub/Sub bị lỡ không được replay; client đồng bộ lại
+bằng message history khi reconnect.
 
 ### 10.2. Kênh Signaling WebSocket
 

@@ -16,11 +16,40 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,https://app.veiltalk.example.com}
+
 jwt:
   secret: ${JWT_SECRET:}
   access-expiry: ${JWT_ACCESS_EXPIRY:900}
   refresh-expiry: ${JWT_REFRESH_EXPIRY:604800}
 
+messaging:
+  websocket:
+    # 4000 ký tự content có thể chiếm khoảng 24 KiB khi JSON phải escape toàn bộ.
+    max-text-message-size: 32768
+    heartbeat-interval-ms: 30000
+    send-time-limit-ms: 10000
+    send-buffer-size-bytes: 262144
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:}
+  secret-key: ${MINIO_SECRET_KEY:}
+  bucket: ${MINIO_BUCKET:veiltalk}
+
 video:
   # Dung lượng lưu trữ video tối đa mỗi tài khoản (NFR-19). Mặc định 2GB.
   storage-limit-bytes: ${VIDEO_STORAGE_LIMIT_BYTES:2147483648}
+  # Vòng đời phiên multipart trong Redis. Mặc định 6h — đủ dài cho một phiên quay,
+  # refresh mỗi lần cấp chunk; phiên bỏ dở sẽ tự hết hạn.
+  upload-session-ttl-seconds: ${VIDEO_UPLOAD_SESSION_TTL_SECONDS:21600}
+  # TTL của presigned PUT URL (mục 7.3). Dùng chung cho lúc ký URL và giá trị expires_in.
+  presigned-url-expiry-seconds: ${VIDEO_PRESIGNED_URL_EXPIRY_SECONDS:3600}
+
+logging:
+  level:
+    # JWT nằm trong query handshake nên không cho framework in URI/session đầy đủ ở DEBUG.
+    org.springframework.web.servlet.DispatcherServlet: INFO
+    org.springframework.web.socket.handler.LoggingWebSocketHandlerDecorator: INFO

@@ -47,7 +47,18 @@ public class MessageRealtimePublisher {
 				status.id());
 	}
 
-	private void publish(UUID userId, String type, Object data, UUID messageId) {
+	public void publishTyping(UUID userId, String type, UUID conversationId) {
+		if (!"TYPING".equals(type) && !"TYPING_STOP".equals(type)) {
+			throw new IllegalArgumentException("Unsupported typing event type");
+		}
+		publish(
+				userId,
+				type,
+				new TypingEvent(conversationId),
+				conversationId);
+	}
+
+	private void publish(UUID userId, String type, Object data, UUID eventReferenceId) {
 		try {
 			String payload = objectMapper.writeValueAsString(
 					new RealtimeEvent(type, data));
@@ -55,8 +66,9 @@ public class MessageRealtimePublisher {
 		} catch (Exception exception) {
 			meterRegistry.counter(FAILURE_METRIC).increment();
 			LOGGER.error(
-					"Realtime message publish failed for message {} and user {}; client must resync from history",
-					messageId,
+					"Realtime event publish failed for reference {} and user {}; "
+							+ "persisted message events recover via history, ephemeral events are dropped",
+					eventReferenceId,
 					userId,
 					exception);
 		}
@@ -66,5 +78,10 @@ public class MessageRealtimePublisher {
 	}
 
 	private record MessageStatusEvent(UUID id, String status) {
+	}
+
+	private record TypingEvent(
+			@com.fasterxml.jackson.annotation.JsonProperty("conversation_id")
+			UUID conversationId) {
 	}
 }
