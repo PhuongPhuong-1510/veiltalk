@@ -103,7 +103,7 @@ MINIO_SECRET_KEY=\<minio-secret-key\>
 
 MINIO_BUCKET=veiltalk
 
-MINIO_WEBHOOK_SECRET=\<hmac-secret\> \# SAD mục 7.6 /internal/videos/webhook
+MINIO_WEBHOOK_SECRET=\<random-shared-secret\> \# API mục 7.6; không phải HMAC
 
 \# Video
 
@@ -213,15 +213,17 @@ không dùng Flyway baseline cho database mới.
 
 ### 5.3. Cấu hình MinIO Bucket và Webhook
 
-MinIO cần được cấu hình để gửi bucket notification về Backend khi upload hoàn tất (SAD mục 7.6 — /internal/videos/webhook).
+MinIO cần được cấu hình để gửi bucket notification về Backend khi upload hoàn tất (API mục 7.6 — `/internal/videos/webhook`). Docker Compose truyền `MINIO_WEBHOOK_SECRET` cho Backend và dùng cùng giá trị làm `MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_VEILTALK`; MinIO gửi request thực tế với `Authorization: Bearer <MINIO_WEBHOOK_SECRET>`. Không thêm scheme vào giá trị env vì MinIO tự thêm `Bearer`.
 
 ## 12. Truy cập MinIO Console: http://localhost:9001 — đăng nhập bằng MINIO_ROOT_USER/PASSWORD
 
 ## 13. Tạo bucket: Buckets → Create → Tên: veiltalk
 
-## 14. Cấu hình webhook: Events → Add Event Destination → Webhook → URL: http://backend:8080/internal/videos/webhook → Authentication Header: X-MinIO-Signature: \<MINIO_WEBHOOK_SECRET\>
+## 14. Cấu hình webhook target đã nằm trong `docker-compose.yml`: enable `on`, URL `http://backend:8080/internal/videos/webhook`, auth token bằng `MINIO_WEBHOOK_SECRET`, batch size `1`. Nếu cấu hình thủ công bằng Console/`mc`, nhập auth token là secret thuần, không nhập `Bearer` hoặc custom scheme.
 
 ## 15. Bật notification: trong bucket veiltalk → Events → Subscribe to Event → chọn s3:ObjectCreated:CompleteMultipartUpload
+
+Sau khi cấu hình/restart MinIO, xác minh request có header `Authorization: Bearer <secret>`. Không ghi header này vào log khi chẩn đoán. Code vẫn xử lý toàn bộ mảng `Records` dù batch size triển khai mặc định là 1.
 
 ### 5.4. Lệnh vận hành thường dùng
 

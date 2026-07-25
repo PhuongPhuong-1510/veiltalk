@@ -216,11 +216,13 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/video/VideoStatus.java` | Enum `RECORDING`, `PROCESSING`, `READY`, `FAILED` |
 | `backend/src/main/java/com/veiltalk/video/VideoStatusConverter.java` | Chuyển enum video sang giá trị PostgreSQL chữ thường |
 | `backend/src/main/java/com/veiltalk/video/VideoRepository.java` | Repository video |
-| `backend/src/main/java/com/veiltalk/video/MinioProperties.java` | Bind `MINIO_ENDPOINT`, access key, secret key và bucket chính |
+| `backend/src/main/java/com/veiltalk/video/MinioProperties.java` | Bind endpoint/credentials/bucket và `MINIO_WEBHOOK_SECRET` |
 | `backend/src/main/java/com/veiltalk/video/VideoProperties.java` | Bind `video.storage-limit-bytes` — hạn mức quota mỗi tài khoản (NFR-19) |
 | `backend/src/main/java/com/veiltalk/video/MinioConfig.java` | Khởi tạo `MinioClient` và `MinioAsyncClient` (multipart); không log credentials |
 | `backend/src/main/java/com/veiltalk/video/VideoController.java` | `POST /videos`, `/videos/{id}/chunks`, `/finalize`, `/abort` (P2-T20–T22) |
 | `backend/src/main/java/com/veiltalk/video/VideoService.java` | Khởi tạo/cấp chunk và finalize/abort multipart; đối chiếu parts, quota thật, conditional state update và compensation |
+| `backend/src/main/java/com/veiltalk/video/VideoWebhookAuthenticationFilter.java` | Chỉ bảo vệ `POST /internal/videos/webhook`; constant-time compare toàn `Authorization: Bearer <secret>` và fail-fast nếu thiếu secret |
+| `backend/src/main/java/com/veiltalk/video/VideoWebhookController.java` / `VideoWebhookRequest.java` / `VideoWebhookService.java` | Nhận payload MinIO thật, validate toàn batch, decode key một lần và atomic `processing→ready` theo storage path + size |
 | `backend/src/main/java/com/veiltalk/video/CreateVideoRequest.java` / `CreateVideoResponse.java` | DTO request/response cho `POST /videos` |
 | `backend/src/main/java/com/veiltalk/video/ChunkUrlRequest.java` / `ChunkUrlResponse.java` | DTO request/response cho `POST /videos/{id}/chunks` (P2-T21) |
 | `backend/src/main/java/com/veiltalk/video/FinalizeVideoRequest.java` / `FinalizeVideoResponse.java` / `AbortVideoRequest.java` | DTO finalize/abort (P2-T22) |
@@ -240,6 +242,8 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/test/java/com/veiltalk/video/VideoFinalizeAbortIntegrationTests.java` | TC-31/TC-32 + quota thật và đối chiếu ETag |
 | `backend/src/test/java/com/veiltalk/video/VideoFinalizeAbortConcurrencyIntegrationTests.java` | Race finalize–abort qua Redis/PostgreSQL thật: chỉ một thao tác thắng |
 | `backend/src/test/java/com/veiltalk/video/VideoFinalizeCompensationTests.java` / `VideoTimeoutCleanupJobTests.java` | Compensation remove object và timeout không abort multipart |
+| `backend/src/test/java/com/veiltalk/video/VideoWebhookIntegrationTests.java` / `VideoWebhookAuthenticationFilterTests.java` | TC-31/TC-44, auth matrix, batch validation, URL decode, idempotency, terminal states và size mismatch P2-T23 |
+| `backend/src/test/resources/application.properties` | Secret chỉ dùng cho test và Hikari pool nhỏ để nhiều Spring test context không làm cạn PostgreSQL connection |
 | `backend/src/test/java/com/veiltalk/video/VideoMultipartPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: PUT part 1 thật → nhận ETag, chứng minh presign part đúng |
 | `backend/src/test/java/com/veiltalk/video/VideoMultipartChunkPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: nối part 1 → PUT part 2 thật, hai ETag khác nhau (nền cho T22) |
 

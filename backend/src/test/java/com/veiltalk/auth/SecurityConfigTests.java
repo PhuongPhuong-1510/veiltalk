@@ -15,19 +15,28 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.veiltalk.video.VideoWebhookAuthenticationFilter;
+import com.veiltalk.video.MinioProperties;
 
 @WebMvcTest(controllers = SecurityConfigTests.TestController.class)
 @AutoConfigureMockMvc
 @Import({
 		SecurityConfig.class,
+		VideoWebhookAuthenticationFilter.class,
 		SecurityConfigTests.TestController.class
 })
+@TestPropertySource(properties = "minio.webhook.secret=test-only-webhook-secret")
+@EnableConfigurationProperties(MinioProperties.class)
 class SecurityConfigTests {
 
 	private static final UUID USER_ID = UUID.fromString("a310fc8c-109f-4e53-91ee-8fcd508f7512");
@@ -128,6 +137,15 @@ class SecurityConfigTests {
 				.andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
 	}
 
+	@Test
+	void internalWebhookDoesNotReceiveCorsHeaders() throws Exception {
+		mockMvc.perform(post("/internal/videos/webhook")
+					.header("Authorization", "Bearer test-only-webhook-secret")
+					.header("Origin", "http://localhost:5173"))
+				.andExpect(status().isOk())
+				.andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+	}
+
 	private JwtClaims accessClaims() {
 		return new JwtClaims(
 				USER_ID,
@@ -153,6 +171,11 @@ class SecurityConfigTests {
 
 		@GetMapping({"/auth/test", "/actuator/health", "/internal/test", "/protected", "/ws/messaging"})
 		String ok() {
+			return "ok";
+		}
+
+		@PostMapping("/internal/videos/webhook")
+		String webhook() {
 			return "ok";
 		}
 	}

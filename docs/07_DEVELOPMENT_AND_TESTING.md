@@ -194,7 +194,7 @@ Phân biệt lỗi môi trường thường gặp:
 | **TC-41** | **JWT secret sai**                  | Server đang chạy                     | Gửi request với JWT ký bằng secret khác                                      | HTTP 401, UNAUTHORIZED                                                                  | NFR-08  |
 | **TC-42** | **SQL Injection via email field**   | Server đang chạy                     | POST /auth/login {email: "' OR '1'='1"}                                      | HTTP 401 hoặc 400 — KHÔNG crash server, KHÔNG trả về data                               | NFR-09  |
 | **TC-43** | **Anti-enumeration đăng nhập**      | Biết email A tồn tại                 | So sánh response body của: (1) sai password email A, (2) email không tồn tại | Response body PHẢI giống hệt nhau — không tiết lộ email có tồn tại không                | FR-02   |
-| **TC-44** | **Webhook không có signature**      | Server đang chạy                     | POST /internal/videos/webhook không có header X-MinIO-Signature              | HTTP 401 hoặc 403                                                                       | ADD 7.6 |
+| **TC-44** | **Webhook không có shared secret**  | Server đang chạy                     | POST /internal/videos/webhook thiếu hoặc sai `Authorization: Bearer <MINIO_WEBHOOK_SECRET>` | HTTP 401 với cùng response; không log/trả lại secret                                    | ADD 7.6 |
 | **TC-45** | **CORS origin không được phép**     | Server đang chạy                     | Gửi request với Origin: https://evil.example.com                             | Response không có Access-Control-Allow-Origin header hoặc giá trị khác với allowed list | NFR-32  |
 
 ## 4. Ca Kiểm thử Phi chức năng (NFR)

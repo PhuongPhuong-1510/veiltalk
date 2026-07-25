@@ -2,6 +2,7 @@ package com.veiltalk.video;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface VideoRepository extends JpaRepository<Video, UUID> {
+
+	Optional<Video> findFirstByStoragePath(String storagePath);
 
 	// Tổng dung lượng đã dùng của user (NFR-19): chỉ tính video status='ready',
 	// bỏ qua bản ghi đã xóa mềm. Video recording/processing/failed không tính vào quota.
@@ -34,6 +37,15 @@ public interface VideoRepository extends JpaRepository<Video, UUID> {
 			+ "AND v.deletedAt IS NULL")
 	int markProcessing(@Param("id") UUID id, @Param("durationSecs") int durationSecs,
 			@Param("actualBytes") long actualBytes);
+
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Query("UPDATE Video v SET v.status = com.veiltalk.video.VideoStatus.READY "
+			+ "WHERE v.storagePath = :storagePath "
+			+ "AND v.status = com.veiltalk.video.VideoStatus.PROCESSING "
+			+ "AND v.deletedAt IS NULL AND v.fileSizeBytes = :fileSizeBytes")
+	int markReadyFromWebhook(
+			@Param("storagePath") String storagePath,
+			@Param("fileSizeBytes") long fileSizeBytes);
 
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Transactional

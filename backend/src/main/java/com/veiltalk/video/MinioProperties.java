@@ -7,5 +7,9 @@ public record MinioProperties(
         String endpoint,
         String accessKey,
         String secretKey,
-        String bucket) {
+        String bucket,
+        Webhook webhook) {
+
+    public record Webhook(String secret) {
+    }
 }

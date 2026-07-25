@@ -15,6 +15,8 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+	private static final String VIDEO_WEBHOOK_PATH = "/internal/videos/webhook";
+
 	private static final String AUTHORIZATION_HEADER = "Authorization";
 	private static final String BEARER_PREFIX = "Bearer ";
 	private static final String ACCESS_TOKEN_TYPE = "access";
@@ -30,6 +32,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		this.jwtService = jwtService;
 		this.jwtBlacklistService = jwtBlacklistService;
 		this.userTokenRevocationService = userTokenRevocationService;
+	}
+
+	@Override
+	protected boolean shouldNotFilter(HttpServletRequest request) {
+		return "POST".equalsIgnoreCase(request.getMethod())
+				&& VIDEO_WEBHOOK_PATH.equals(request.getRequestURI());
 	}
 
 	@Override

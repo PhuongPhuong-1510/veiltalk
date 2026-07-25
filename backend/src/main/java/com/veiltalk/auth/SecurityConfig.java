@@ -18,11 +18,14 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletResponse;
+
+import com.veiltalk.video.VideoWebhookAuthenticationFilter;
 
 @Configuration
 public class SecurityConfig {
@@ -41,7 +44,8 @@ public class SecurityConfig {
 			HttpSecurity http,
 			JwtService jwtService,
 			JwtBlacklistService jwtBlacklistService,
-			UserTokenRevocationService userTokenRevocationService) throws Exception {
+			UserTokenRevocationService userTokenRevocationService,
+			VideoWebhookAuthenticationFilter videoWebhookAuthenticationFilter) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
@@ -67,6 +71,9 @@ public class SecurityConfig {
 								.includeSubDomains(true)
 								.maxAgeInSeconds(HSTS_MAX_AGE_SECONDS)))
 				.addFilterBefore(
+						videoWebhookAuthenticationFilter,
+						UsernamePasswordAuthenticationFilter.class)
+				.addFilterBefore(
 						new JwtAuthenticationFilter(
 								jwtService,
 								jwtBlacklistService,
@@ -74,6 +81,15 @@ public class SecurityConfig {
 						UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
+	}
+
+	@Bean
+	FilterRegistrationBean<VideoWebhookAuthenticationFilter> disableServletRegistration(
+			VideoWebhookAuthenticationFilter filter) {
+		FilterRegistrationBean<VideoWebhookAuthenticationFilter> registration =
+				new FilterRegistrationBean<>(filter);
+		registration.setEnabled(false);
+		return registration;
 	}
 
 	@Bean
@@ -89,7 +105,11 @@ public class SecurityConfig {
 		configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE));
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-		source.registerCorsConfiguration("/**", configuration);
+		for (String path : List.of(
+				"/auth/**", "/users/**", "/avatars/**", "/conversations/**",
+				"/videos/**", "/metrics/**", "/ws/**")) {
+			source.registerCorsConfiguration(path, configuration);
+		}
 		return source;
 	}
 }

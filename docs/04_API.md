@@ -672,15 +672,30 @@ HTTP Status Codes
 
 ### 7.6. POST /internal/videos/webhook
 
-Webhook endpoint — chỉ nhận request từ MinIO, không phải từ client. MinIO gửi notification này sau khi CompleteMultipartUpload hoàn tất. Backend xác thực chữ ký MinIO trong header trước khi xử lý.
+Webhook endpoint — chỉ nhận request từ MinIO, không phải từ client. MinIO gửi notification này sau khi CompleteMultipartUpload hoàn tất. Backend xác thực shared secret trong toàn bộ header `Authorization` trước khi xử lý; đây không phải HMAC và Backend không diễn giải secret như JWT.
 
-*Endpoint này được đặt ở /internal/ và không có trong CORS policy — không thể gọi từ trình duyệt. Authentication bằng shared secret (HMAC signature) giữa MinIO và Backend, không dùng JWT.*
+*Endpoint này được đặt ở `/internal/` và không có trong CORS policy. CORS không phải lớp xác thực; shared-secret header mới là lớp bảo vệ bắt buộc ở mức MVP. JWT filter chủ động bỏ qua đúng endpoint này để filter webhook riêng xử lý.*
 
-Request từ MinIO (tự động)
+Request Header
 
-{ "EventName": "s3:ObjectCreated:CompleteMultipartUpload", "Records": \[{ "s3": { "bucket": { "name": "veiltalk" }, "object": { "key": "videos/uuid/demo.mp4", "size": 15728640, "eTag": "abc123" } } }\] }
+```http
+Authorization: Bearer <MINIO_WEBHOOK_SECRET>
+```
 
-Backend xử lý: tìm video record theo storage_path, cập nhật status = ready, file_size_bytes = object.size, tính dung lượng thực vào storage_used_bytes của user.
+Backend so sánh constant-time toàn bộ giá trị `Bearer <configured-secret>`. Header thiếu, sai scheme, sai secret, JWT Bearer hợp lệ hoặc có ký tự thừa đều trả cùng `401 UNAUTHORIZED`; header và secret không được ghi log hay đưa vào response. `MINIO_WEBHOOK_SECRET` bắt buộc có giá trị, nếu thiếu/rỗng thì Backend fail-fast khi khởi động. Shared secret tĩnh không chống replay về mặt mật mã; conditional state transition idempotent giới hạn tác hại replay. HMAC body kèm timestamp/nonce hoặc mTLS là hardening ngoài MVP.
+
+Request từ MinIO (tự động; cấu trúc đã đối chiếu với MinIO `RELEASE.2025-09-07T16-13-09Z`)
+
+{ "EventName": "s3:ObjectCreated:CompleteMultipartUpload", "Records": \[{ "eventName": "s3:ObjectCreated:CompleteMultipartUpload", "s3": { "bucket": { "name": "veiltalk" }, "object": { "key": "videos%2Fuuid%2Fsource.mp4", "size": 15728640, "eTag": "abc123" } } }\] }
+
+Backend validate cấu trúc toàn bộ `Records` trước khi update, URL-decode object key đúng một lần, kiểm event chính xác `s3:ObjectCreated:CompleteMultipartUpload` và bucket khớp cấu hình. Sau đó tìm video bằng exact `storage_path` và update nguyên tử `processing → ready` chỉ khi `deleted_at IS NULL` và `file_size_bytes = object.size` (T22 đã lưu kích thước thật).
+
+- JSON/record sai cấu trúc → `400 VALIDATION_ERROR`, không partial update.
+- Thiếu/sai Authorization → `401 UNAUTHORIZED` với cùng response trung lập.
+- Update thành công → `204 No Content`.
+- Webhook lặp, video ready/failed/soft-delete, object không tồn tại hoặc event/bucket không áp dụng → no-op `204`.
+- Video processing nhưng size không khớp → giữ processing, log cảnh báo integrity và trả `204`; timeout job T22 sẽ chuyển failed.
+- Lỗi database tạm thời → `500` để MinIO retry.
 
 ### 7.7. GET /videos/{id}
 

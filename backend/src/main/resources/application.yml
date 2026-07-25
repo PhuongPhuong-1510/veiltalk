@@ -38,6 +38,8 @@ minio:
   access-key: ${MINIO_ACCESS_KEY:}
   secret-key: ${MINIO_SECRET_KEY:}
   bucket: ${MINIO_BUCKET:veiltalk}
+  webhook:
+    secret: ${MINIO_WEBHOOK_SECRET:}
 
 video:
   # Dung lượng lưu trữ video tối đa mỗi tài khoản (NFR-19). Mặc định 2GB.
