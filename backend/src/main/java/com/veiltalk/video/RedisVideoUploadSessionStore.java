@@ -1,7 +1,9 @@
 package com.veiltalk.video;
 
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -96,5 +98,31 @@ public class RedisVideoUploadSessionStore implements VideoUploadSessionStore {
 				Long.toString(storageLimitBytes),
 				Long.toString(ttlMillis));
 		return ReserveResult.valueOf(result);
+	}
+
+	@Override
+	public Optional<UploadSession> findSession(UUID videoId) {
+		Map<Object, Object> values = redisTemplate.opsForHash().entries(sessionKey(videoId));
+		if (values.isEmpty()) {
+			return Optional.empty();
+		}
+		Map<Integer, String> etags = new HashMap<>();
+		values.forEach((field, value) -> {
+			String name = field.toString();
+			if (name.startsWith("etag:")) {
+				etags.put(Integer.parseInt(name.substring(5)), value.toString());
+			}
+		});
+		return Optional.of(new UploadSession(
+				values.get("uploadId").toString(),
+				UUID.fromString(values.get("userId").toString()),
+				Long.parseLong(values.get("chunkSizeBytes").toString()),
+				Integer.parseInt(values.get("nextPartNumber").toString()),
+				Map.copyOf(etags)));
+	}
+
+	@Override
+	public void deleteSession(UUID videoId) {
+		redisTemplate.delete(sessionKey(videoId));
 	}
 }

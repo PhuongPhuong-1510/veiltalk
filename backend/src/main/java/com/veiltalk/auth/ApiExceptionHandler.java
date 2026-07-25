@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.veiltalk.video.StorageQuotaExceededException;
+import com.veiltalk.video.VideoOperationConflictException;
+import com.veiltalk.video.VideoStorageException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -39,6 +41,11 @@ public class ApiExceptionHandler {
 		return error(HttpStatus.CONFLICT, "CONFLICT", exception.getMessage(), Map.of());
 	}
 
+	@ExceptionHandler(VideoOperationConflictException.class)
+	ResponseEntity<Map<String, Object>> handleVideoConflict(VideoOperationConflictException exception) {
+		return error(HttpStatus.CONFLICT, "CONFLICT", exception.getMessage(), Map.of());
+	}
+
 	@ExceptionHandler(UnauthorizedException.class)
 	ResponseEntity<Map<String, Object>> handleUnauthorized(UnauthorizedException exception) {
 		return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", exception.getMessage(), Map.of());
@@ -57,6 +64,12 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(StorageQuotaExceededException.class)
 	ResponseEntity<Map<String, Object>> handleStorageQuota(StorageQuotaExceededException exception) {
 		return error(HttpStatus.INSUFFICIENT_STORAGE, "STORAGE_QUOTA_EXCEEDED", exception.getMessage(), Map.of());
+	}
+
+	@ExceptionHandler(VideoStorageException.class)
+	ResponseEntity<Map<String, Object>> handleVideoStorage(VideoStorageException exception) {
+		return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+				"Không thể xử lý lưu trữ video lúc này.", Map.of());
 	}
 
 	@ExceptionHandler(ValidationException.class)

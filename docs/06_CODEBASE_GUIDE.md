@@ -219,14 +219,17 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/video/MinioProperties.java` | Bind `MINIO_ENDPOINT`, access key, secret key và bucket chính |
 | `backend/src/main/java/com/veiltalk/video/VideoProperties.java` | Bind `video.storage-limit-bytes` — hạn mức quota mỗi tài khoản (NFR-19) |
 | `backend/src/main/java/com/veiltalk/video/MinioConfig.java` | Khởi tạo `MinioClient` và `MinioAsyncClient` (multipart); không log credentials |
-| `backend/src/main/java/com/veiltalk/video/VideoController.java` | `POST /videos` (P2-T20) + `POST /videos/{id}/chunks` (P2-T21) |
-| `backend/src/main/java/com/veiltalk/video/VideoService.java` | `initiateUpload` (quota + record recording + createMultipartUpload + presign part 1 + gieo phiên Redis) và `requestNextChunk` (ownership + reserve part + presign part kế) |
+| `backend/src/main/java/com/veiltalk/video/VideoController.java` | `POST /videos`, `/videos/{id}/chunks`, `/finalize`, `/abort` (P2-T20–T22) |
+| `backend/src/main/java/com/veiltalk/video/VideoService.java` | Khởi tạo/cấp chunk và finalize/abort multipart; đối chiếu parts, quota thật, conditional state update và compensation |
 | `backend/src/main/java/com/veiltalk/video/CreateVideoRequest.java` / `CreateVideoResponse.java` | DTO request/response cho `POST /videos` |
 | `backend/src/main/java/com/veiltalk/video/ChunkUrlRequest.java` / `ChunkUrlResponse.java` | DTO request/response cho `POST /videos/{id}/chunks` (P2-T21) |
+| `backend/src/main/java/com/veiltalk/video/FinalizeVideoRequest.java` / `FinalizeVideoResponse.java` / `AbortVideoRequest.java` | DTO finalize/abort (P2-T22) |
 | `backend/src/main/java/com/veiltalk/video/VideoUploadSessionStore.java` | Interface state phiên multipart (createSession, reserveNextPart → enum ReserveResult) |
 | `backend/src/main/java/com/veiltalk/video/RedisVideoUploadSessionStore.java` | Impl Redis: hash `video:upload:{videoId}`; reserveNextPart nguyên tử bằng Lua (thứ tự + idempotency + quota) |
-| `backend/src/main/java/com/veiltalk/video/VideoMultipartStorage.java` | Interface bọc MinIO multipart (createMultipartUpload, presignPartUrl) — dùng lại P2-T21/T22 |
-| `backend/src/main/java/com/veiltalk/video/MinioMultipartStorage.java` | Impl thật qua `MinioAsyncClient`; presign PUT kèm `uploadId`/`partNumber`, TTL từ `video.presigned-url-expiry-seconds` |
+| `backend/src/main/java/com/veiltalk/video/VideoMultipartStorage.java` | Interface MinIO: create/presign/list/complete/abort multipart và remove object |
+| `backend/src/main/java/com/veiltalk/video/MinioMultipartStorage.java` | Impl `MinioAsyncClient`; ListParts phân trang, complete/abort và remove object |
+| `backend/src/main/java/com/veiltalk/video/RedisDistributedLock.java` | Redis lock token UUID; SET NX PX, Lua renew/release; finalize khóa user rồi video |
+| `backend/src/main/java/com/veiltalk/video/VideoTimeoutCleanupJob.java` | ScheduledExecutorService quét `processing` quá 10 phút, conditional failed và remove object best-effort |
 | `backend/src/main/java/com/veiltalk/video/VideoProperties.java` | Bind `video.*`: storage-limit-bytes, upload-session-ttl-seconds, presigned-url-expiry-seconds |
 | `backend/src/main/java/com/veiltalk/video/StorageQuotaExceededException.java` | Quota vượt → HTTP 507 `STORAGE_QUOTA_EXCEEDED` (xử lý ở `ApiExceptionHandler`) |
 | `backend/src/main/java/com/veiltalk/video/VideoStorageException.java` | Lỗi hạ tầng MinIO (unchecked) — mặc định trả 500 |
@@ -234,6 +237,9 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/test/java/com/veiltalk/video/MinioSdkCompatibilityTests.java` | Spike bảo vệ public low-level multipart API cần cho P2-T20–P2-T22 |
 | `backend/src/test/java/com/veiltalk/video/VideoCreateIntegrationTests.java` | TC-29, TC-33 + 400/401 (mock `VideoMultipartStorage` + `VideoUploadSessionStore`) |
 | `backend/src/test/java/com/veiltalk/video/VideoChunkIntegrationTests.java` | TC-30 + 400/403/404/507/retry cho `/chunks`, Redis thật (Lua chạy thật) |
+| `backend/src/test/java/com/veiltalk/video/VideoFinalizeAbortIntegrationTests.java` | TC-31/TC-32 + quota thật và đối chiếu ETag |
+| `backend/src/test/java/com/veiltalk/video/VideoFinalizeAbortConcurrencyIntegrationTests.java` | Race finalize–abort qua Redis/PostgreSQL thật: chỉ một thao tác thắng |
+| `backend/src/test/java/com/veiltalk/video/VideoFinalizeCompensationTests.java` / `VideoTimeoutCleanupJobTests.java` | Compensation remove object và timeout không abort multipart |
 | `backend/src/test/java/com/veiltalk/video/VideoMultipartPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: PUT part 1 thật → nhận ETag, chứng minh presign part đúng |
 | `backend/src/test/java/com/veiltalk/video/VideoMultipartChunkPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: nối part 1 → PUT part 2 thật, hai ETag khác nhau (nền cho T22) |
 

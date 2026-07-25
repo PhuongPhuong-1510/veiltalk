@@ -1,5 +1,7 @@
 package com.veiltalk.video;
 
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -31,6 +33,14 @@ public interface VideoUploadSessionStore {
 			String etagPrevious,
 			long readyBytes,
 			long storageLimitBytes);
+
+	Optional<UploadSession> findSession(UUID videoId);
+
+	void deleteSession(UUID videoId);
+
+	record UploadSession(String uploadId, UUID userId, long chunkSizeBytes,
+			int nextPartNumber, Map<Integer, String> etags) {
+	}
 
 	/**
 	 * Kết quả của reserveNextPart — service ánh xạ sang HTTP.

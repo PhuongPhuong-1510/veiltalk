@@ -109,6 +109,14 @@ MINIO_WEBHOOK_SECRET=\<hmac-secret\> \# SAD mục 7.6 /internal/videos/webhook
 
 VIDEO_STORAGE_LIMIT_BYTES=2147483648 \# Hạn mức quota mỗi tài khoản, mặc định 2GB (NFR-19)
 
+VIDEO_LOCK_TTL_MILLIS=30000 \# Lease Redis lock finalize/abort; tự gia hạn khi token còn khớp
+
+VIDEO_LOCK_ACQUIRE_TIMEOUT_MILLIS=5000
+
+VIDEO_PROCESSING_TIMEOUT_SECONDS=600 \# processing quá 10 phút → failed
+
+VIDEO_CLEANUP_INTERVAL_SECONDS=300 \# quét timeout mỗi 5 phút
+
 \# CORS
 
 CORS_ALLOWED_ORIGINS=http://localhost:5173,https://app.veiltalk.example.com

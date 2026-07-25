@@ -638,9 +638,9 @@ Response 202 Accepted
 
 { "id": "uuid", "status": "processing", "message": "Upload hoàn tất, đang xử lý. Trạng thái sẽ cập nhật qua MinIO webhook." }
 
-*202 Accepted thay vì 200 OK vì quá trình MinIO complete và webhook là bất đồng bộ — client dùng polling GET /videos/{id} để biết khi video chuyển sang ready (không nhắc WebSocket vì chưa định nghĩa message type tương ứng).*
+*Trước khi complete, Backend gọi ListParts có phân trang, đối chiếu part number/ETag giữa request, Redis và MinIO, rồi cộng kích thước part thực. Quota finalize tính tổng video `ready` + `processing` chưa xóa mềm dưới Redis lock theo user. Sau complete thành công, Backend lưu kích thước thực và chuyển nguyên tử `recording → processing`; webhook vẫn là bước bất đồng bộ chuyển `processing → ready`.*
 
-*Fallback nếu MinIO webhook không bao giờ đến: Backend có background job chạy mỗi 5 phút, kiểm tra tất cả video ở trạng thái processing quá 10 phút mà không có webhook — đánh dấu failed và abort multipart upload trên MinIO. Điều này ngăn video bị kẹt mãi ở processing.*
+*Fallback nếu MinIO webhook không bao giờ đến: Backend có background job chạy mỗi 5 phút, đổi nguyên tử video `processing → failed` khi quá 10 phút, best-effort xóa object đã complete và dọn Redis session còn sót. Lỗi cleanup được log để P2-T24 retry, không làm dừng cả batch.*
 
 HTTP Status Codes
 
@@ -650,11 +650,11 @@ HTTP Status Codes
 | **400**         | Bad Request          | parts không đầy đủ hoặc etag không khớp với những gì MinIO ghi nhận                    |
 | **403**         | Forbidden            | Video không thuộc về user này                                                          |
 | **409**         | Conflict             | Video đã ở trạng thái ready hoặc đã được finalize trước đó                             |
-| **507**         | Insufficient Storage | Dung lượng thực tế khi finalize vượt 2GB — upload bị từ chối, video chuyển sang failed |
+| **507**         | Insufficient Storage | Dung lượng thực tế làm tổng `ready + processing` vượt 2GB — multipart bị abort, video chuyển `failed` và xóa mềm |
 
 ### 7.5. POST /videos/{id}/abort
 
-Hủy phiên quay đang dở. Backend gọi MinIO AbortMultipartUpload để dọn sạch các chunk đã upload. Video record bị xóa. Không ảnh hưởng quota vì video chưa ở trạng thái ready.
+Hủy phiên quay đang dở. Backend gọi MinIO AbortMultipartUpload để dọn sạch các chunk đã upload. Sau khi MinIO thành công, Backend đổi nguyên tử `recording → failed`, đặt `deleted_at` và xóa Redis session. Nếu MinIO lỗi, DB/session được giữ nguyên. Các API thông thường không nhìn thấy record đã xóa mềm.
 
 Request Body
 

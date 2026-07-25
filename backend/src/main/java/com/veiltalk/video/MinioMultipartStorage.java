@@ -1,5 +1,7 @@
 package com.veiltalk.video;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -7,8 +9,11 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 
 import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.ListPartsResponse;
 import io.minio.MinioAsyncClient;
+import io.minio.RemoveObjectArgs;
 import io.minio.http.Method;
+import io.minio.messages.Part;
 
 @Component
 public class MinioMultipartStorage implements VideoMultipartStorage {
@@ -63,5 +68,87 @@ public class MinioMultipartStorage implements VideoMultipartStorage {
 		} catch (Exception exception) {
 			throw new VideoStorageException("Không thể tạo presigned URL cho part", exception);
 		}
+	}
+
+	@Override
+	public List<UploadedPart> listParts(String objectKey, String uploadId) {
+		try {
+			List<UploadedPart> parts = new ArrayList<>();
+			int marker = 0;
+			boolean truncated;
+			do {
+				ListPartsResponse response = minioAsyncClient
+						.listPartsAsync(minioProperties.bucket(), null, objectKey, 1000, marker,
+								uploadId, null, null)
+						.get();
+				response.result().partList().forEach(part ->
+						parts.add(new UploadedPart(part.partNumber(), part.etag(), part.partSize())));
+				truncated = response.result().isTruncated();
+				marker = response.result().nextPartNumberMarker();
+			} while (truncated);
+			return List.copyOf(parts);
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new VideoStorageException("Bị gián đoạn khi đọc danh sách multipart", exception);
+		} catch (ExecutionException exception) {
+			throw storageFailure("Không thể đọc danh sách multipart trên MinIO", exception);
+		} catch (Exception exception) {
+			throw new VideoStorageException("Không thể đọc danh sách multipart trên MinIO", exception);
+		}
+	}
+
+	@Override
+	public void completeMultipartUpload(String objectKey, String uploadId, List<UploadedPart> parts) {
+		try {
+			Part[] minioParts = parts.stream()
+					.map(part -> new Part(part.partNumber(), part.etag()))
+					.toArray(Part[]::new);
+			minioAsyncClient.completeMultipartUploadAsync(
+					minioProperties.bucket(), null, objectKey, uploadId, minioParts, null, null).get();
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new VideoStorageException("Bị gián đoạn khi hoàn tất multipart upload", exception);
+		} catch (ExecutionException exception) {
+			throw storageFailure("Không thể hoàn tất multipart upload trên MinIO", exception);
+		} catch (Exception exception) {
+			throw new VideoStorageException("Không thể hoàn tất multipart upload trên MinIO", exception);
+		}
+	}
+
+	@Override
+	public void abortMultipartUpload(String objectKey, String uploadId) {
+		try {
+			minioAsyncClient.abortMultipartUploadAsync(
+					minioProperties.bucket(), null, objectKey, uploadId, null, null).get();
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new VideoStorageException("Bị gián đoạn khi hủy multipart upload", exception);
+		} catch (ExecutionException exception) {
+			throw storageFailure("Không thể hủy multipart upload trên MinIO", exception);
+		} catch (Exception exception) {
+			throw new VideoStorageException("Không thể hủy multipart upload trên MinIO", exception);
+		}
+	}
+
+	@Override
+	public void removeObject(String objectKey) {
+		try {
+			minioAsyncClient.removeObject(RemoveObjectArgs.builder()
+					.bucket(minioProperties.bucket())
+					.object(objectKey)
+					.build()).get();
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new VideoStorageException("Bị gián đoạn khi xóa object video", exception);
+		} catch (ExecutionException exception) {
+			throw storageFailure("Không thể xóa object video trên MinIO", exception);
+		} catch (Exception exception) {
+			throw new VideoStorageException("Không thể xóa object video trên MinIO", exception);
+		}
+	}
+
+	private VideoStorageException storageFailure(String message, ExecutionException exception) {
+		return new VideoStorageException(message,
+				exception.getCause() == null ? exception : exception.getCause());
 	}
 }

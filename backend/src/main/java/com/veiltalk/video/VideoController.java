@@ -42,4 +42,22 @@ public class VideoController {
 				request);
 		return ResponseEntity.ok(response);
 	}
+
+	@PostMapping("/videos/{id}/finalize")
+	ResponseEntity<FinalizeVideoResponse> finalizeUpload(
+			Authentication authentication,
+			@PathVariable("id") UUID videoId,
+			@Valid @RequestBody FinalizeVideoRequest request) {
+		return ResponseEntity.accepted().body(videoService.finalizeUpload(
+				(UUID) authentication.getPrincipal(), videoId, request));
+	}
+
+	@PostMapping("/videos/{id}/abort")
+	ResponseEntity<Void> abortUpload(
+			Authentication authentication,
+			@PathVariable("id") UUID videoId,
+			@Valid @RequestBody AbortVideoRequest request) {
+		videoService.abortUpload((UUID) authentication.getPrincipal(), videoId, request);
+		return ResponseEntity.noContent().build();
+	}
 }

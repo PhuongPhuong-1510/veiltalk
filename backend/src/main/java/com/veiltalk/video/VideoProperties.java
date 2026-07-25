@@ -10,5 +10,9 @@ public record VideoProperties(
         long uploadSessionTtlSeconds,
         // Một nguồn sự thật cho TTL presigned URL: MinioMultipartStorage ký URL VÀ
         // VideoService trả expires_in đều đọc giá trị này (khớp mô tả API mục 7.3).
-        long presignedUrlExpirySeconds) {
+        long presignedUrlExpirySeconds,
+        long lockTtlMillis,
+        long lockAcquireTimeoutMillis,
+        long processingTimeoutSeconds,
+        long cleanupIntervalSeconds) {
 }

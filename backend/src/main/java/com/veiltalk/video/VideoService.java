@@ -1,5 +1,8 @@
 package com.veiltalk.video;
 
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -9,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import com.veiltalk.auth.ForbiddenException;
+import com.veiltalk.auth.ConflictException;
 import com.veiltalk.auth.NotFoundException;
 import com.veiltalk.auth.ValidationException;
 
@@ -27,18 +31,21 @@ public class VideoService {
 	private final VideoUploadSessionStore sessionStore;
 	private final VideoProperties videoProperties;
 	private final EntityManager entityManager;
+	private final RedisDistributedLock distributedLock;
 
 	public VideoService(
 			VideoRepository videoRepository,
 			VideoMultipartStorage multipartStorage,
 			VideoUploadSessionStore sessionStore,
 			VideoProperties videoProperties,
-			EntityManager entityManager) {
+			EntityManager entityManager,
+			RedisDistributedLock distributedLock) {
 		this.videoRepository = videoRepository;
 		this.multipartStorage = multipartStorage;
 		this.sessionStore = sessionStore;
 		this.videoProperties = videoProperties;
 		this.entityManager = entityManager;
+		this.distributedLock = distributedLock;
 	}
 
 	@Transactional
@@ -149,6 +156,174 @@ public class VideoService {
 			case ERR_ORDER -> throw new ValidationException(
 					"part_number không đúng thứ tự của phiên upload.");
 			default -> throw new IllegalStateException("Kết quả reserveNextPart không xác định: " + result);
+		}
+	}
+
+	public FinalizeVideoResponse finalizeUpload(
+			UUID userId, UUID videoId, FinalizeVideoRequest request) {
+		validateRequestParts(request.parts());
+		try (var quotaLock = distributedLock.acquire("video:quota-lock:" + userId);
+				var videoLock = distributedLock.acquire("video:operation-lock:" + videoId)) {
+			Video video = requireOwnedRecording(userId, videoId);
+			VideoUploadSessionStore.UploadSession session = requireSession(videoId);
+			validateUploadId(userId, request.uploadId(), session);
+			validateRedisEtags(request.parts(), session);
+
+			List<VideoMultipartStorage.UploadedPart> actualParts =
+					multipartStorage.listParts(video.getStoragePath(), request.uploadId()).stream()
+							.sorted(Comparator.comparingInt(
+									VideoMultipartStorage.UploadedPart::partNumber))
+							.toList();
+			validateMinioParts(request.parts(), actualParts);
+			long actualUploadedBytes = sumPartSizes(actualParts);
+			long reservedBytes = videoRepository.sumQuotaReservedBytes(userId);
+			if (reservedBytes > videoProperties.storageLimitBytes() - actualUploadedBytes) {
+				multipartStorage.abortMultipartUpload(video.getStoragePath(), request.uploadId());
+				int updated = videoRepository.failAndSoftDeleteRecording(videoId, Instant.now());
+				sessionStore.deleteSession(videoId);
+				if (updated != 1) {
+					throw new VideoOperationConflictException(
+							"Trạng thái video đã thay đổi khi xử lý quota.");
+				}
+				throw new StorageQuotaExceededException(
+						"Dung lượng thực tế vượt hạn mức. Phiên quay đã được hủy.");
+			}
+
+			multipartStorage.completeMultipartUpload(
+					video.getStoragePath(), request.uploadId(), actualParts);
+			int updated;
+			try {
+				updated = videoRepository.markProcessing(
+						videoId, request.durationSecs(), actualUploadedBytes);
+			} catch (RuntimeException databaseFailure) {
+				cleanupCompletedObject(video, databaseFailure);
+				sessionStore.deleteSession(videoId);
+				throw databaseFailure;
+			}
+			if (updated != 1) {
+				RuntimeException stateFailure = new VideoOperationConflictException(
+						"Video đã được xử lý bởi thao tác khác.");
+				cleanupCompletedObject(video, stateFailure);
+				sessionStore.deleteSession(videoId);
+				throw stateFailure;
+			}
+			sessionStore.deleteSession(videoId);
+			return new FinalizeVideoResponse(videoId, VideoStatus.PROCESSING.getDatabaseValue(),
+					"Upload hoàn tất, đang xử lý. Trạng thái sẽ cập nhật qua MinIO webhook.");
+		}
+	}
+
+	public void abortUpload(UUID userId, UUID videoId, AbortVideoRequest request) {
+		try (var videoLock = distributedLock.acquire("video:operation-lock:" + videoId)) {
+			Video video = requireOwnedRecording(userId, videoId);
+			VideoUploadSessionStore.UploadSession session = requireSession(videoId);
+			validateUploadId(userId, request.uploadId(), session);
+			multipartStorage.abortMultipartUpload(video.getStoragePath(), request.uploadId());
+			int updated = videoRepository.failAndSoftDeleteRecording(videoId, Instant.now());
+			sessionStore.deleteSession(videoId);
+			if (updated != 1) {
+				throw new VideoOperationConflictException(
+						"Video đã được xử lý bởi thao tác khác.");
+			}
+		}
+	}
+
+	private Video requireOwnedRecording(UUID userId, UUID videoId) {
+		Video video = videoRepository.findById(videoId)
+				.filter(candidate -> candidate.getDeletedAt() == null)
+				.orElseThrow(() -> new NotFoundException("Video không tồn tại."));
+		if (!video.getUserId().equals(userId)) {
+			throw new ForbiddenException("Video không thuộc về bạn.");
+		}
+		if (video.getStatus() != VideoStatus.RECORDING) {
+			throw new ConflictException("Video đã được finalize hoặc không còn ghi hình.");
+		}
+		return video;
+	}
+
+	private VideoUploadSessionStore.UploadSession requireSession(UUID videoId) {
+		return sessionStore.findSession(videoId)
+				.orElseThrow(() -> new NotFoundException("Phiên upload không tồn tại hoặc đã hết hạn."));
+	}
+
+	private void validateUploadId(
+			UUID userId, String uploadId, VideoUploadSessionStore.UploadSession session) {
+		if (!session.userId().equals(userId) || !session.uploadId().equals(uploadId)) {
+			throw new NotFoundException("Phiên upload không tồn tại hoặc upload_id không hợp lệ.");
+		}
+	}
+
+	private void validateRequestParts(List<FinalizeVideoRequest.PartRequest> parts) {
+		for (int index = 0; index < parts.size(); index++) {
+			if (parts.get(index).partNumber() != index + 1) {
+				throw new ValidationException(
+						"parts phải liên tục từ 1..N, đúng thứ tự và không trùng.");
+			}
+		}
+	}
+
+	private void validateRedisEtags(
+			List<FinalizeVideoRequest.PartRequest> parts,
+			VideoUploadSessionStore.UploadSession session) {
+		if (session.nextPartNumber() != parts.size() + 1
+				|| session.etags().size() != Math.max(0, parts.size() - 1)) {
+			throw new ValidationException("Danh sách parts không khớp thứ tự phiên upload.");
+		}
+		for (int partNumber = 1; partNumber < parts.size(); partNumber++) {
+			String stored = session.etags().get(partNumber);
+			if (stored == null || !normalizeEtag(stored).equals(
+					normalizeEtag(parts.get(partNumber - 1).etag()))) {
+				throw new ValidationException("ETag request không khớp ETag đã lưu trong Redis.");
+			}
+		}
+	}
+
+	private void validateMinioParts(
+			List<FinalizeVideoRequest.PartRequest> requestParts,
+			List<VideoMultipartStorage.UploadedPart> actualParts) {
+		if (actualParts.size() != requestParts.size()) {
+			throw new ValidationException("Danh sách parts không đầy đủ trên MinIO.");
+		}
+		for (int index = 0; index < actualParts.size(); index++) {
+			var requested = requestParts.get(index);
+			var actual = actualParts.get(index);
+			if (actual.partNumber() != requested.partNumber()
+					|| !normalizeEtag(actual.etag()).equals(normalizeEtag(requested.etag()))) {
+				throw new ValidationException("Part number hoặc ETag không khớp MinIO.");
+			}
+		}
+	}
+
+	private long sumPartSizes(List<VideoMultipartStorage.UploadedPart> parts) {
+		try {
+			long total = 0;
+			for (var part : parts) {
+				if (part.sizeBytes() <= 0) {
+					throw new ValidationException("MinIO trả về kích thước part không hợp lệ.");
+				}
+				total = Math.addExact(total, part.sizeBytes());
+			}
+			return total;
+		} catch (ArithmeticException exception) {
+			throw new ValidationException("Tổng kích thước video không hợp lệ.");
+		}
+	}
+
+	static String normalizeEtag(String etag) {
+		String value = etag.trim();
+		if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+			return value.substring(1, value.length() - 1);
+		}
+		return value;
+	}
+
+	private void cleanupCompletedObject(Video video, RuntimeException primaryFailure) {
+		try {
+			multipartStorage.removeObject(video.getStoragePath());
+		} catch (RuntimeException cleanupFailure) {
+			primaryFailure.addSuppressed(cleanupFailure);
+			LOGGER.error("ORPHAN_VIDEO_OBJECT cleanup thất bại cho video {} objectKey={}; "
+					+ "cần P2-T24 retry", video.getId(), video.getStoragePath(), cleanupFailure);
 		}
 	}
 }

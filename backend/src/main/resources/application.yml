@@ -47,6 +47,10 @@ video:
   upload-session-ttl-seconds: ${VIDEO_UPLOAD_SESSION_TTL_SECONDS:21600}
   # TTL của presigned PUT URL (mục 7.3). Dùng chung cho lúc ký URL và giá trị expires_in.
   presigned-url-expiry-seconds: ${VIDEO_PRESIGNED_URL_EXPIRY_SECONDS:3600}
+  lock-ttl-millis: ${VIDEO_LOCK_TTL_MILLIS:30000}
+  lock-acquire-timeout-millis: ${VIDEO_LOCK_ACQUIRE_TIMEOUT_MILLIS:5000}
+  processing-timeout-seconds: ${VIDEO_PROCESSING_TIMEOUT_SECONDS:600}
+  cleanup-interval-seconds: ${VIDEO_CLEANUP_INTERVAL_SECONDS:300}
 
 logging:
   level:
