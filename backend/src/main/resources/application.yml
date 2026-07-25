@@ -20,3 +20,7 @@ jwt:
   secret: ${JWT_SECRET:}
   access-expiry: ${JWT_ACCESS_EXPIRY:900}
   refresh-expiry: ${JWT_REFRESH_EXPIRY:604800}
+
+video:
+  # Dung lượng lưu trữ video tối đa mỗi tài khoản (NFR-19). Mặc định 2GB.
+  storage-limit-bytes: ${VIDEO_STORAGE_LIMIT_BYTES:2147483648}

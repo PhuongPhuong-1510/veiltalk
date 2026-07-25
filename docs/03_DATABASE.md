@@ -185,7 +185,7 @@ Lưu metadata của video đã quay — không lưu file binary trong database (
 
 - CREATE INDEX idx_videos_user_created ON videos(user_id, created_at DESC) WHERE deleted_at IS NULL; — lấy thư viện video của user theo thứ tự mới nhất (FR-17)
 
-- CREATE INDEX idx_videos_user_size ON videos(user_id, file_size_bytes) WHERE deleted_at IS NULL; — tính tổng dung lượng đã dùng của user (NFR-19): SELECT SUM(file_size_bytes) FROM videos WHERE user_id = \$1 AND deleted_at IS NULL
+- CREATE INDEX idx_videos_user_size ON videos(user_id, file_size_bytes) WHERE deleted_at IS NULL; — tính tổng dung lượng đã dùng của user (NFR-19): SELECT SUM(file_size_bytes) FROM videos WHERE user_id = \$1 AND status = 'ready' AND deleted_at IS NULL — chỉ tính video status='ready' (recording/processing/failed không tính vào quota, xem API Design mục 7.1–7.2 và P2-T20)
 
 ### 3.6. Bảng refresh_tokens
 
@@ -253,7 +253,7 @@ Do giới hạn trình bày trong tài liệu Word, sơ đồ ERD được mô t
 | **Lịch sử chat: WHERE conversation_id = \$1 ORDER BY client_timestamp, id** | idx_messages_conv_time (composite)           | messages — `id` là tie-breaker ổn định cho keyset cursor; index hiện hữu lọc conversation và timestamp, PostgreSQL chỉ sắp xếp thêm các hàng có cùng timestamp                                                               |
 | **Danh sách trò chuyện gần nhất của user A**                                | idx_conv_user_a (composite)                  | conversations                                                                                                                                                                                                             |
 | **Danh sách trò chuyện gần nhất của user B**                                | idx_conv_user_b (composite)                  | conversations                                                                                                                                                                                                             |
-| **Kiểm tra dung lượng đã dùng: SUM(file_size_bytes) WHERE user_id = \$1**   | idx_videos_user_size (partial)               | videos                                                                                                                                                                                                                    |
+| **Kiểm tra dung lượng đã dùng: SUM(file_size_bytes) WHERE user_id = \$1 AND status='ready'** | idx_videos_user_size (partial)               | videos                                                                                                                                                                                                                    |
 | **Thư viện video: WHERE user_id = \$1 ORDER BY created_at DESC**            | idx_videos_user_created (composite, partial) | videos                                                                                                                                                                                                                    |
 | **Validate refresh token: WHERE token_hash = \$1**                          | idx_refresh_token_hash (unique)              | refresh_tokens                                                                                                                                                                                                            |
 

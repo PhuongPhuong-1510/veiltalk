@@ -105,6 +105,10 @@ MINIO_BUCKET=veiltalk
 
 MINIO_WEBHOOK_SECRET=\<hmac-secret\> \# SAD mục 7.6 /internal/videos/webhook
 
+\# Video
+
+VIDEO_STORAGE_LIMIT_BYTES=2147483648 \# Hạn mức quota mỗi tài khoản, mặc định 2GB (NFR-19)
+
 \# CORS
 
 CORS_ALLOWED_ORIGINS=http://localhost:5173,https://app.veiltalk.example.com

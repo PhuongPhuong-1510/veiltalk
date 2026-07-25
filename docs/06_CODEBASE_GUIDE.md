@@ -194,6 +194,17 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/video/VideoStatus.java` | Enum `RECORDING`, `PROCESSING`, `READY`, `FAILED` |
 | `backend/src/main/java/com/veiltalk/video/VideoStatusConverter.java` | Chuyển enum video sang giá trị PostgreSQL chữ thường |
 | `backend/src/main/java/com/veiltalk/video/VideoRepository.java` | Repository video |
+| `backend/src/main/java/com/veiltalk/video/VideoProperties.java` | Bind `video.storage-limit-bytes` — hạn mức quota mỗi tài khoản (NFR-19) |
+| `backend/src/main/java/com/veiltalk/video/MinioConfig.java` | Khởi tạo `MinioClient` và `MinioAsyncClient` (multipart); không log credentials |
+| `backend/src/main/java/com/veiltalk/video/VideoController.java` | `POST /videos` — khởi tạo multipart upload (P2-T20) |
+| `backend/src/main/java/com/veiltalk/video/VideoService.java` | Quota check + tạo record recording + createMultipartUpload + presign part 1 |
+| `backend/src/main/java/com/veiltalk/video/CreateVideoRequest.java` / `CreateVideoResponse.java` | DTO request/response cho `POST /videos` |
+| `backend/src/main/java/com/veiltalk/video/VideoMultipartStorage.java` | Interface bọc MinIO multipart (createMultipartUpload, presignPartUrl) — dùng lại P2-T21/T22 |
+| `backend/src/main/java/com/veiltalk/video/MinioMultipartStorage.java` | Impl thật qua `MinioAsyncClient`; presign PUT kèm `uploadId`/`partNumber` |
+| `backend/src/main/java/com/veiltalk/video/StorageQuotaExceededException.java` | Quota vượt → HTTP 507 `STORAGE_QUOTA_EXCEEDED` (xử lý ở `ApiExceptionHandler`) |
+| `backend/src/main/java/com/veiltalk/video/VideoStorageException.java` | Lỗi hạ tầng MinIO (unchecked) — mặc định trả 500 |
+| `backend/src/test/java/com/veiltalk/video/VideoCreateIntegrationTests.java` | TC-29, TC-33 + 400/401 (mock `VideoMultipartStorage`) |
+| `backend/src/test/java/com/veiltalk/video/VideoMultipartPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: PUT part thật → nhận ETag, chứng minh presign part đúng |
 
 P1-T04 dùng `@Convert` rõ ràng trên từng field enum, không dùng `@Enumerated`. Test
 converter bao phủ hai chiều Java ↔ giá trị database, annotation mapping và persist/read

@@ -10,6 +10,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.veiltalk.video.StorageQuotaExceededException;
+
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
@@ -50,6 +52,11 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(ForbiddenException.class)
 	ResponseEntity<Map<String, Object>> handleForbidden(ForbiddenException exception) {
 		return error(HttpStatus.FORBIDDEN, "FORBIDDEN", exception.getMessage(), Map.of());
+	}
+
+	@ExceptionHandler(StorageQuotaExceededException.class)
+	ResponseEntity<Map<String, Object>> handleStorageQuota(StorageQuotaExceededException exception) {
+		return error(HttpStatus.INSUFFICIENT_STORAGE, "STORAGE_QUOTA_EXCEEDED", exception.getMessage(), Map.of());
 	}
 
 	@ExceptionHandler(ValidationException.class)
