@@ -543,6 +543,50 @@ nhầm `/api` nhưng `AuthController`/`SecurityConfig` không có `context-path`
 
 P4-T01 đã được xác minh bằng `npm run build`, `npx tsc -b` và `npx vitest run` (9/9 test PASS).
 
+### Auth store (P4-T02)
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `frontend/src/lib/store/authStore.ts` | Zustand store: `{ user, accessToken, status, isLoading, login, register, logout, restoreSession }`; đăng ký `configureAuthHooks` của `client.ts` ngay khi module load |
+| `frontend/src/lib/store/authStore.test.ts` | Test Vitest: login/register thành công và lỗi, `restoreSession` có/không refresh token, refresh token hết hạn, logout best-effort, `onAuthFailure` qua `client.ts` thật |
+
+`status` có 3 giá trị: `idle` (chưa xác định lúc khởi động, tránh router redirect
+vội về `/login` trong khi `restoreSession` đang chạy), `authenticated`,
+`unauthenticated`. Không có field `isAuthenticated` riêng — derive từ `status`.
+
+Access token chỉ ở Zustand state (memory). Refresh token nằm ở biến module-level
+`refreshTokenRef` **và** `sessionStorage` (key `veiltalk_refresh_token`) — quyết
+định có ý thức, không phải mặc định:
+
+- Phương án đã cân nhắc và loại bỏ: refresh token cũng chỉ ở memory (giống access
+  token) — an toàn hơn trước XSS (không script nào đọc qua Storage API) nhưng mất
+  session mỗi lần F5, bắt đăng nhập lại liên tục — không chấp nhận được cho app
+  nhắn tin/gọi video dùng thường xuyên.
+- Chọn `sessionStorage`: vẫn đọc được qua XSS như `localStorage`, nhưng tab-scoped
+  và tự xóa khi đóng tab/trình duyệt — giảm cửa sổ tấn công so với `localStorage`
+  (không tồn tại lâu dài trên đĩa). Không dùng `localStorage` trong mọi trường hợp.
+- Giới hạn đa tab đã biết, chấp nhận cho MVP: `logout()` ở tab A không đồng bộ
+  ngay sang tab B (mỗi tab có `sessionStorage` riêng) — tab B vẫn coi là đăng
+  nhập tới khi access token hết hạn (tối đa 15 phút) rồi tự refresh thất bại.
+  Backlog nếu cần đồng bộ tức thời: `BroadcastChannel` hoặc lắng nghe storage
+  event — chưa làm, chưa cần cho MVP.
+
+`restoreSession()` (gọi một lần lúc app khởi động, ví dụ từ Splash SCR-01 ở
+P4-T06): đọc refresh token từ `sessionStorage` → gọi `/auth/refresh` lấy access
+token mới → gọi `GET /users/me` lấy lại `user` (cũng mất sau F5) → `status:
+"authenticated"`. Không có refresh token hoặc refresh thất bại → `status:
+"unauthenticated"` ngay, không giữ `idle`.
+
+Store **không tự điều hướng router** khi `onAuthFailure`/logout — chỉ set
+`status: "unauthenticated"`; component/router tự lắng nghe và redirect về
+`/login`, tránh coupling store vào một router cụ thể.
+
+Test dùng `MemoryStorage` tự viết (implements `Storage`) thay vì cài `jsdom`,
+vì môi trường test hiện chạy Node thuần (không cấu hình jsdom trong
+`vite.config.ts`) và AGENTS.md yêu cầu hỏi trước khi thêm thư viện mới.
+
+Toàn bộ 16 test Frontend (client.ts + authStore) và `npx tsc --noEmit` PASS.
+
 ### Vòng lặp tracking
 ### Bộ dựng hình nhân vật
 ### Lớp WebRTC
