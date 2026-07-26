@@ -937,9 +937,9 @@ Rate limiting: tối đa 20 kết nối WebSocket mới/địa chỉ IP/phút (S
 
 ### 10.3. Nội bộ: POST /internal/call/notify (P3-T04)
 
-Cầu nối Signaling Server → Backend để đẩy `CALL_INCOMING` (mục 10.1) qua Messaging WebSocket của callee. Chỉ Signaling Server gọi endpoint này, không phải client.
+Cầu nối Signaling Server → Backend để đẩy `CALL_INCOMING` (mục 10.1) qua Messaging WebSocket của callee.
 
-Xác thực: header `Authorization: Bearer <INTERNAL_CALL_NOTIFY_SECRET>` (cùng cơ chế shared-secret constant-time-compare như `/internal/videos/webhook` — mục MinIO webhook). Sai/thiếu secret trả `401 UNAUTHORIZED`.
+Xác thực: header `Authorization: Bearer <INTERNAL_CALL_NOTIFY_SECRET>` (cùng cơ chế shared-secret constant-time-compare như `/internal/videos/webhook` — mục MinIO webhook). Sai/thiếu secret trả `401 UNAUTHORIZED`. Lưu ý: endpoint này được bảo vệ bằng **credential** (shared secret), **không phải** network isolation — port 8080 của backend được publish ra host trong `docker-compose.yml`, nên bất kỳ ai biết `INTERNAL_CALL_NOTIFY_SECRET` đều có thể gọi được, không chỉ Signaling Server. Production nên bổ sung network isolation (ví dụ chỉ container signaling mới route được tới `/internal/**`, qua network riêng hoặc reverse proxy chặn theo path + nguồn) — xem mục việc tồn đọng trong `docs/09_ROADMAP_AND_TASKS.md`.
 
 Request body:
 

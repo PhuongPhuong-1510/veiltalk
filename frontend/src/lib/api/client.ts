@@ -24,7 +24,9 @@ export function configureAuthHooks(hooks: AuthHooks): void {
 
 let refreshPromise: Promise<string> | null = null;
 
-async function refreshAccessToken(): Promise<string> {
+// export: messagingWS.ts cũng cần chủ động refresh trước khi reconnect,
+// tái dùng đúng cơ chế (và refreshPromise dedupe) thay vì tự viết lại.
+export async function refreshAccessToken(): Promise<string> {
   if (refreshPromise) {
     return refreshPromise;
   }

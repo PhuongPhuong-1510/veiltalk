@@ -1,4 +1,4 @@
-export { configureAuthHooks } from "./client";
+export { configureAuthHooks, refreshAccessToken } from "./client";
 export { ApiError } from "./types";
 export type * from "./types";
 

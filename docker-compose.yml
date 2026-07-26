@@ -80,7 +80,7 @@ services:
       context: ./signaling
     environment:
       PORT: ${PORT}
-      JWT_SECRET: ${JWT_SECRET}
+      SIGNALING_JWT_SECRET: ${SIGNALING_JWT_SECRET}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX}
       INTERNAL_CALL_NOTIFY_SECRET: ${INTERNAL_CALL_NOTIFY_SECRET}
       BACKEND_URL: ${BACKEND_URL}

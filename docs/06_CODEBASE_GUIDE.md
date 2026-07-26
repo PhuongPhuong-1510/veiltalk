@@ -587,6 +587,53 @@ vì môi trường test hiện chạy Node thuần (không cấu hình jsdom tro
 
 Toàn bộ 16 test Frontend (client.ts + authStore) và `npx tsc --noEmit` PASS.
 
+### WebSocket service — Messaging (P4-T03)
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `frontend/src/lib/ws/messagingWS.ts` | Module-level singleton: `connectMessagingWS()`, `disconnectMessagingWS(reason?)`, `sendTyping(conversationId)`, `sendTypingStop(conversationId)`, `onMessage(type, handler)`, `onStatusChange(handler)` |
+| `frontend/src/lib/ws/messagingWS.test.ts` | Test Vitest: mock `WebSocket` global tối thiểu + `vi.useFakeTimers()`, mock `refreshAccessToken` qua `vi.mock("../api")`, dùng `authStore` thật (set state trực tiếp) |
+
+Dùng WebSocket API gốc của trình duyệt, không thêm thư viện (theo AGENTS.md). Chỉ một
+socket dùng chung toàn app — component không tự connect/disconnect, chỉ đăng ký/hủy đăng
+ký handler qua `onMessage()` (trả về hàm unsubscribe). Vòng đời connect/disconnect nằm ở
+App root, kích hoạt theo `authStore.status` (xem dưới), tách khỏi vòng đời component.
+
+**Auth:** đọc `useAuthStore.getState().accessToken` ngay trước mỗi lần mở `new WebSocket()`
+— không cache token trong closure. Backend từ chối handshake bằng HTTP 401 **trước khi
+upgrade** khi token thiếu/sai/hết hạn (TC-47, API mục 10.1); giới hạn của WebSocket API là
+browser không lộ status code thật cho `close` event xảy ra ở giai đoạn đó. Heuristic dùng:
+nếu `close` xảy ra trong <1s sau khi mở và chưa từng nhận message nào → nghi auth fail →
+gọi `refreshAccessToken()` (export mới từ `client.ts`, xem dưới) một lần rồi mới vào chuỗi
+reconnect bình thường. Nếu refresh cũng fail, `onAuthFailure` (hook đã có từ P4-T01/T02) tự
+chuyển `authStore.status` sang `unauthenticated`, việc reconnect tự dừng.
+
+**Reconnect:** exponential backoff + jitter — `delay = min(1000 * 2^attempt, 30000) *
+(0.8~1.2)`, tối đa 10 lần thử rồi phát `onStatusChange('closed')` cho UI tự hiện banner/nút
+thử lại thủ công. Mỗi lần thử đọc lại token mới nhất từ `authStore` (không dùng token cache
+cũ). Subscribe `useAuthStore.subscribe(...)`: khi `status` chuyển `unauthenticated` (logout
+hoặc `onAuthFailure`) thì hủy timer đang chờ và đóng socket ngay, không đợi tới lượt kiểm
+tra tiếp theo — tránh race giữa timer treo và logout.
+
+Nhóm close code coi là "cần reconnect": `1006` (mất mạng), `1011`/`1001` (lỗi/tắt server),
+`4002` (token hết hạn giữa chừng), `4003` (**xác nhận từ API mục 10.1: chỉ là timeout
+heartbeat — không nhận PONG cho 2 lần PING liên tiếp, KHÔNG phải lỗi cố ý về quyền/token
+như 4002** — thường do tab bị browser throttle ở background). Chỉ `1000` (client tự đóng,
+gồm cả trường hợp logout) là không reconnect.
+
+**Nhận message:** `JSON.parse` trong `try/catch`; parse lỗi hoặc `type` không nằm trong tập
+đã biết (`NEW_MESSAGE`, `MESSAGE_STATUS_UPDATE`, `CALL_INCOMING`, `PING`, `ERROR`) → log
+cảnh báo, bỏ qua, không throw. `PING` tự trả `PONG` nội bộ, không emit ra ngoài. Mỗi handler
+đăng ký qua `onMessage` được gọi trong `try/catch` riêng — một handler lỗi không chặn các
+handler khác hay crash service.
+
+`refreshAccessToken` được export thêm từ `client.ts`/`api/index.ts` (trước đó chỉ dùng nội
+bộ cho luồng 401-retry của `request()`) để `messagingWS.ts` tái dùng đúng cơ chế refresh
+(và `refreshPromise` dedupe sẵn có) thay vì tự viết lại hoặc gọi một API bất kỳ chỉ để kích
+side-effect refresh.
+
+Toàn bộ 13 test `messagingWS.ts` + 30 test Frontend và `npx tsc --noEmit` PASS.
+
 ### Vòng lặp tracking
 ### Bộ dựng hình nhân vật
 ### Lớp WebRTC
