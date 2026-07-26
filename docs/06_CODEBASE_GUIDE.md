@@ -11,7 +11,7 @@
 | Thư mục | Nội dung | Trạng thái |
 |---|---|---|
 | `backend/` | Spring Boot 3.5.16 API (Java 21, Maven) | datasource và Flyway V1 đã cấu hình; smoke test thành công |
-| `signaling/` | Node.js WebSocket relay | project skeleton hoàn tất |
+| `signaling/` | Node.js WebSocket relay | P3-T01 hoàn thành: WebSocket server + JWT auth (SIGNALING_JWT_SECRET) |
 | `frontend/` | Vite + React + TypeScript | project skeleton hoàn tất |
 | `infra/` | cấu hình hạ tầng | đã tạo thư mục, không chứa Docker init script |
 | `docs/` | Tài liệu thiết kế, roadmap, checklist và runbook | đã có |
@@ -488,13 +488,18 @@ window 3 giây/max 1 request thay vì 1 phút/10 request. Toàn bộ 220 test Ba
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `signaling/package.json` | Node.js project và scripts `start`, `check` |
+| `signaling/package.json` | Node.js project và scripts `start`, `check`, `test` |
 | `signaling/package-lock.json` | Khóa phiên bản dependency |
-| `signaling/src/index.js` | Entry-point skeleton; chưa triển khai WebSocket/JWT relay |
+| `signaling/src/index.js` | Entry-point: đọc `PORT`/`SIGNALING_JWT_SECRET` từ env rồi gọi `createServer()` |
+| `signaling/src/server.js` | `createServer({ port, jwtSecret, log })` — WebSocketServer tại `/ws/signaling`; validate JWT ở `connection` handler, reject bằng close code 4001 (khác Messaging WS dùng HTTP 401 trước upgrade — mục 10.2 API); map `userId → Set<WebSocket>` (`connectionsByUserId`) dùng cho relay ở P3-T02 |
+| `signaling/src/auth.js` | `verifyAccessToken(token, secret)` (HS256, chỉ chấp nhận `type: "access"`), `extractToken(url)` đọc query param `token` duy nhất |
+| `signaling/src/server.test.js` | `node:test` — TC-48/TC-49, cleanup connection map khi disconnect |
+| `signaling/src/auth.test.js` | `node:test` — verify token thật ký bằng `SIGNALING_JWT_SECRET` đọc từ `.env`, đối chiếu `JWT_SECRET`/`SIGNALING_JWT_SECRET` phải giống nhau trong `.env` |
 | `signaling/Dockerfile` | Image Node.js 24 Alpine, cài production dependencies và chạy entry-point |
 
-Dependencies nền tảng: `ws` 8.21.1, `jsonwebtoken` 9.0.3 và `dotenv` 17.4.2.
+Dependencies nền tảng: `ws` 8.21.1, `jsonwebtoken` 9.0.3 và `dotenv` 17.4.2 — không thêm thư viện test (dùng `node:test`/`node:assert` built-in theo AGENTS.md).
 P0-T04 đã được xác minh bằng `npm run check` và `npm start`.
+P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test PASS.
 
 ## Frontend
 
