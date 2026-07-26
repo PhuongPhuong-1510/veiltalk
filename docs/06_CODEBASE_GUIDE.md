@@ -467,6 +467,23 @@ cần rà soát thủ công. `VideoCleanupRetryJob` poll job đến hạn mỗi 
 là thành công để tránh lặp vô hạn khi retry một job đã thực ra xong việc. TC-34–TC-37 và
 toàn bộ 213 test Backend đều PASS.
 
+### Module metrics
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `backend/src/main/java/com/veiltalk/metrics/MetricsController.java` | `POST /metrics/client`, lấy userId từ `Authentication` |
+| `backend/src/main/java/com/veiltalk/metrics/MetricsService.java` | Parse timestamp ISO 8601 (400 nếu sai định dạng), kiểm rate limit rồi ghi log có cấu trúc — không lưu DB |
+| `backend/src/main/java/com/veiltalk/metrics/MetricsRateLimiter.java` | Redis fixed-window 1 request/3 giây/user, cùng cơ chế `UserSearchRateLimiter` |
+| `backend/src/main/java/com/veiltalk/metrics/MetricsClientRequest.java` | DTO request; `session_type` chỉ nhận `call`/`preview`, `webrtc_rtt_ms` optional kể cả khi `session_type=call` |
+| `backend/src/test/java/com/veiltalk/metrics/MetricsClientIntegrationTests.java` | Integration test 204/400/401/429 theo mẫu `UserSearchIntegrationTests` |
+
+P2-T25 triển khai `POST /metrics/client` (NFR-22). Log dùng prefix cố định `CLIENT_METRICS`
+và field `key=value` (`user_id`, `session_type`, `tracking_latency_ms`, `fps`,
+`webrtc_rtt_ms`, `client_timestamp`) để có thể grep lại và phát hiện vi phạm
+NFR-01/02/03 trong môi trường thực; không dùng hệ metrics (Micrometer) riêng, chỉ log.
+Rate limit dùng chung pattern Redis fixed-window với `UserSearchRateLimiter` nhưng
+window 3 giây/max 1 request thay vì 1 phút/10 request. Toàn bộ 220 test Backend PASS.
+
 ## Signaling Server
 
 | Đường dẫn | Nội dung |
