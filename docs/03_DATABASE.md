@@ -61,6 +61,7 @@ Bao phủ toàn bộ schema PostgreSQL của hệ thống VeilTalk MVP, bao gồ
 | **conversations**   | Cuộc trò chuyện 1-1 — định danh duy nhất cho mỗi cặp người dùng |
 | **messages**        | Tin nhắn văn bản — nội dung, trạng thái gửi nhận                |
 | **videos**          | Metadata video đã quay — thông tin file, trạng thái lưu trữ     |
+| **video_cleanup_jobs** | Retry bền vững cho thao tác MinIO thất bại (abort/remove object), P2-T24 |
 | **refresh_tokens**  | Token làm mới JWT — quản lý phiên đăng nhập                     |
 
 ### 2.3. Nguyên tắc thiết kế
@@ -177,6 +178,7 @@ Lưu metadata của video đã quay — không lưu file binary trong database (
 | **duration_secs**   | INTEGER          | YES       |               | NULL              | Thời lượng video (giây) — nullable vì chỉ có sau khi xử lý xong                                                         |
 | **status**          | VARCHAR(20)      | NO        |               | 'recording'       | Trạng thái: 'recording' (phiên quay đang diễn ra), 'processing' (đã finalize, chờ xử lý), 'ready' (xem được), 'failed' (lỗi upload hoặc xử lý) |
 | **format**          | VARCHAR(10)      | NO        |               | 'mp4'             | Định dạng file xuất ra — mặc định mp4 (NFR-18), để ngỏ cho tương lai                                                    |
+| **upload_id**       | VARCHAR(255)     | YES       |               | NULL              | Bản bền vững của MinIO multipart `upload_id` (P2-T24) — Redis `video:upload:{videoId}` giữ session hoạt động nhưng có TTL và có thể mất trước khi tài khoản bị xóa; cột này cho phép cleanup vẫn abort được multipart trên MinIO. NULL cho video 'recording' tạo trước migration V3 (chấp nhận cho MVP, xem `VideoAccountCleanupService`) |
 | **created_at**      | TIMESTAMPTZ      | NO        |               | NOW()             | Thời điểm bắt đầu quay                                                                                                  |
 | **updated_at**      | TIMESTAMPTZ      | NO        |               | NOW()             | Thời điểm cập nhật gần nhất — được cập nhật tự động bởi trigger `trg_videos_updated_at`                                |
 | **deleted_at**      | TIMESTAMPTZ      | YES       |               | NULL              | Soft delete — nullable; có giá trị khi user xóa video (FR-17) hoặc xóa tài khoản (NFR-27)                               |
@@ -186,6 +188,28 @@ Lưu metadata của video đã quay — không lưu file binary trong database (
 - CREATE INDEX idx_videos_user_created ON videos(user_id, created_at DESC) WHERE deleted_at IS NULL; — lấy thư viện video của user theo thứ tự mới nhất (FR-17)
 
 - CREATE INDEX idx_videos_user_size ON videos(user_id, file_size_bytes) WHERE deleted_at IS NULL; — tính tổng dung lượng đã dùng của user (NFR-19): SELECT SUM(file_size_bytes) FROM videos WHERE user_id = \$1 AND status = 'ready' AND deleted_at IS NULL — chỉ tính video status='ready' (recording/processing/failed không tính vào quota, xem API Design mục 7.1–7.2 và P2-T20)
+
+### 3.5a. Bảng video_cleanup_jobs (P2-T24)
+
+Retry bền vững cho thao tác MinIO thất bại lần đầu — dùng CHUNG cho hai nguồn: (1) abort multipart khi xóa tài khoản gặp lỗi MinIO (API 4.5, 7.5; TC-37) và (2) dọn object mồ côi sai kích thước của `VideoTimeoutCleanupJob` (P2-T22). Cả hai đều cùng một hình trạng — "một thao tác MinIO idempotent cần thử lại có backoff, giới hạn số lần" — nên gộp một bảng thay vì hai cơ chế riêng.
+
+| **Cột**             | **Kiểu dữ liệu** | **NULL?** | **Ràng buộc** | **Default**       | **Mô tả**                                                                                     |
+|----------------------|------------------|-----------|---------------|-------------------|------------------------------------------------------------------------------------------------|
+| **id**               | UUID             | NO        | PK            | gen_random_uuid() | Khóa chính                                                                                      |
+| **video_id**         | UUID             | NO        | FK            |                   | Tham chiếu videos.id                                                                            |
+| **storage_path**     | VARCHAR(500)     | NO        |               |                   | Object key trên MinIO cần thao tác lại                                                          |
+| **upload_id**        | VARCHAR(255)     | YES       |               | NULL              | Bắt buộc cho operation='ABORT_MULTIPART'; NULL cho 'REMOVE_OBJECT'                              |
+| **operation**        | VARCHAR(20)      | NO        | CHECK IN ('ABORT_MULTIPART','REMOVE_OBJECT') |    | Thao tác MinIO cần retry                                                                        |
+| **status**           | VARCHAR(20)      | NO        | CHECK IN ('PENDING','FAILED_PERMANENT') | 'PENDING' | 'PENDING' đang chờ retry; 'FAILED_PERMANENT' đã vượt max attempts, cần rà soát thủ công (không tự xóa) |
+| **attempts**         | INTEGER          | NO        |               | 0                 | Số lần đã thử                                                                                    |
+| **next_attempt_at**  | TIMESTAMPTZ      | NO        |               | NOW()             | Thời điểm retry kế tiếp — backoff nhân đôi từ `video.cleanup-job-initial-backoff-seconds` (mặc định 60s), tối đa `video.cleanup-job-max-attempts` lần (mặc định 10) |
+| **last_error**       | VARCHAR(1000)    | YES       |               | NULL              | Thông điệp lỗi lần thử gần nhất                                                                  |
+| **created_at**       | TIMESTAMPTZ      | NO        |               | NOW()             | Thời điểm tạo                                                                                    |
+| **updated_at**       | TIMESTAMPTZ      | NO        |               | NOW()             | Cập nhật tự động bởi trigger `trg_video_cleanup_jobs_updated_at`                                 |
+
+**Index:** `CREATE INDEX idx_video_cleanup_jobs_due ON video_cleanup_jobs(next_attempt_at) WHERE status = 'PENDING';` — `VideoCleanupRetryJob` poll các job đến hạn.
+
+*Idempotency: `abortMultipartUpload` coi MinIO `NoSuchUpload` là thành công (phiên đã abort/complete trước đó) thay vì lỗi, nên retry một job đã thực ra xong việc không lặp vô hạn.*
 
 ### 3.6. Bảng refresh_tokens
 
@@ -221,6 +245,7 @@ Do giới hạn trình bày trong tài liệu Word, sơ đồ ERD được mô t
 | **conversations** | 1 — 0..\*   | messages             | messages.conversation_id → conversations.id | Một cuộc trò chuyện có nhiều tin nhắn                            |
 | **users**         | 1 — 0..\*   | messages             | messages.sender_id → users.id               | Một user gửi nhiều tin nhắn                                      |
 | **users**         | 1 — 0..\*   | videos               | videos.user_id → users.id                   | Một user quay nhiều video                                        |
+| **videos**        | 1 — 0..\*   | video_cleanup_jobs   | video_cleanup_jobs.video_id → videos.id     | Một video có thể có nhiều job retry MinIO (P2-T24)               |
 | **users**         | 1 — 0..\*   | refresh_tokens       | refresh_tokens.user_id → users.id           | Một user có thể có nhiều phiên đăng nhập đồng thời               |
 
 ### 4.2. Tóm tắt ràng buộc toàn vẹn tham chiếu
@@ -415,6 +440,37 @@ ALTER TABLE users
 
 Schema hiện hành sau V2 có các giá trị settings mặc định:
 `is_discoverable = FALSE`, `email_notifications = TRUE`, `theme = 'system'`.
+
+### 6.2. Migration V3 — Video cleanup durability
+
+P2-T24 bổ sung nơi lưu bền `upload_id` (Redis có TTL, có thể mất trước khi tài khoản bị
+xóa) và bảng `video_cleanup_jobs` dùng chung cho retry abort-multipart (xóa tài khoản, TC-37)
+và retry orphan-object-removal (`VideoTimeoutCleanupJob`, P2-T22).
+
+```sql
+-- Migration: V3__video_cleanup_durability.sql
+ALTER TABLE videos ADD COLUMN upload_id VARCHAR(255);
+
+CREATE TABLE video_cleanup_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_id UUID NOT NULL REFERENCES videos(id),
+    storage_path VARCHAR(500) NOT NULL,
+    upload_id VARCHAR(255),
+    operation VARCHAR(20) NOT NULL CHECK (operation IN ('ABORT_MULTIPART', 'REMOVE_OBJECT')),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'FAILED_PERMANENT')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_error VARCHAR(1000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_video_cleanup_jobs_due ON video_cleanup_jobs(next_attempt_at)
+    WHERE status = 'PENDING';
+
+CREATE TRIGGER trg_video_cleanup_jobs_updated_at BEFORE UPDATE ON video_cleanup_jobs
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+```
 
 ## 7. Redis — Cấu trúc Key-Value
 

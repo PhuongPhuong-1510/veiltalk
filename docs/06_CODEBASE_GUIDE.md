@@ -219,8 +219,14 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/video/MinioProperties.java` | Bind endpoint/credentials/bucket và `MINIO_WEBHOOK_SECRET` |
 | `backend/src/main/java/com/veiltalk/video/VideoProperties.java` | Bind `video.storage-limit-bytes` — hạn mức quota mỗi tài khoản (NFR-19) |
 | `backend/src/main/java/com/veiltalk/video/MinioConfig.java` | Khởi tạo `MinioClient` và `MinioAsyncClient` (multipart); không log credentials |
-| `backend/src/main/java/com/veiltalk/video/VideoController.java` | `POST /videos`, `/videos/{id}/chunks`, `/finalize`, `/abort` (P2-T20–T22) |
-| `backend/src/main/java/com/veiltalk/video/VideoService.java` | Khởi tạo/cấp chunk và finalize/abort multipart; đối chiếu parts, quota thật, conditional state update và compensation |
+| `backend/src/main/java/com/veiltalk/video/VideoController.java` | `POST /videos`, `/videos/{id}/chunks`, `/finalize`, `/abort` (P2-T20–T22); `GET/PUT/DELETE /videos`, `GET /videos/{id}` (P2-T24) |
+| `backend/src/main/java/com/veiltalk/video/VideoService.java` | Khởi tạo/cấp chunk và finalize/abort multipart; đối chiếu parts, quota thật, conditional state update và compensation; thư viện/đổi tên/xóa mềm/presigned view_url (P2-T24) |
+| `backend/src/main/java/com/veiltalk/video/VideoCursor.java` | Mã hóa/giải mã cursor Base64URL `(created_at, id)` cho `GET /videos` (P2-T24) |
+| `backend/src/main/java/com/veiltalk/video/VideoLibraryResponse.java` / `VideoSummary.java` / `VideoDetailResponse.java` / `RenameVideoRequest.java` | DTO cho GET/PUT/DELETE `/videos` (P2-T24, API mục 7.1, 7.7–7.9) |
+| `backend/src/main/java/com/veiltalk/video/VideoAccountCleanupService.java` | Abort mọi video `recording` của user khi xóa tài khoản; per-video trong transaction `REQUIRES_NEW` riêng, tự nuốt lỗi MinIO và ghi cleanup job thay vì throw (P2-T24, TC-37) |
+| `backend/src/main/java/com/veiltalk/video/VideoCleanupTransactionSupport.java` | Bean phụ REQUIRES_NEW cho `VideoAccountCleanupService` — tách bean để tránh self-invocation Spring proxy |
+| `backend/src/main/java/com/veiltalk/video/VideoCleanupJob.java` / `VideoCleanupJobRepository.java` / `VideoCleanupOperation.java` / `VideoCleanupJobStatus.java` | Entity/repo bảng `video_cleanup_jobs` — retry bền vững dùng chung cho ABORT_MULTIPART (xóa tài khoản) và REMOVE_OBJECT (orphan object timeout, P2-T22) |
+| `backend/src/main/java/com/veiltalk/video/VideoCleanupRetryJob.java` | `ScheduledExecutorService` poll `video_cleanup_jobs` đến hạn; backoff nhân đôi, `FAILED_PERMANENT` sau max attempts (P2-T24) |
 | `backend/src/main/java/com/veiltalk/video/VideoWebhookAuthenticationFilter.java` | Chỉ bảo vệ `POST /internal/videos/webhook`; constant-time compare toàn `Authorization: Bearer <secret>` và fail-fast nếu thiếu secret |
 | `backend/src/main/java/com/veiltalk/video/VideoWebhookController.java` / `VideoWebhookRequest.java` / `VideoWebhookService.java` | Nhận payload MinIO thật, validate toàn batch, decode key một lần và atomic `processing→ready` theo storage path + size |
 | `backend/src/main/java/com/veiltalk/video/CreateVideoRequest.java` / `CreateVideoResponse.java` | DTO request/response cho `POST /videos` |
@@ -231,7 +237,7 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/main/java/com/veiltalk/video/VideoMultipartStorage.java` | Interface MinIO: create/presign/list/complete/abort multipart và remove object |
 | `backend/src/main/java/com/veiltalk/video/MinioMultipartStorage.java` | Impl `MinioAsyncClient`; ListParts phân trang, complete/abort và remove object |
 | `backend/src/main/java/com/veiltalk/video/RedisDistributedLock.java` | Redis lock token UUID; SET NX PX, Lua renew/release; finalize khóa user rồi video |
-| `backend/src/main/java/com/veiltalk/video/VideoTimeoutCleanupJob.java` | ScheduledExecutorService quét `processing` quá 10 phút, conditional failed và remove object best-effort |
+| `backend/src/main/java/com/veiltalk/video/VideoTimeoutCleanupJob.java` | ScheduledExecutorService quét `processing` quá 10 phút, conditional failed; remove object lỗi ghi `video_cleanup_jobs` để retry thay vì chỉ log (P2-T24) |
 | `backend/src/main/java/com/veiltalk/video/VideoProperties.java` | Bind `video.*`: storage-limit-bytes, upload-session-ttl-seconds, presigned-url-expiry-seconds |
 | `backend/src/main/java/com/veiltalk/video/StorageQuotaExceededException.java` | Quota vượt → HTTP 507 `STORAGE_QUOTA_EXCEEDED` (xử lý ở `ApiExceptionHandler`) |
 | `backend/src/main/java/com/veiltalk/video/VideoStorageException.java` | Lỗi hạ tầng MinIO (unchecked) — mặc định trả 500 |
@@ -246,6 +252,11 @@ V1 trên PostgreSQL 16 và smoke test `BackendApplicationTests` PASS. Migration 
 | `backend/src/test/resources/application.properties` | Secret chỉ dùng cho test và Hikari pool nhỏ để nhiều Spring test context không làm cạn PostgreSQL connection |
 | `backend/src/test/java/com/veiltalk/video/VideoMultipartPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: PUT part 1 thật → nhận ETag, chứng minh presign part đúng |
 | `backend/src/test/java/com/veiltalk/video/VideoMultipartChunkPresignIntegrationTests.java` | Gate `MINIO_INTEGRATION_TEST`: nối part 1 → PUT part 2 thật, hai ETag khác nhau (nền cho T22) |
+| `backend/src/test/java/com/veiltalk/video/VideoManagementIntegrationTests.java` | TC-34–TC-36: đổi tên, xóa video ready giảm quota ngay, video failed view_url null, presigned view_url, 403/404 |
+| `backend/src/test/java/com/veiltalk/video/VideoAccountCleanupServiceTests.java` | Unit test abort thành công/thất bại/upload_id không xác định (fallback Redis session, hoặc bỏ qua MinIO cho video tạo trước V3) |
+| `backend/src/test/java/com/veiltalk/video/VideoCleanupRetryJobTests.java` | Unit test retry ABORT_MULTIPART/REMOVE_OBJECT: thành công xoá job, backoff nhân đôi, `FAILED_PERMANENT` sau max attempts |
+| `backend/src/test/java/com/veiltalk/video/MinioMultipartStorageAbortTests.java` | NoSuchUpload coi là thành công (idempotent), lỗi MinIO khác vẫn propagate để retry |
+| `backend/src/test/java/com/veiltalk/user/UserAccountDeletionVideoCleanupIntegrationTests.java` | TC-37: abort thành công/thất bại qua HTTP thật; KHÔNG dùng `@Transactional` vì `REQUIRES_NEW` cần thấy dữ liệu setUp đã commit — dọn dẹp thủ công ở `@AfterEach` |
 
 P1-T04 dùng `@Convert` rõ ràng trên từng field enum, không dùng `@Enumerated`. Test
 converter bao phủ hai chiều Java ↔ giá trị database, annotation mapping và persist/read
@@ -437,6 +448,24 @@ MinIO 8.5.17 công khai low-level multipart qua `MinioAsyncClient`:
 `abortMultipartUploadAsync`. P2-T19 không triển khai multipart. Trước P2-T20 phải spike
 cách dùng các public async API này; không phụ thuộc tùy tiện vào protected/internal API
 hoặc tạo adapter kế thừa `MinioClient`.
+
+P2-T24 triển khai `GET/PUT/DELETE /videos` (cursor pagination `(created_at, id)`, đổi tên,
+xóa mềm giảm quota ngay nếu `ready`, presigned view_url 1h khi `ready`) và hoàn thiện phần
+abort recording khi xóa tài khoản đã hoãn từ P2-T08. Migration V3 thêm `videos.upload_id`
+(bản bền vững của MinIO upload_id, vì Redis session có TTL) và bảng `video_cleanup_jobs`
+dùng CHUNG cho hai nguồn lỗi: abort-multipart khi xóa tài khoản và orphan-object-removal
+của `VideoTimeoutCleanupJob` (gánh luôn TODO cũ của P2-T22, không còn TODO mồ côi trong
+code). `VideoAccountCleanupService` chạy sau khi soft-delete/revoke token của
+`UserAccountService.deleteAccount` đã commit; mỗi video xử lý trong transaction
+`REQUIRES_NEW` riêng (qua bean phụ `VideoCleanupTransactionSupport` để tránh
+self-invocation) nên lỗi MinIO không rollback việc xóa tài khoản và ngược lại. `upload_id`
+không xác định (video 'recording' tạo trước V3 và Redis session cũng hết hạn) thì soft-delete
+mà bỏ qua abort MinIO — hành vi chấp nhận cho MVP, có thể để lại multipart mồ côi hiếm gặp
+cần rà soát thủ công. `VideoCleanupRetryJob` poll job đến hạn mỗi phút (cấu hình
+`video.cleanup-job-*`), backoff nhân đôi từ 60s, tối đa 10 lần rồi chuyển
+`FAILED_PERMANENT`; `MinioMultipartStorage.abortMultipartUpload` coi MinIO `NoSuchUpload`
+là thành công để tránh lặp vô hạn khi retry một job đã thực ra xong việc. TC-34–TC-37 và
+toàn bộ 213 test Backend đều PASS.
 
 ## Signaling Server
 

@@ -289,10 +289,13 @@ vào Redis theo key `jwt:user-revoked-after:{userId}`. TTL của key bằng th�
 token tối đa. `JwtAuthenticationFilter` từ chối mọi access token của user có claim `iat`
 không mới hơn mốc revoke, vì vậy tất cả phiên đăng nhập hiện có mất hiệu lực ngay.
 
-Background job dọn dẹp dữ liệu thật sau 30 ngày. Việc abort các multipart upload đang
-recording được thực hiện trong P2-T24 sau khi hạ tầng MinIO và luồng multipart
-P2-T19–P2-T22 hoàn thành. Nếu MinIO abort thất bại, việc soft delete/revoke token không
-bị rollback; cleanup phải được lưu bền vững để retry, không chỉ ghi log.
+Background job dọn dẹp dữ liệu thật sau 30 ngày. `VideoAccountCleanupService` (P2-T24) abort
+mọi video `recording` của user trên MinIO NGAY sau khi soft-delete/revoke token đã commit —
+chạy trong transaction `REQUIRES_NEW` riêng nên một lỗi ở bước này không rollback việc xóa
+tài khoản, và ngược lại. Nếu MinIO abort thất bại, video giữ nguyên `recording` (như
+`POST /videos/{id}/abort` lúc lỗi) và một dòng `video_cleanup_jobs` được ghi để
+`VideoCleanupRetryJob` retry có backoff (không chỉ ghi log) — xem `docs/03_DATABASE.md` mục
+3.5a.
 
 Request Body
 

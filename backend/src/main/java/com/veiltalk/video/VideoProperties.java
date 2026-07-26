@@ -14,5 +14,11 @@ public record VideoProperties(
         long lockTtlMillis,
         long lockAcquireTimeoutMillis,
         long processingTimeoutSeconds,
-        long cleanupIntervalSeconds) {
+        long cleanupIntervalSeconds,
+        // P2-T24 — video_cleanup_jobs retry: nhân đôi mỗi lần thất bại, bắt đầu từ giá trị này.
+        long cleanupJobInitialBackoffSeconds,
+        // Số lần thử tối đa trước khi chuyển FAILED_PERMANENT (không tự xóa, cần ops rà soát).
+        int cleanupJobMaxAttempts,
+        // Chu kỳ quét video_cleanup_jobs của VideoCleanupRetryJob.
+        long cleanupJobPollIntervalSeconds) {
 }

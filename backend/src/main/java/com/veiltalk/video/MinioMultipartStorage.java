@@ -21,6 +21,10 @@ import io.minio.messages.Part;
 @Component
 public class MinioMultipartStorage implements VideoMultipartStorage {
 
+	// Hạn presigned GET URL để phát video ready — cố định 1 giờ theo API Design mục 7.7,
+	// không cấu hình được (khác presignedUrlExpirySeconds vốn dùng cho part PUT lúc quay).
+	private static final int VIEW_URL_EXPIRY_SECONDS = 3600;
+
 	private final MinioAsyncClient minioAsyncClient;
 	private final MinioProperties minioProperties;
 	private final VideoProperties videoProperties;
@@ -70,6 +74,20 @@ public class MinioMultipartStorage implements VideoMultipartStorage {
 					.build());
 		} catch (Exception exception) {
 			throw new VideoStorageException("Không thể tạo presigned URL cho part", exception);
+		}
+	}
+
+	@Override
+	public String presignGetUrl(String objectKey) {
+		try {
+			return minioAsyncClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+					.method(Method.GET)
+					.bucket(minioProperties.bucket())
+					.object(objectKey)
+					.expiry(VIEW_URL_EXPIRY_SECONDS, TimeUnit.SECONDS)
+					.build());
+		} catch (Exception exception) {
+			throw new VideoStorageException("Không thể tạo presigned URL để phát video", exception);
 		}
 	}
 
@@ -150,6 +168,13 @@ public class MinioMultipartStorage implements VideoMultipartStorage {
 			Thread.currentThread().interrupt();
 			throw new VideoStorageException("Bị gián đoạn khi hủy multipart upload", exception);
 		} catch (ExecutionException exception) {
+			// NoSuchUpload: multipart đã bị abort/complete trước đó (retry idempotent) —
+			// coi như thành công thay vì báo lỗi để job retry không lặp vô hạn.
+			Throwable cause = exception.getCause();
+			if (cause instanceof ErrorResponseException error
+					&& "NoSuchUpload".equals(error.errorResponse().code())) {
+				return;
+			}
 			throw storageFailure("Không thể hủy multipart upload trên MinIO", exception);
 		} catch (Exception exception) {
 			throw new VideoStorageException("Không thể hủy multipart upload trên MinIO", exception);

@@ -28,6 +28,11 @@ public class Video {
 	@Column(name = "storage_path", nullable = false, length = 500)
 	private String storagePath;
 
+	// Bản bền vững của upload_id MinIO (Redis video:upload:{videoId} có TTL, có thể mất
+	// trước khi tài khoản bị xóa). NULL cho video 'recording' tạo trước P2-T24 (V3 migration).
+	@Column(name = "upload_id", length = 255)
+	private String uploadId;
+
 	@Column(name = "file_size_bytes", nullable = false)
 	private long fileSizeBytes;
 
@@ -83,6 +88,14 @@ public class Video {
 
 	public void setStoragePath(String storagePath) {
 		this.storagePath = storagePath;
+	}
+
+	public String getUploadId() {
+		return uploadId;
+	}
+
+	public void setUploadId(String uploadId) {
+		this.uploadId = uploadId;
 	}
 
 	public long getFileSizeBytes() {

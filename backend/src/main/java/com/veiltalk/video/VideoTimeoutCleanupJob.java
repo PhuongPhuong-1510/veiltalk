@@ -23,6 +23,7 @@ public class VideoTimeoutCleanupJob {
 	private final VideoRepository videoRepository;
 	private final VideoMultipartStorage multipartStorage;
 	private final VideoUploadSessionStore sessionStore;
+	private final VideoCleanupJobRepository cleanupJobRepository;
 	private final VideoProperties properties;
 	private final RedisDistributedLock distributedLock;
 	private final Clock clock;
@@ -38,22 +39,25 @@ public class VideoTimeoutCleanupJob {
 			VideoRepository videoRepository,
 			VideoMultipartStorage multipartStorage,
 			VideoUploadSessionStore sessionStore,
+			VideoCleanupJobRepository cleanupJobRepository,
 			VideoProperties properties,
 			RedisDistributedLock distributedLock) {
-		this(videoRepository, multipartStorage, sessionStore, properties, distributedLock,
-				Clock.systemUTC());
+		this(videoRepository, multipartStorage, sessionStore, cleanupJobRepository, properties,
+				distributedLock, Clock.systemUTC());
 	}
 
 	VideoTimeoutCleanupJob(
 			VideoRepository videoRepository,
 			VideoMultipartStorage multipartStorage,
 			VideoUploadSessionStore sessionStore,
+			VideoCleanupJobRepository cleanupJobRepository,
 			VideoProperties properties,
 			RedisDistributedLock distributedLock,
 			Clock clock) {
 		this.videoRepository = videoRepository;
 		this.multipartStorage = multipartStorage;
 		this.sessionStore = sessionStore;
+		this.cleanupJobRepository = cleanupJobRepository;
 		this.properties = properties;
 		this.distributedLock = distributedLock;
 		this.clock = clock;
@@ -106,7 +110,9 @@ public class VideoTimeoutCleanupJob {
 					multipartStorage.removeObject(video.getStoragePath());
 				} catch (RuntimeException exception) {
 					LOGGER.error("ORPHAN_VIDEO_OBJECT timeout cleanup thất bại cho video {} objectKey={}; "
-							+ "cần P2-T24 retry", video.getId(), video.getStoragePath(), exception);
+							+ "ghi cleanup job để retry", video.getId(), video.getStoragePath(), exception);
+					cleanupJobRepository.save(VideoCleanupJob.removeObject(
+							video.getId(), video.getStoragePath(), clock.instant()));
 				}
 			}
 			deleteSession(video.getId());

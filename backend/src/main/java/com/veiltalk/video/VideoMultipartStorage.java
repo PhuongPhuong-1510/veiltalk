@@ -29,6 +29,11 @@ public interface VideoMultipartStorage {
 
 	List<UploadedPart> listParts(String objectKey, String uploadId);
 
+	/**
+	 * Presigned GET URL để client phát video ready (mục 7.7). Hạn 1 giờ theo API Design.
+	 */
+	String presignGetUrl(String objectKey);
+
 	void completeMultipartUpload(String objectKey, String uploadId, List<UploadedPart> parts);
 
 	OptionalLong statObjectSize(String objectKey);

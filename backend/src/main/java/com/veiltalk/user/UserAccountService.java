@@ -8,6 +8,7 @@ import com.veiltalk.auth.UnauthorizedException;
 import com.veiltalk.auth.User;
 import com.veiltalk.auth.UserRepository;
 import com.veiltalk.auth.UserTokenRevocationService;
+import com.veiltalk.video.VideoAccountCleanupService;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,16 +24,19 @@ public class UserAccountService {
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final UserTokenRevocationService userTokenRevocationService;
+	private final VideoAccountCleanupService videoAccountCleanupService;
 
 	public UserAccountService(
 			UserRepository userRepository,
 			RefreshTokenRepository refreshTokenRepository,
 			PasswordEncoder passwordEncoder,
-			UserTokenRevocationService userTokenRevocationService) {
+			UserTokenRevocationService userTokenRevocationService,
+			VideoAccountCleanupService videoAccountCleanupService) {
 		this.userRepository = userRepository;
 		this.refreshTokenRepository = refreshTokenRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.userTokenRevocationService = userTokenRevocationService;
+		this.videoAccountCleanupService = videoAccountCleanupService;
 	}
 
 	@Transactional
@@ -48,5 +52,10 @@ public class UserAccountService {
 		refreshTokenRepository.revokeAllActiveByUserId(authenticatedUserId, revokedAt);
 		userRepository.saveAndFlush(user);
 		userTokenRevocationService.revokeAllIssuedTokens(authenticatedUserId, revokedAt);
+
+		// P2-T24: abort mọi phiên quay video còn dở. Chạy SAU khi soft-delete/revoke đã ghi
+		// nhận ở trên — service này tự nuốt lỗi và dùng transaction riêng nên không kéo theo
+		// rollback thao tác xóa tài khoản dù MinIO abort thất bại (API Design mục 4.5).
+		videoAccountCleanupService.abortAllRecordingsForUser(authenticatedUserId);
 	}
 }

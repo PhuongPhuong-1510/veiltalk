@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -72,4 +73,35 @@ public interface VideoRepository extends JpaRepository<Video, UUID> {
 	@Query("SELECT v FROM Video v WHERE v.status = com.veiltalk.video.VideoStatus.PROCESSING "
 			+ "AND v.deletedAt IS NULL AND v.updatedAt < :cutoff")
 	List<Video> findTimedOutProcessing(@Param("cutoff") Instant cutoff);
+
+	@Query("SELECT v FROM Video v WHERE v.userId = :userId "
+			+ "AND v.status = com.veiltalk.video.VideoStatus.RECORDING AND v.deletedAt IS NULL")
+	List<Video> findRecordingByUserId(@Param("userId") UUID userId);
+
+	// Cursor pagination (7.1): created_at DESC, id DESC làm tie-breaker vì created_at
+	// không đảm bảo duy nhất. Cursor mã hóa (created_at, id) của bản ghi cuối trang trước.
+	// CAST bắt buộc: PostgreSQL driver không tự suy ra kiểu tham số khi vế "IS NULL" đứng
+	// một mình (không có ngữ cảnh kiểu khác) — lỗi "could not determine data type of parameter".
+	@Query("SELECT v FROM Video v WHERE v.userId = :userId AND v.deletedAt IS NULL "
+			+ "AND (CAST(:status AS com.veiltalk.video.VideoStatus) IS NULL OR v.status = :status) "
+			+ "AND (CAST(:cursorCreatedAt AS java.time.Instant) IS NULL "
+			+ "     OR v.createdAt < :cursorCreatedAt "
+			+ "     OR (v.createdAt = :cursorCreatedAt AND v.id < :cursorId)) "
+			+ "ORDER BY v.createdAt DESC, v.id DESC")
+	List<Video> findLibraryPage(
+			@Param("userId") UUID userId,
+			@Param("status") VideoStatus status,
+			@Param("cursorCreatedAt") Instant cursorCreatedAt,
+			@Param("cursorId") UUID cursorId,
+			Pageable pageable);
+
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Transactional
+	@Query("UPDATE Video v SET v.title = :title WHERE v.id = :id AND v.deletedAt IS NULL")
+	int renameVideo(@Param("id") UUID id, @Param("title") String title);
+
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Transactional
+	@Query("UPDATE Video v SET v.deletedAt = :deletedAt WHERE v.id = :id AND v.deletedAt IS NULL")
+	int softDeleteVideo(@Param("id") UUID id, @Param("deletedAt") Instant deletedAt);
 }

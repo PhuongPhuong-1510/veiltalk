@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -72,6 +73,7 @@ public class VideoService {
 		video.setUserId(userId);
 		video.setTitle(request.title());
 		video.setStoragePath(storageKey);
+		video.setUploadId(uploadId);
 		video.setFileSizeBytes(request.estimatedSizeBytes());
 		video.setFormat(format);
 		video.setStatus(VideoStatus.RECORDING);
@@ -253,6 +255,110 @@ public class VideoService {
 	private FinalizeVideoResponse processingResponse(UUID videoId) {
 		return new FinalizeVideoResponse(videoId, VideoStatus.PROCESSING.getDatabaseValue(),
 				"Upload hoàn tất, đang xử lý. Trạng thái sẽ cập nhật qua MinIO webhook.");
+	}
+
+	/**
+	 * P2-T24 — GET /videos (mục 7.1): thư viện video cá nhân, cursor pagination theo
+	 * (created_at DESC, id DESC). storage_used_bytes chỉ tính video 'ready' (NFR-19).
+	 */
+	@Transactional(readOnly = true)
+	public VideoLibraryResponse listVideos(UUID userId, String statusFilter, String cursor, int limit) {
+		VideoStatus status = statusFilter == null ? null : VideoStatus.fromDatabaseValue(statusFilter);
+		VideoCursor decoded = VideoCursor.decode(cursor);
+		int pageSize = Math.min(Math.max(limit, 1), 50);
+
+		List<Video> page = videoRepository.findLibraryPage(
+				userId, status,
+				decoded == null ? null : decoded.createdAt(),
+				decoded == null ? null : decoded.id(),
+				PageRequest.of(0, pageSize + 1));
+
+		boolean hasMore = page.size() > pageSize;
+		List<Video> pageItems = hasMore ? page.subList(0, pageSize) : page;
+		String nextCursor = hasMore
+				? VideoCursor.encode(pageItems.get(pageItems.size() - 1))
+				: null;
+
+		List<VideoSummary> summaries = pageItems.stream()
+				.map(video -> new VideoSummary(
+						video.getId(),
+						video.getTitle(),
+						video.getStatus().getDatabaseValue(),
+						video.getDurationSecs(),
+						video.getFileSizeBytes(),
+						video.getFormat(),
+						video.getCreatedAt()))
+				.toList();
+
+		long usedBytes = videoRepository.sumReadyFileSizeBytes(userId);
+		return new VideoLibraryResponse(
+				summaries, usedBytes, videoProperties.storageLimitBytes(), nextCursor, hasMore);
+	}
+
+	/**
+	 * P2-T24 — GET /videos/{id} (mục 7.7): view_url chỉ khi status='ready'; failed luôn null.
+	 */
+	@Transactional(readOnly = true)
+	public VideoDetailResponse getVideo(UUID userId, UUID videoId) {
+		Video video = requireOwnedVisible(userId, videoId);
+		String viewUrl = video.getStatus() == VideoStatus.READY
+				? multipartStorage.presignGetUrl(video.getStoragePath())
+				: null;
+		return toDetailResponse(video, viewUrl);
+	}
+
+	/**
+	 * P2-T24 — PUT /videos/{id} (mục 7.8): đổi tên, không giới hạn theo status.
+	 */
+	@Transactional
+	public VideoDetailResponse renameVideo(UUID userId, UUID videoId, RenameVideoRequest request) {
+		Video video = requireOwnedVisible(userId, videoId);
+		int updated = videoRepository.renameVideo(videoId, request.title());
+		if (updated != 1) {
+			throw new VideoOperationConflictException("Video đã được xử lý bởi thao tác khác.");
+		}
+		video.setTitle(request.title());
+		String viewUrl = video.getStatus() == VideoStatus.READY
+				? multipartStorage.presignGetUrl(video.getStoragePath())
+				: null;
+		return toDetailResponse(video, viewUrl);
+	}
+
+	/**
+	 * P2-T24 — DELETE /videos/{id} (mục 7.9): soft delete; storage giảm ngay nếu status='ready'
+	 * vì quota chỉ tính video ready chưa xóa mềm (idx_videos_user_size). Không gọi MinIO ở đây —
+	 * background job dọn file thật sau, theo đúng mô tả API.
+	 */
+	@Transactional
+	public void deleteVideo(UUID userId, UUID videoId) {
+		requireOwnedVisible(userId, videoId);
+		int updated = videoRepository.softDeleteVideo(videoId, Instant.now());
+		if (updated != 1) {
+			throw new VideoOperationConflictException("Video đã được xử lý bởi thao tác khác.");
+		}
+	}
+
+	private Video requireOwnedVisible(UUID userId, UUID videoId) {
+		Video video = videoRepository.findById(videoId)
+				.filter(candidate -> candidate.getDeletedAt() == null)
+				.orElseThrow(() -> new NotFoundException("Video không tồn tại."));
+		if (!video.getUserId().equals(userId)) {
+			throw new ForbiddenException("Video không thuộc về bạn.");
+		}
+		return video;
+	}
+
+	private VideoDetailResponse toDetailResponse(Video video, String viewUrl) {
+		return new VideoDetailResponse(
+				video.getId(),
+				video.getTitle(),
+				video.getStatus().getDatabaseValue(),
+				video.getDurationSecs(),
+				video.getStatus() == VideoStatus.FAILED ? 0 : video.getFileSizeBytes(),
+				video.getFormat(),
+				viewUrl,
+				video.getCreatedAt(),
+				video.getUpdatedAt());
 	}
 
 	public void abortUpload(UUID userId, UUID videoId, AbortVideoRequest request) {

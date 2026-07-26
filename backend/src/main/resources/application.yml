@@ -53,6 +53,11 @@ video:
   lock-acquire-timeout-millis: ${VIDEO_LOCK_ACQUIRE_TIMEOUT_MILLIS:5000}
   processing-timeout-seconds: ${VIDEO_PROCESSING_TIMEOUT_SECONDS:600}
   cleanup-interval-seconds: ${VIDEO_CLEANUP_INTERVAL_SECONDS:300}
+  # P2-T24 — retry bền vững cho video_cleanup_jobs (abort multipart khi xóa tài khoản,
+  # dọn object mồ côi timeout). Backoff nhân đôi từ 1 phút, tối đa 10 lần (~17h tổng cộng).
+  cleanup-job-initial-backoff-seconds: ${VIDEO_CLEANUP_JOB_INITIAL_BACKOFF_SECONDS:60}
+  cleanup-job-max-attempts: ${VIDEO_CLEANUP_JOB_MAX_ATTEMPTS:10}
+  cleanup-job-poll-interval-seconds: ${VIDEO_CLEANUP_JOB_POLL_INTERVAL_SECONDS:60}
 
 logging:
   level:

@@ -24,7 +24,7 @@ class VideoFinalizeCompensationTests {
 		VideoMultipartStorage storage = mock(VideoMultipartStorage.class);
 		VideoUploadSessionStore sessions = mock(VideoUploadSessionStore.class);
 		VideoProperties properties = new VideoProperties(
-				Long.MAX_VALUE, 21_600, 3_600, 30_000, 5_000, 600, 300);
+				Long.MAX_VALUE, 21_600, 3_600, 30_000, 5_000, 600, 300, 60, 10, 60);
 		RedisDistributedLock lock = mock(RedisDistributedLock.class);
 		RedisDistributedLock.LockHandle quotaHandle = mock(RedisDistributedLock.LockHandle.class);
 		RedisDistributedLock.LockHandle videoHandle = mock(RedisDistributedLock.LockHandle.class);
