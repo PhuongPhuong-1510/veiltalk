@@ -252,6 +252,8 @@ Sau khi cấu hình/restart MinIO, xác minh request có header `Authorization: 
 | **MinIO**            | GET http://localhost:9000/minio/health/live → HTTP 200            |
 | **PostgreSQL**       | docker compose exec postgres pg_isready -U veiltalk_user          |
 
+`management.endpoint.health.show-components: always` bật các sub-path `/actuator/health/{component}` (db, redis, ...). Toàn bộ `/actuator/health/**` được permitAll trong `SecurityConfig` — public, không yêu cầu xác thực. Đây là quyết định có ý thức cho giai đoạn MVP/demo (P2-T26): endpoint chỉ lộ trạng thái UP/DOWN, không lộ chi tiết nhạy cảm (connection string, stacktrace). Nếu triển khai production thật, cân nhắc siết bằng `management.endpoint.health.roles` + reverse-proxy chặn `/actuator/**` từ ngoài, hoặc tách management port riêng.
+
 ### 6.2. Xử lý sự cố thường gặp
 
 | **Triệu chứng**                                          | **Nguyên nhân thường gặp — Cách khắc phục**                                                                                                                      |
