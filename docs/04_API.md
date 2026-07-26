@@ -30,7 +30,11 @@ Tài liệu này đặc tả chi tiết toàn bộ REST API của hệ thống V
 
 ### 1.2. Quy ước chung
 
-- Base URL: https://veiltalk.example.com/api — tất cả endpoint đều có tiền tố này.
+- Base URL: https://veiltalk.example.com — không có tiền tố `/api`; Backend không cấu hình
+  `server.servlet.context-path`, mọi endpoint (`AuthController`, v.v.) map thẳng ở gốc
+  (`@PostMapping("/auth/register")`, không phải `/api/auth/register`). Đối chiếu với
+  `backend/src/main/java/com/veiltalk/auth/SecurityConfig.java` và test tích hợp
+  (`AuthRegistrationIntegrationTests`) — gọi `post("/auth/register")` trực tiếp.
 
 - Định dạng dữ liệu: JSON cho tất cả request body và response body (Content-Type: application/json).
 
