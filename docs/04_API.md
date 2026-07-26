@@ -907,6 +907,7 @@ Mục đích: trao đổi SDP offer/answer và ICE candidate để thiết lập
 Xác thực
 
 - JWT bắt buộc trong WebSocket handshake — Signaling Server validate chữ ký trước khi relay (SAD mục 4.2, bổ sung từ lần review SAD).
+- Token không hợp lệ/thiếu: Signaling Server **accept handshake rồi đóng ngay bằng WebSocket close code 4001** (TC-49), khác với Messaging WebSocket — nơi handshake bị từ chối bằng **HTTP 401 trước khi upgrade** (mục 10.1, TC-47). Khác biệt này có chủ đích: Messaging WS dùng Spring `HandshakeInterceptor` (chạy trước khi nâng cấp giao thức, có thể set HTTP status), còn Signaling WS validate trong callback `connection` của thư viện `ws` (sau khi giao thức đã nâng cấp lên WebSocket, không còn set được HTTP status) — phản ánh đúng vòng đời khác nhau của hai kênh (P3-T01).
 
 Message types
 
