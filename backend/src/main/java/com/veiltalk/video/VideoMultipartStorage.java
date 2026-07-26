@@ -1,6 +1,7 @@
 package com.veiltalk.video;
 
 import java.util.List;
+import java.util.OptionalLong;
 
 /**
  * Trừu tượng hóa các thao tác MinIO multipart upload cho luồng quay video.
@@ -29,6 +30,8 @@ public interface VideoMultipartStorage {
 	List<UploadedPart> listParts(String objectKey, String uploadId);
 
 	void completeMultipartUpload(String objectKey, String uploadId, List<UploadedPart> parts);
+
+	OptionalLong statObjectSize(String objectKey);
 
 	void abortMultipartUpload(String objectKey, String uploadId);
 

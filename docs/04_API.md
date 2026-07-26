@@ -624,7 +624,7 @@ HTTP Status Codes
 
 ### 7.4. POST /videos/{id}/finalize
 
-Hoàn tất phiên quay: Backend gọi MinIO CompleteMultipartUpload với danh sách ETag các part. MinIO gộp các part thành file hoàn chỉnh, sau đó gửi webhook tới Backend để cập nhật status từ recording → ready và tính dung lượng thực vào quota.
+Hoàn tất phiên quay: Backend xác thực parts/quota, commit nguyên tử `recording → processing` cùng kích thước và thời lượng thực trước khi gọi MinIO CompleteMultipartUpload. MinIO gộp các part thành file hoàn chỉnh, sau đó gửi webhook tới Backend để cập nhật `processing → ready`.
 
 Request Body
 
@@ -638,9 +638,9 @@ Response 202 Accepted
 
 { "id": "uuid", "status": "processing", "message": "Upload hoàn tất, đang xử lý. Trạng thái sẽ cập nhật qua MinIO webhook." }
 
-*Trước khi complete, Backend gọi ListParts có phân trang, đối chiếu part number/ETag giữa request, Redis và MinIO, rồi cộng kích thước part thực. Quota finalize tính tổng video `ready` + `processing` chưa xóa mềm dưới Redis lock theo user. Sau complete thành công, Backend lưu kích thước thực và chuyển nguyên tử `recording → processing`; webhook vẫn là bước bất đồng bộ chuyển `processing → ready`.*
+*Trước khi complete, Backend gọi ListParts có phân trang, đối chiếu part number/ETag giữa request, Redis và MinIO, rồi cộng kích thước part thực. Quota finalize tính tổng video `ready` + `processing` chưa xóa mềm dưới Redis lock theo user. Backend commit nguyên tử `recording → processing` trước lời gọi CompleteMultipartUpload để webhook đến tức thời không bị bỏ qua. Nếu Complete trả lỗi không xác định, Backend HEAD object: object đúng kích thước được reconcile thành `ready`; nếu object chưa tồn tại và multipart vẫn còn nguyên thì conditional quay lại `recording`; nếu MinIO không xác định được thì giữ `processing` để job timeout kiểm tra lại. Không phụ thuộc MinIO retry webhook.*
 
-*Fallback nếu MinIO webhook không bao giờ đến: Backend có background job chạy mỗi 5 phút, đổi nguyên tử video `processing → failed` khi quá 10 phút, best-effort xóa object đã complete và dọn Redis session còn sót. Lỗi cleanup được log để P2-T24 retry, không làm dừng cả batch.*
+*Fallback nếu MinIO webhook không bao giờ đến: Backend có background job chạy mỗi 5 phút và lấy cùng distributed operation lock của video. Với video `processing` quá 10 phút, job HEAD object trước: object đúng kích thước được conditional chuyển `processing → ready`; MinIO tạm thời không truy cập được thì giữ `processing` để thử lại; chỉ khi không có object hoặc object sai kích thước mới conditional chuyển `processing → failed`. Object sai kích thước được xóa best-effort. Mọi transition đều conditional nên không ghi đè `ready`.*
 
 HTTP Status Codes
 
@@ -695,7 +695,7 @@ Backend validate cấu trúc toàn bộ `Records` trước khi update, URL-decod
 - Update thành công → `204 No Content`.
 - Webhook lặp, video ready/failed/soft-delete, object không tồn tại hoặc event/bucket không áp dụng → no-op `204`.
 - Video processing nhưng size không khớp → giữ processing, log cảnh báo integrity và trả `204`; timeout job T22 sẽ chuyển failed.
-- Lỗi database tạm thời → `500` để MinIO retry.
+- Lỗi database tạm thời → `500`; MinIO phiên bản đang chạy đã được spike xác nhận không retry webhook non-2xx, nên tính đúng đắn không phụ thuộc vào lần gửi lại này. Finalize commit `processing` trước Complete và timeout HEAD reconciliation là hai lớp chống mất event.
 
 ### 7.7. GET /videos/{id}
 

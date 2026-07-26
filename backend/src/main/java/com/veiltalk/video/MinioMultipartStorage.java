@@ -3,6 +3,7 @@ package com.veiltalk.video;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -12,6 +13,8 @@ import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.ListPartsResponse;
 import io.minio.MinioAsyncClient;
 import io.minio.RemoveObjectArgs;
+import io.minio.StatObjectArgs;
+import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import io.minio.messages.Part;
 
@@ -112,6 +115,29 @@ public class MinioMultipartStorage implements VideoMultipartStorage {
 			throw storageFailure("Không thể hoàn tất multipart upload trên MinIO", exception);
 		} catch (Exception exception) {
 			throw new VideoStorageException("Không thể hoàn tất multipart upload trên MinIO", exception);
+		}
+	}
+
+	@Override
+	public OptionalLong statObjectSize(String objectKey) {
+		try {
+			long size = minioAsyncClient.statObject(StatObjectArgs.builder()
+					.bucket(minioProperties.bucket())
+					.object(objectKey)
+					.build()).get().size();
+			return OptionalLong.of(size);
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new VideoStorageException("Bị gián đoạn khi kiểm tra object video", exception);
+		} catch (ExecutionException exception) {
+			Throwable cause = exception.getCause();
+			if (cause instanceof ErrorResponseException error
+					&& "NoSuchKey".equals(error.errorResponse().code())) {
+				return OptionalLong.empty();
+			}
+			throw storageFailure("Không thể kiểm tra object video trên MinIO", exception);
+		} catch (Exception exception) {
+			throw new VideoStorageException("Không thể kiểm tra object video trên MinIO", exception);
 		}
 	}
 

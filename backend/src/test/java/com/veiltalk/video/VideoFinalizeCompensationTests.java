@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.util.List;
@@ -18,7 +19,7 @@ import jakarta.persistence.EntityManager;
 class VideoFinalizeCompensationTests {
 
 	@Test
-	void completeSuccessAndDatabaseFailureRemovesObjectAndDeletesFinishedSession() {
+	void processingTransitionFailureNeverCallsCompleteOrDeletesSession() {
 		VideoRepository repository = mock(VideoRepository.class);
 		VideoMultipartStorage storage = mock(VideoMultipartStorage.class);
 		VideoUploadSessionStore sessions = mock(VideoUploadSessionStore.class);
@@ -61,8 +62,8 @@ class VideoFinalizeCompensationTests {
 				new FinalizeVideoRequest("upload-id", requestParts, 12)))
 				.isInstanceOf(IllegalStateException.class);
 
-		verify(storage).completeMultipartUpload(objectKey, "upload-id", actualParts);
-		verify(storage).removeObject(objectKey);
-		verify(sessions).deleteSession(videoId);
+		verify(storage, never()).completeMultipartUpload(objectKey, "upload-id", actualParts);
+		verify(storage, never()).removeObject(objectKey);
+		verify(sessions, never()).deleteSession(videoId);
 	}
 }

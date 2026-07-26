@@ -24,6 +24,7 @@ public class VideoTimeoutCleanupJob {
 	private final VideoMultipartStorage multipartStorage;
 	private final VideoUploadSessionStore sessionStore;
 	private final VideoProperties properties;
+	private final RedisDistributedLock distributedLock;
 	private final Clock clock;
 	private final ScheduledExecutorService executor =
 			Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -37,8 +38,10 @@ public class VideoTimeoutCleanupJob {
 			VideoRepository videoRepository,
 			VideoMultipartStorage multipartStorage,
 			VideoUploadSessionStore sessionStore,
-			VideoProperties properties) {
-		this(videoRepository, multipartStorage, sessionStore, properties, Clock.systemUTC());
+			VideoProperties properties,
+			RedisDistributedLock distributedLock) {
+		this(videoRepository, multipartStorage, sessionStore, properties, distributedLock,
+				Clock.systemUTC());
 	}
 
 	VideoTimeoutCleanupJob(
@@ -46,11 +49,13 @@ public class VideoTimeoutCleanupJob {
 			VideoMultipartStorage multipartStorage,
 			VideoUploadSessionStore sessionStore,
 			VideoProperties properties,
+			RedisDistributedLock distributedLock,
 			Clock clock) {
 		this.videoRepository = videoRepository;
 		this.multipartStorage = multipartStorage;
 		this.sessionStore = sessionStore;
 		this.properties = properties;
+		this.distributedLock = distributedLock;
 		this.clock = clock;
 	}
 
@@ -81,20 +86,38 @@ public class VideoTimeoutCleanupJob {
 	}
 
 	private void cleanupOne(Video video) {
-		if (videoRepository.failProcessing(video.getId()) != 1) {
-			return;
-		}
-		try {
-			multipartStorage.removeObject(video.getStoragePath());
-		} catch (RuntimeException exception) {
-			LOGGER.error("ORPHAN_VIDEO_OBJECT timeout cleanup thất bại cho video {} objectKey={}; "
-					+ "cần P2-T24 retry", video.getId(), video.getStoragePath(), exception);
-		} finally {
-			try {
-				sessionStore.deleteSession(video.getId());
-			} catch (RuntimeException exception) {
-				LOGGER.error("Không thể dọn Redis session timeout cho video {}", video.getId(), exception);
+		try (var videoLock = distributedLock.acquire(
+				"video:operation-lock:" + video.getId())) {
+			var objectSize = multipartStorage.statObjectSize(video.getStoragePath());
+			if (objectSize.isPresent() && objectSize.getAsLong() == video.getFileSizeBytes()) {
+				videoRepository.markReadyFromWebhook(
+						video.getStoragePath(), video.getFileSizeBytes());
+				deleteSession(video.getId());
+				return;
 			}
+
+			if (videoRepository.failProcessing(video.getId()) != 1) {
+				return;
+			}
+			// Chỉ xóa khi HEAD đã thấy một object sai kích thước. Nếu object không tồn tại,
+			// không phát lệnh xóa có thể đua với CompleteMultipartUpload.
+			if (objectSize.isPresent()) {
+				try {
+					multipartStorage.removeObject(video.getStoragePath());
+				} catch (RuntimeException exception) {
+					LOGGER.error("ORPHAN_VIDEO_OBJECT timeout cleanup thất bại cho video {} objectKey={}; "
+							+ "cần P2-T24 retry", video.getId(), video.getStoragePath(), exception);
+				}
+			}
+			deleteSession(video.getId());
+		}
+	}
+
+	private void deleteSession(java.util.UUID videoId) {
+		try {
+			sessionStore.deleteSession(videoId);
+		} catch (RuntimeException exception) {
+			LOGGER.error("Không thể dọn Redis session timeout cho video {}", videoId, exception);
 		}
 	}
 

@@ -189,28 +189,70 @@ public class VideoService {
 						"Dung lượng thực tế vượt hạn mức. Phiên quay đã được hủy.");
 			}
 
-			multipartStorage.completeMultipartUpload(
-					video.getStoragePath(), request.uploadId(), actualParts);
-			int updated;
-			try {
-				updated = videoRepository.markProcessing(
-						videoId, request.durationSecs(), actualUploadedBytes);
-			} catch (RuntimeException databaseFailure) {
-				cleanupCompletedObject(video, databaseFailure);
-				sessionStore.deleteSession(videoId);
-				throw databaseFailure;
-			}
+			// Commit PROCESSING trước khi gọi MinIO. Webhook có thể đến ngay trong lời gọi
+			// CompleteMultipartUpload và phải nhìn thấy trạng thái đã commit này.
+			int updated = videoRepository.markProcessing(
+					videoId, request.durationSecs(), actualUploadedBytes);
 			if (updated != 1) {
-				RuntimeException stateFailure = new VideoOperationConflictException(
+				throw new VideoOperationConflictException(
 						"Video đã được xử lý bởi thao tác khác.");
-				cleanupCompletedObject(video, stateFailure);
-				sessionStore.deleteSession(videoId);
-				throw stateFailure;
+			}
+
+			try {
+				multipartStorage.completeMultipartUpload(
+						video.getStoragePath(), request.uploadId(), actualParts);
+			} catch (RuntimeException completeFailure) {
+				if (reconcileFailedComplete(video, request.uploadId(), actualParts,
+						actualUploadedBytes, completeFailure)) {
+					sessionStore.deleteSession(videoId);
+					return processingResponse(videoId);
+				}
+				throw completeFailure;
 			}
 			sessionStore.deleteSession(videoId);
-			return new FinalizeVideoResponse(videoId, VideoStatus.PROCESSING.getDatabaseValue(),
-					"Upload hoàn tất, đang xử lý. Trạng thái sẽ cập nhật qua MinIO webhook.");
+			return processingResponse(videoId);
 		}
+	}
+
+	private boolean reconcileFailedComplete(
+			Video video,
+			String uploadId,
+			List<VideoMultipartStorage.UploadedPart> parts,
+			long expectedBytes,
+			RuntimeException completeFailure) {
+		try {
+			var objectSize = multipartStorage.statObjectSize(video.getStoragePath());
+			if (objectSize.isPresent()) {
+				if (objectSize.getAsLong() == expectedBytes) {
+					videoRepository.markReadyFromWebhook(video.getStoragePath(), expectedBytes);
+					return true;
+				}
+				LOGGER.error("VIDEO_COMPLETE_SIZE_MISMATCH videoId={} expectedBytes={} actualBytes={}",
+						video.getId(), expectedBytes, objectSize.getAsLong());
+				return false;
+			}
+
+			// Chỉ quay lại RECORDING khi MinIO xác nhận multipart vẫn tồn tại và khớp.
+			List<VideoMultipartStorage.UploadedPart> remainingParts = multipartStorage
+					.listParts(video.getStoragePath(), uploadId).stream()
+					.sorted(Comparator.comparingInt(
+							VideoMultipartStorage.UploadedPart::partNumber))
+					.toList();
+			if (remainingParts.equals(parts)) {
+				videoRepository.restoreRecording(video.getId());
+			}
+			return false;
+		} catch (RuntimeException reconciliationFailure) {
+			completeFailure.addSuppressed(reconciliationFailure);
+			LOGGER.error("VIDEO_COMPLETE_RECONCILIATION_FAILED videoId={} objectKey={}",
+					video.getId(), video.getStoragePath(), reconciliationFailure);
+			return false;
+		}
+	}
+
+	private FinalizeVideoResponse processingResponse(UUID videoId) {
+		return new FinalizeVideoResponse(videoId, VideoStatus.PROCESSING.getDatabaseValue(),
+				"Upload hoàn tất, đang xử lý. Trạng thái sẽ cập nhật qua MinIO webhook.");
 	}
 
 	public void abortUpload(UUID userId, UUID videoId, AbortVideoRequest request) {
@@ -317,13 +359,4 @@ public class VideoService {
 		return value;
 	}
 
-	private void cleanupCompletedObject(Video video, RuntimeException primaryFailure) {
-		try {
-			multipartStorage.removeObject(video.getStoragePath());
-		} catch (RuntimeException cleanupFailure) {
-			primaryFailure.addSuppressed(cleanupFailure);
-			LOGGER.error("ORPHAN_VIDEO_OBJECT cleanup thất bại cho video {} objectKey={}; "
-					+ "cần P2-T24 retry", video.getId(), video.getStoragePath(), cleanupFailure);
-		}
-	}
 }

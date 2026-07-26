@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 
@@ -51,6 +54,8 @@ class VideoFinalizeAbortIntegrationTests {
 	private StringRedisTemplate redisTemplate;
 	@Autowired
 	private JwtService jwtService;
+	@Autowired
+	private VideoWebhookService videoWebhookService;
 
 	@MockitoBean
 	private VideoMultipartStorage multipartStorage;
@@ -92,6 +97,70 @@ class VideoFinalizeAbortIntegrationTests {
 		assertThat(sessionStore.findSession(video.getId())).isEmpty();
 		verify(multipartStorage).completeMultipartUpload(
 				video.getStoragePath(), UPLOAD_ID, minioParts("etag-1", "\"etag-2\""));
+	}
+
+	@Test
+	void webhookArrivingDuringMinioCompleteMustNotBeLostBeforeProcessingTransition() throws Exception {
+		Video video = recordingWithTwoParts("etag-1");
+		given(multipartStorage.listParts(video.getStoragePath(), UPLOAD_ID))
+				.willReturn(minioParts("etag-1", "etag-2"));
+		doAnswer(invocation -> {
+			videoWebhookService.process(new VideoWebhookRequest(List.of(
+					new VideoWebhookRequest.NotificationRecord(
+							"s3:ObjectCreated:CompleteMultipartUpload",
+							new VideoWebhookRequest.S3Data(
+									new VideoWebhookRequest.BucketData("veiltalk"),
+									new VideoWebhookRequest.ObjectData(
+											video.getStoragePath().replace("/", "%2F"),
+											PART_SIZE * 2))))));
+			return null;
+		}).when(multipartStorage).completeMultipartUpload(
+				video.getStoragePath(), UPLOAD_ID, minioParts("etag-1", "etag-2"));
+
+		mockMvc.perform(finalizeRequest(video.getId(), "etag-1", "etag-2"))
+				.andExpect(status().isAccepted());
+
+		assertThat(videoRepository.findById(video.getId()).orElseThrow().getStatus())
+				.as("Webhook CompleteMultipartUpload đến trong lúc complete không được bị ACK mất")
+				.isEqualTo(VideoStatus.READY);
+	}
+
+	@Test
+	void completeResponseLostButObjectExistsReconcilesReady() throws Exception {
+		Video video = recordingWithTwoParts("etag-1");
+		var parts = minioParts("etag-1", "etag-2");
+		given(multipartStorage.listParts(video.getStoragePath(), UPLOAD_ID)).willReturn(parts);
+		willThrow(new VideoStorageException("response lost", new RuntimeException("timeout")))
+				.given(multipartStorage).completeMultipartUpload(
+						video.getStoragePath(), UPLOAD_ID, parts);
+		given(multipartStorage.statObjectSize(video.getStoragePath()))
+				.willReturn(OptionalLong.of(PART_SIZE * 2));
+
+		mockMvc.perform(finalizeRequest(video.getId(), "etag-1", "etag-2"))
+				.andExpect(status().isAccepted());
+
+		assertThat(videoRepository.findById(video.getId()).orElseThrow().getStatus())
+				.isEqualTo(VideoStatus.READY);
+		assertThat(sessionStore.findSession(video.getId())).isEmpty();
+	}
+
+	@Test
+	void completeFailsAndMultipartStillExistsRestoresRecording() throws Exception {
+		Video video = recordingWithTwoParts("etag-1");
+		var parts = minioParts("etag-1", "etag-2");
+		given(multipartStorage.listParts(video.getStoragePath(), UPLOAD_ID)).willReturn(parts);
+		willThrow(new VideoStorageException("complete failed", new RuntimeException("MinIO error")))
+				.given(multipartStorage).completeMultipartUpload(
+						video.getStoragePath(), UPLOAD_ID, parts);
+		given(multipartStorage.statObjectSize(video.getStoragePath()))
+				.willReturn(OptionalLong.empty());
+
+		mockMvc.perform(finalizeRequest(video.getId(), "etag-1", "etag-2"))
+				.andExpect(status().isInternalServerError());
+
+		assertThat(videoRepository.findById(video.getId()).orElseThrow().getStatus())
+				.isEqualTo(VideoStatus.RECORDING);
+		assertThat(sessionStore.findSession(video.getId())).isPresent();
 	}
 
 	@Test

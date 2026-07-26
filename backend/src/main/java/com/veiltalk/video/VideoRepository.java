@@ -39,6 +39,13 @@ public interface VideoRepository extends JpaRepository<Video, UUID> {
 			@Param("actualBytes") long actualBytes);
 
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Transactional
+	@Query("UPDATE Video v SET v.status = com.veiltalk.video.VideoStatus.RECORDING "
+			+ "WHERE v.id = :id AND v.status = com.veiltalk.video.VideoStatus.PROCESSING "
+			+ "AND v.deletedAt IS NULL")
+	int restoreRecording(@Param("id") UUID id);
+
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Query("UPDATE Video v SET v.status = com.veiltalk.video.VideoStatus.READY "
 			+ "WHERE v.storagePath = :storagePath "
 			+ "AND v.status = com.veiltalk.video.VideoStatus.PROCESSING "
