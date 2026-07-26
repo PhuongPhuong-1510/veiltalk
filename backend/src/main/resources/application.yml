@@ -42,6 +42,10 @@ messaging:
     send-time-limit-ms: 10000
     send-buffer-size-bytes: 262144
 
+call:
+  notify:
+    secret: ${INTERNAL_CALL_NOTIFY_SECRET:}
+
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
   access-key: ${MINIO_ACCESS_KEY:}

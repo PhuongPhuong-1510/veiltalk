@@ -47,6 +47,18 @@ public class MessageRealtimePublisher {
 				status.id());
 	}
 
+	public void publishCallIncoming(
+			UUID calleeUserId,
+			UUID callerId,
+			String callerDisplayName,
+			UUID callSessionId) {
+		publish(
+				calleeUserId,
+				"CALL_INCOMING",
+				new CallIncomingEvent(callerId, callerDisplayName, callSessionId),
+				callSessionId);
+	}
+
 	public void publishTyping(UUID userId, String type, UUID conversationId) {
 		if (!"TYPING".equals(type) && !"TYPING_STOP".equals(type)) {
 			throw new IllegalArgumentException("Unsupported typing event type");
@@ -83,5 +95,11 @@ public class MessageRealtimePublisher {
 	private record TypingEvent(
 			@com.fasterxml.jackson.annotation.JsonProperty("conversation_id")
 			UUID conversationId) {
+	}
+
+	private record CallIncomingEvent(
+			@com.fasterxml.jackson.annotation.JsonProperty("caller_id") UUID callerId,
+			@com.fasterxml.jackson.annotation.JsonProperty("caller_display_name") String callerDisplayName,
+			@com.fasterxml.jackson.annotation.JsonProperty("call_session_id") UUID callSessionId) {
 	}
 }
