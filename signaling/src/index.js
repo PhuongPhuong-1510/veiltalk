@@ -10,6 +10,8 @@ if (!jwtSecret) {
   process.exit(1);
 }
 
-createServer({ port, jwtSecret });
+const trustedProxyIps = process.env.TRUSTED_PROXY_IPS || "";
+
+createServer({ port, jwtSecret, trustedProxyIps });
 
 console.log(`VeilTalk signaling server listening on port ${port}`);

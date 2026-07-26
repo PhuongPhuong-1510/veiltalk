@@ -137,6 +137,15 @@ JWT_SECRET=\<same-as-JWT_SECRET\> \# validate JWT trước khi relay (SAD mục 
 
 RATE_LIMIT_MAX=20 \# max connections/IP/minute
 
+TRUSTED_PROXY_IPS=\<comma-separated IP list, ví dụ IP nội bộ của Nginx trên internal-net\>
+\# Signaling Server chỉ tin header X-Forwarded-For khi request đến từ một IP trong danh
+\# sách này (SAD mục 4.2, 9.4). Không set / để rỗng => KHÔNG tin proxy nào, dùng thẳng
+\# remoteAddress — mặc định an toàn, vì tin mọi X-Forwarded-For khi thiếu cấu hình cho
+\# phép kẻ tấn công tự set header để né rate limit (mỗi request giả một IP khác nhau).
+\# Nginx PHẢI được cấu hình luôn ghi đè X-Forwarded-For bằng IP client thật (proxy_set_header
+\# X-Forwarded-For \$remote_addr;), không forward nguyên header do client gửi lên — nếu không,
+\# client có thể tự đặt X-Forwarded-For và vô hiệu hóa rate limit dù IP Nginx nằm trong danh sách tin cậy.
+
 ### 3.3. PostgreSQL
 
 POSTGRES_DB=veiltalk
