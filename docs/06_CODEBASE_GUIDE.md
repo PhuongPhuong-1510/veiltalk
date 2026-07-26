@@ -518,6 +518,31 @@ rendering, state, routing và design system thuộc các task Phase 4.
 
 P0-T05 đã được xác minh bằng `npm run build` và `npm run lint`.
 
+### API client (P4-T01)
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `frontend/src/lib/api/client.ts` | Core `request<T>()` dùng `fetch` gốc (không axios): gắn `Authorization` header, tự refresh access token khi 401 (khóa refresh bằng promise singleton chống gọi song song, chặn retry đệ quy vào `/auth/login`\|`/auth/register`\|`/auth/refresh`), map lỗi HTTP/network về `ApiError` |
+| `frontend/src/lib/api/types.ts` | `ApiError`, `ErrorEnvelope`, type request/response theo từng nhóm endpoint trong API Design |
+| `frontend/src/lib/api/endpoints/*.ts` | Hàm gọi API theo domain: `auth.ts`, `users.ts`, `avatars.ts`, `conversations.ts`, `videos.ts`, `metrics.ts` — màn hình import từ đây, không tự gọi `request()` trực tiếp |
+| `frontend/src/lib/api/index.ts` | Barrel export cho toàn bộ `lib/api` |
+| `frontend/src/lib/api/client.test.ts` | Test Vitest: gắn header, luồng refresh (thành công/thất bại/song song/chặn đệ quy), lỗi mạng, error envelope, 204 |
+| `frontend/src/vite-env.d.ts` | Khai báo type `import.meta.env.VITE_API_BASE_URL` |
+
+`client.ts` **không tự đọc token từ đâu cả** — nhận qua `configureAuthHooks({ getAccessToken,
+getRefreshToken, onTokensRefreshed, onAuthFailure })`, một setter module-level. P4-T02 (authStore)
+sẽ gọi hàm này lúc khởi tạo store để "cắm dây" vào state thật; nhờ vậy P4-T01 không phụ thuộc
+P4-T02 và không có circular import. Refresh chỉ **reactive** (khi nhận 401), chưa làm proactive
+refresh theo `expires_in` — nếu cần sau này thì mở rộng ở `client.ts`, không đổi interface
+`configureAuthHooks`.
+
+Base URL đọc từ `VITE_API_BASE_URL`, fallback `http://localhost:8080` khi chưa set biến môi
+trường — **không có tiền tố `/api`**, khớp cách backend map route thật (xem sửa đổi
+`docs/04_API.md` mục 1.2, phát hiện khi chạy smoke test P4-T01 với backend thật: doc gốc ghi
+nhầm `/api` nhưng `AuthController`/`SecurityConfig` không có `context-path`).
+
+P4-T01 đã được xác minh bằng `npm run build`, `npx tsc -b` và `npx vitest run` (9/9 test PASS).
+
 ### Vòng lặp tracking
 ### Bộ dựng hình nhân vật
 ### Lớp WebRTC
