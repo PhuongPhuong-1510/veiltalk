@@ -919,4 +919,14 @@ Message types
 | **CALL_REJECT**   | B → Server → A     | reason              | B từ chối cuộc gọi                   |
 | **CALL_END**      | A/B → Server → B/A | \-                  | Kết thúc cuộc gọi, giải phóng phiên  |
 
+Relay: Server gắn thêm `from_user_id` (userId của người gửi, lấy từ JWT đã xác thực ở handshake) vào message trước khi relay, để phía nhận biết message đến từ ai. Message có `type` không thuộc bảng trên hoặc thiếu `target_user_id` bị Server bỏ qua (không phản hồi lỗi).
+
+Lỗi target offline: nếu `target_user_id` không có kết nối Signaling WebSocket nào đang mở, Server gửi lại cho sender:
+
+```json
+{ "type": "ERROR", "data": { "code": "TARGET_OFFLINE", "message": "Target user is not connected to the signaling server", "target_user_id": "uuid" } }
+```
+
+Rate limiting: tối đa 20 kết nối WebSocket mới/địa chỉ IP/phút (SAD mục 4.2, 9.4 — chống DoS). Vượt ngưỡng: Server **accept handshake rồi đóng ngay bằng close code 4029** (cùng cơ chế với 4001 ở trên — thư viện `ws` không set được HTTP status sau khi giao thức đã nâng cấp). Địa chỉ IP dùng để rate-limit lấy theo cấu hình `TRUSTED_PROXY_IPS` (xem `docs/08_DEPLOYMENT_AND_OPERATIONS.md`) — P3-T02.
+
 *— Hết tài liệu —*
