@@ -927,6 +927,27 @@ Lỗi target offline: nếu `target_user_id` không có kết nối Signaling We
 { "type": "ERROR", "data": { "code": "TARGET_OFFLINE", "message": "Target user is not connected to the signaling server", "target_user_id": "uuid" } }
 ```
 
+Từ P3-T04: khi nhận `CALL_OFFER`, Signaling Server gọi Backend trước (`POST /internal/call/notify`, xem mục 10.3) để đẩy `CALL_INCOMING` cho B qua Messaging WebSocket — B thường **chưa** có kết nối Signaling WebSocket ở thời điểm này (chỉ mở sau khi thấy `CALL_INCOMING`). Nếu lệnh notify đó thất bại (callee không tồn tại/đã xoá mềm, backend lỗi, hoặc quá timeout `CALL_NOTIFY_TIMEOUT_MS`), Signaling Server trả về **cùng lỗi `TARGET_OFFLINE`** ở trên cho A — không phân biệt lý do thất bại, kể cả khi B tình cờ đang có một kết nối Signaling WebSocket khác mở sẵn. Đây là nguyên tắc chống dò tài khoản (AGENTS.md) áp dụng ở ranh giới signaling↔client: A không được biết B không tồn tại khác với B chỉ đang offline.
+
 Rate limiting: tối đa 20 kết nối WebSocket mới/địa chỉ IP/phút (SAD mục 4.2, 9.4 — chống DoS). Vượt ngưỡng: Server **accept handshake rồi đóng ngay bằng close code 4029** (cùng cơ chế với 4001 ở trên — thư viện `ws` không set được HTTP status sau khi giao thức đã nâng cấp). Địa chỉ IP dùng để rate-limit lấy theo cấu hình `TRUSTED_PROXY_IPS` (xem `docs/08_DEPLOYMENT_AND_OPERATIONS.md`) — P3-T02.
+
+### 10.3. Nội bộ: POST /internal/call/notify (P3-T04)
+
+Cầu nối Signaling Server → Backend để đẩy `CALL_INCOMING` (mục 10.1) qua Messaging WebSocket của callee. Chỉ Signaling Server gọi endpoint này, không phải client.
+
+Xác thực: header `Authorization: Bearer <INTERNAL_CALL_NOTIFY_SECRET>` (cùng cơ chế shared-secret constant-time-compare như `/internal/videos/webhook` — mục MinIO webhook). Sai/thiếu secret trả `401 UNAUTHORIZED`.
+
+Request body:
+
+```json
+{ "caller_id": "uuid", "callee_id": "uuid" }
+```
+
+Response:
+
+- `204 No Content` — callee hợp lệ (tồn tại, chưa xoá mềm). Backend đã publish `CALL_INCOMING` (kèm `caller_display_name` tra từ `caller_id`, và `call_session_id` sinh xác định — xem dưới) tới `messaging:user:{callee_id}` qua Redis; mọi Backend instance subscribe kênh này sẽ đẩy tiếp qua Messaging WebSocket cho mọi tab/thiết bị của callee đang mở.
+- `404 Not Found` — callee (hoặc caller) không tồn tại/đã xoá mềm. Backend không publish gì. Vì signaling là caller nội bộ tin cậy (không phải client), 404 ở đây **không** vi phạm nguyên tắc chống dò tài khoản — nguyên tắc đó chỉ áp khi signaling trả lời lại cho client A (mục 10.2, `TARGET_OFFLINE`).
+
+`call_session_id`: sinh **xác định** (deterministic) từ cặp `(caller_id, callee_id)` đã chuẩn hoá thứ tự (giống cách `conversation_id` chuẩn hoá cặp user trong `ConversationService`, nhưng khác ở chỗ `call_session_id` **không** lưu DB hay giữ Map riêng — tính lại mỗi lần cần). Cùng một cặp user luôn ra cùng `call_session_id`, bất kể ai gọi ai trước.
 
 *— Hết tài liệu —*

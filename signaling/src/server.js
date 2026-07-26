@@ -1,6 +1,7 @@
 const { WebSocketServer } = require("ws");
 const { verifyAccessToken, extractToken } = require("./auth");
 const { resolveClientIp, parseTrustedProxyIps, createConnectionRateLimiter } = require("./rateLimiter");
+const { createCallNotifyClient } = require("./callNotifyClient");
 
 const RELAY_MESSAGE_TYPES = new Set(["CALL_OFFER", "CALL_ANSWER", "ICE_CANDIDATE", "CALL_REJECT", "CALL_END"]);
 const SESSION_TIMEOUT_MS = 30_000;
@@ -13,9 +14,13 @@ function createServer({
   log = console.log,
   sessionTimeoutMs = SESSION_TIMEOUT_MS,
   sessionSweepIntervalMs = SESSION_SWEEP_INTERVAL_MS,
+  callNotifyClient,
 }) {
   if (!jwtSecret) {
     throw new Error("jwtSecret is required to start the signaling server");
+  }
+  if (!callNotifyClient) {
+    throw new Error("callNotifyClient is required to start the signaling server");
   }
 
   const trustedProxies = parseTrustedProxyIps(trustedProxyIps);
@@ -123,7 +128,9 @@ function createServer({
     log(`Signaling WS connected: user ${userId}`);
 
     ws.on("message", (raw) => {
-      relayMessage(userId, raw, log);
+      relayMessage(userId, raw, log).catch((error) => {
+        log(`Signaling WS: unexpected error relaying message from user ${userId}: ${error.message}`);
+      });
     });
 
     ws.on("close", () => {
@@ -135,11 +142,25 @@ function createServer({
     });
   });
 
+  function sendTargetOffline(senderUserId, targetUserId) {
+    const senderConnections = connectionsByUserId.get(senderUserId);
+    for (const senderWs of senderConnections ?? []) {
+      sendJson(senderWs, {
+        type: "ERROR",
+        data: {
+          code: "TARGET_OFFLINE",
+          message: "Target user is not connected to the signaling server",
+          target_user_id: targetUserId,
+        },
+      });
+    }
+  }
+
   // Relay CALL_OFFER/CALL_ANSWER/ICE_CANDIDATE/CALL_REJECT/CALL_END tới target_user_id
   // (API Design mục 10.2), đồng thời cập nhật vòng đời session theo userId. Message
   // không parse được / type không thuộc danh sách relay bị bỏ qua với client (không
   // phản hồi lỗi cho input rác) nhưng vẫn log phía server để debug.
-  function relayMessage(senderUserId, raw, log) {
+  async function relayMessage(senderUserId, raw, log) {
     let message;
     try {
       message = JSON.parse(raw);
@@ -154,19 +175,22 @@ function createServer({
       return;
     }
 
+    // CALL_OFFER: gọi backend TRƯỚC khi kiểm tra/relay qua Signaling WS. B thường
+    // CHƯA có kết nối Signaling WS ở thời điểm này (đó là lý do P3-T04 tồn tại) —
+    // notify đẩy CALL_INCOMING cho B qua Messaging WS. Callee không tồn tại/xoá
+    // mềm và callee offline được gộp thành CÙNG một lỗi trung tính cho A
+    // (anti-enumeration ở ranh giới signaling->client, không phải backend->signaling).
+    if (type === "CALL_OFFER") {
+      const result = await callNotifyClient.notify(senderUserId, targetUserId);
+      if (result !== "notified") {
+        sendTargetOffline(senderUserId, targetUserId);
+        return;
+      }
+    }
+
     const targetConnections = connectionsByUserId.get(targetUserId);
     if (!targetConnections || targetConnections.size === 0) {
-      const senderConnections = connectionsByUserId.get(senderUserId);
-      for (const senderWs of senderConnections ?? []) {
-        sendJson(senderWs, {
-          type: "ERROR",
-          data: {
-            code: "TARGET_OFFLINE",
-            message: "Target user is not connected to the signaling server",
-            target_user_id: targetUserId,
-          },
-        });
-      }
+      sendTargetOffline(senderUserId, targetUserId);
       return;
     }
 

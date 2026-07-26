@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.veiltalk.call.CallNotifyAuthenticationFilter;
+import com.veiltalk.call.CallNotifyProperties;
 import com.veiltalk.video.VideoWebhookAuthenticationFilter;
 import com.veiltalk.video.MinioProperties;
 
@@ -33,10 +35,14 @@ import com.veiltalk.video.MinioProperties;
 @Import({
 		SecurityConfig.class,
 		VideoWebhookAuthenticationFilter.class,
+		CallNotifyAuthenticationFilter.class,
 		SecurityConfigTests.TestController.class
 })
-@TestPropertySource(properties = "minio.webhook.secret=test-only-webhook-secret")
-@EnableConfigurationProperties(MinioProperties.class)
+@TestPropertySource(properties = {
+		"minio.webhook.secret=test-only-webhook-secret",
+		"call.notify.secret=test-only-call-notify-secret"
+})
+@EnableConfigurationProperties({MinioProperties.class, CallNotifyProperties.class})
 class SecurityConfigTests {
 
 	private static final UUID USER_ID = UUID.fromString("a310fc8c-109f-4e53-91ee-8fcd508f7512");

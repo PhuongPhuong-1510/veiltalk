@@ -25,6 +25,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletResponse;
 
+import com.veiltalk.call.CallNotifyAuthenticationFilter;
 import com.veiltalk.video.VideoWebhookAuthenticationFilter;
 
 @Configuration
@@ -45,7 +46,8 @@ public class SecurityConfig {
 			JwtService jwtService,
 			JwtBlacklistService jwtBlacklistService,
 			UserTokenRevocationService userTokenRevocationService,
-			VideoWebhookAuthenticationFilter videoWebhookAuthenticationFilter) throws Exception {
+			VideoWebhookAuthenticationFilter videoWebhookAuthenticationFilter,
+			CallNotifyAuthenticationFilter callNotifyAuthenticationFilter) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
@@ -74,6 +76,9 @@ public class SecurityConfig {
 						videoWebhookAuthenticationFilter,
 						UsernamePasswordAuthenticationFilter.class)
 				.addFilterBefore(
+						callNotifyAuthenticationFilter,
+						UsernamePasswordAuthenticationFilter.class)
+				.addFilterBefore(
 						new JwtAuthenticationFilter(
 								jwtService,
 								jwtBlacklistService,
@@ -87,6 +92,15 @@ public class SecurityConfig {
 	FilterRegistrationBean<VideoWebhookAuthenticationFilter> disableServletRegistration(
 			VideoWebhookAuthenticationFilter filter) {
 		FilterRegistrationBean<VideoWebhookAuthenticationFilter> registration =
+				new FilterRegistrationBean<>(filter);
+		registration.setEnabled(false);
+		return registration;
+	}
+
+	@Bean
+	FilterRegistrationBean<CallNotifyAuthenticationFilter> disableCallNotifyServletRegistration(
+			CallNotifyAuthenticationFilter filter) {
+		FilterRegistrationBean<CallNotifyAuthenticationFilter> registration =
 				new FilterRegistrationBean<>(filter);
 		registration.setEnabled(false);
 		return registration;

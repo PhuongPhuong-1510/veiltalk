@@ -20,15 +20,28 @@ function signAccessToken(secret, overrides = {}) {
   return jwt.sign(payload, secret, { algorithm: "HS256", noTimestamp: true });
 }
 
+function createStubCallNotifyClient(result = "notified") {
+  const calls = [];
+  return {
+    calls,
+    notify: async (callerId, calleeId) => {
+      calls.push({ callerId, calleeId });
+      return result;
+    },
+  };
+}
+
 function startTestServer(overrides = {}) {
+  const callNotifyClient = overrides.callNotifyClient ?? createStubCallNotifyClient();
   const { wss, connectionsByUserId, callSessionsByUserId, stop } = createServer({
     port: 0,
     jwtSecret: TEST_SECRET,
     log: () => {},
     ...overrides,
+    callNotifyClient,
   });
   const { port } = wss.address();
-  return { wss, connectionsByUserId, callSessionsByUserId, stop, port };
+  return { wss, connectionsByUserId, callSessionsByUserId, stop, port, callNotifyClient };
 }
 
 function connect(port, token) {
@@ -138,6 +151,71 @@ test("relays CALL_OFFER from sender to target user, tagging from_user_id", async
   assert.strictEqual(message.type, "CALL_OFFER");
   assert.strictEqual(message.data.sdp, "fake-sdp");
   assert.strictEqual(message.from_user_id, "a310fc8c-109f-4e53-91ee-8fcd508f7512");
+
+  wsA.close();
+  wsB.close();
+  await closeServer({ wss, stop });
+});
+
+test("calls backend call notify before relaying CALL_OFFER (P3-T04)", async () => {
+  const { wss, port, stop, callNotifyClient } = startTestServer();
+  const tokenA = signAccessToken(TEST_SECRET);
+  const tokenB = signAccessToken(TEST_SECRET, { sub: USER_B });
+  const wsA = await connect(port, tokenA);
+  const wsB = await connect(port, tokenB);
+
+  const received = nextMessage(wsB);
+  wsA.send(JSON.stringify({ type: "CALL_OFFER", data: { sdp: "s" }, target_user_id: USER_B }));
+  await received;
+
+  assert.strictEqual(callNotifyClient.calls.length, 1);
+  assert.strictEqual(callNotifyClient.calls[0].callerId, "a310fc8c-109f-4e53-91ee-8fcd508f7512");
+  assert.strictEqual(callNotifyClient.calls[0].calleeId, USER_B);
+
+  wsA.close();
+  wsB.close();
+  await closeServer({ wss, stop });
+});
+
+test("sends TARGET_OFFLINE to caller when call notify fails, even though callee has a signaling connection open", async () => {
+  const failingClient = createStubCallNotifyClient("failed");
+  const { wss, port, stop } = startTestServer({ callNotifyClient: failingClient });
+  const tokenA = signAccessToken(TEST_SECRET);
+  const tokenB = signAccessToken(TEST_SECRET, { sub: USER_B });
+  const wsA = await connect(port, tokenA);
+  const wsB = await connect(port, tokenB);
+
+  const received = nextMessage(wsA);
+  wsA.send(JSON.stringify({ type: "CALL_OFFER", data: { sdp: "s" }, target_user_id: USER_B }));
+
+  const message = await received;
+  assert.strictEqual(message.type, "ERROR");
+  assert.strictEqual(message.data.code, "TARGET_OFFLINE");
+
+  wsA.close();
+  wsB.close();
+  await closeServer({ wss, stop });
+});
+
+test("does not relay CALL_OFFER to callee's signaling connection when call notify fails", async () => {
+  const failingClient = createStubCallNotifyClient("failed");
+  const { wss, port, stop } = startTestServer({ callNotifyClient: failingClient });
+  const tokenA = signAccessToken(TEST_SECRET);
+  const tokenB = signAccessToken(TEST_SECRET, { sub: USER_B });
+  const wsA = await connect(port, tokenA);
+  const wsB = await connect(port, tokenB);
+
+  let receivedOnB = false;
+  wsB.on("message", () => {
+    receivedOnB = true;
+  });
+
+  const errorReceived = nextMessage(wsA);
+  wsA.send(JSON.stringify({ type: "CALL_OFFER", data: { sdp: "s" }, target_user_id: USER_B }));
+  await errorReceived;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  assert.strictEqual(receivedOnB, false);
 
   wsA.close();
   wsB.close();

@@ -170,6 +170,34 @@ class MessageRealtimePublisherTests {
 		}
 	}
 
+	@Test
+	void publishesCallIncomingContract() throws Exception {
+		StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+		ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+		MeterRegistry meterRegistry = mock(MeterRegistry.class);
+		Counter failureCounter = mock(Counter.class);
+		when(meterRegistry.counter("messaging.redis.publish.failures")).thenReturn(failureCounter);
+		MessageRealtimePublisher publisher = new MessageRealtimePublisher(
+				redisTemplate,
+				objectMapper,
+				meterRegistry);
+		UUID calleeUserId = UUID.randomUUID();
+		UUID callerId = UUID.randomUUID();
+		UUID callSessionId = UUID.randomUUID();
+		ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+
+		publisher.publishCallIncoming(calleeUserId, callerId, "Nguyễn Văn A", callSessionId);
+
+		verify(redisTemplate).convertAndSend(
+				org.mockito.ArgumentMatchers.eq("messaging:user:" + calleeUserId),
+				payloadCaptor.capture());
+		JsonNode payload = objectMapper.readTree(payloadCaptor.getValue());
+		assertThat(payload.get("type").asText()).isEqualTo("CALL_INCOMING");
+		assertThat(payload.get("data").get("caller_id").asText()).isEqualTo(callerId.toString());
+		assertThat(payload.get("data").get("caller_display_name").asText()).isEqualTo("Nguyễn Văn A");
+		assertThat(payload.get("data").get("call_session_id").asText()).isEqualTo(callSessionId.toString());
+	}
+
 	private MessageResponse sampleMessage() {
 		return new MessageResponse(
 				UUID.randomUUID(),
