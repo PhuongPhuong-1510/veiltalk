@@ -106,7 +106,7 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 | **Component**            | **Trách nhiệm**                                                       | **Nhận dữ liệu từ**                                        | **Gửi dữ liệu tới**                                                     |
 |--------------------------|-----------------------------------------------------------------------|------------------------------------------------------------|-------------------------------------------------------------------------|
-| **Tracking Module**      | Trích xuất landmark, lọc mượt (One Euro Filter), ràng buộc IK         | Webcam (getUserMedia)                                      | Avatar Renderer (nội bộ) · Communication Module                         |
+| **Tracking/Motion Module** | Trích xuất landmark; lọc direction; chuyển target world sang normalized-humanoid parent-local, rest-relative joint delta; áp constraint | Webcam (getUserMedia) | Avatar Renderer (nội bộ) · Communication Module |
 | **Avatar Renderer**      | Render nhân vật ảo 3D lên canvas, nhận dữ liệu từ 1 trong 2 nguồn     | Tracking Module (local) hoặc Communication Module (remote) | WebGL canvas (hiển thị)                                                 |
 | **Communication Module** | Quản lý RTCPeerConnection, tách luồng audio/skeleton, xử lý reconnect | Tracking Module · Signaling Server · Client khác (P2P)     | Avatar Renderer (dữ liệu remote) · Signaling Server · Client khác (P2P) |
 | **Messaging Module**     | Gửi/nhận tin nhắn, hàng đợi ngoại tuyến, đảm bảo idempotency          | Giao diện người dùng (input)                               | Backend API (WebSocket riêng cho messaging)                             |
@@ -123,9 +123,9 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 - Thư viện: MediaPipe Tasks API (thay thế cho MediaPipe Holistic đã bị deprecated). Lý do chọn so với phương án khác: TensorFlow.js cho độ chính xác tương đương nhưng đòi hỏi tự huấn luyện/tinh chỉnh model theo dõi tay — tốn thời gian ngoài phạm vi đồ án; face-api.js chỉ mạnh ở khuôn mặt, không có model theo dõi tay/thân tích hợp sẵn. MediaPipe Tasks API cung cấp các task chuyên biệt (FaceLandmarker, HandLandmarker, PoseLandmarker) thay thế Holistic đơn khối, hiệu năng tốt hơn và được Google tiếp tục duy trì.
 
-- Pipeline xử lý: raw frame → landmark extraction (MediaPipe) → One Euro Filter (làm mượt theo thời gian) → IK constraint (giới hạn góc khớp giải phẫu) → hệ số blendshape + góc khớp.
+- Pipeline xử lý hiện tại: raw frame → landmark extraction (MediaPipe) → per-side image bounds/visibility gate → torso semantic basis → three-point anatomical arm-frame (primary direction + elbow-offset secondary reference) → direction/pole filters → parent-local/rest-relative delta → safety constraint → hold/return/recovery → hệ số blendshape + `AvatarPosePacketV1`. Depth-degenerate pole dùng projected previous/rest fallback; Phase 3A không animate chest, còn palm fusion và production anatomical calibration chưa triển khai.
 
-- Output: một đối tượng JSON nhỏ gọn (hệ số blendshape + góc khớp) được gửi qua RTCDataChannel mỗi khung hình hợp lệ.
+- Output: `AvatarPosePacketV1` plain-data nhỏ gọn. `jointRotations` chứa quaternion delta trong normalized-humanoid parent-local, rest-relative space; packet không chứa raw face/hand/pose landmarks hoặc facial transform matrix. RTCDataChannel transport thuộc P4-T15, chưa nằm trong P4-T10.
 
 - Xử lý edge case: mất theo dõi do che khuất/ánh sáng yếu — áp dụng đúng FR-09 (giữ tư thế hợp lệ gần nhất).
 
@@ -135,11 +135,37 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 - Định dạng model: GLB/GLTF với morph target ánh xạ trực tiếp tới hệ số blendshape từ Tracking Module (nhất quán với khuyến nghị dùng model VRM — VRM xây trên nền GLTF).
 
-- Pipeline render: nhận dữ liệu khung xương → áp dụng blendshape lên morph target → áp dụng góc khớp đã qua IK constraint → render lên WebGL canvas.
+- Pipeline render: nhận `AvatarPosePacketV1` → ánh xạ blendshape → tái tạo target local tuyệt đối bằng `qRestLocal × qDeltaLocal` → optional frame-rate-independent quaternion smoothing → gán normalized humanoid bone quaternion → `vrm.update(dt)` → render WebGL canvas. Renderer không ghi bone position/scale khi apply pose.
 
 - Hai chế độ nguồn dữ liệu: theo dõi cục bộ (cho chính nhân vật của người dùng) và dữ liệu nhận qua RTCDataChannel (cho nhân vật của người đối thoại) — cùng một Renderer, khác nguồn input. Về model 3D phía nhận: khi thiết lập cuộc gọi, phía nhận tải model GLB của người gọi từ Backend API (không truyền trực tiếp qua WebRTC DataChannel vì file model có thể lớn). Backend lưu sẵn URL/reference tới model đã chọn của từng user trong hồ sơ tài khoản (FR-04); phía nhận dùng URL này để tải model đúng trước khi bắt đầu nhận skeleton data. Nhờ đó, người dùng B thấy đúng nhân vật ảo (màu tóc, trang phục) mà người dùng A đã tùy chỉnh.
 
 - Bảng giới hạn góc khớp giải phẫu (khuỷu tay, cổ tay, vai) được định nghĩa tĩnh trong cấu hình, dùng chung cho cả theo dõi cục bộ và dữ liệu nhận từ xa, đảm bảo FR-08 áp dụng nhất quán cho cả hai chế độ.
+
+##### P4-T10 normalized arm retargeting contract
+
+Model loader chuẩn hóa VRM0 trước, lấy normalized humanoid nodes và capture một immutable
+rig profile theo model generation. Mỗi controlled joint lưu rest local rotation, rest world
+rotation, parent rest world rotation và rest world direction từ model thật. Profile cũ bị
+loại khi reload model; motion processor không solve nếu chưa có profile hợp lệ.
+
+Solver chạy `leftUpperArm → leftLowerArm → rightUpperArm → rightLowerArm`. Upper arm dùng
+parent rest world cố định; lower arm dùng target world của upper arm vừa giải trong cùng
+target pose. Solver không đọc animated bone transform từ renderer, nhờ đó cùng input cho
+cùng output và không tích lũy drift theo frame:
+
+```text
+qSwingWorld  = fromTo(dRestWorld, dTargetWorld)
+qTargetWorld = qSwingWorld × qRestWorld
+qTargetLocal = inverse(qParentTargetWorld) × qTargetWorld
+qDeltaLocal  = inverse(qRestLocal) × qTargetLocal
+qAppliedLocal = qRestLocal × qDeltaLocal
+```
+
+Production coordinate conversion vẫn là `(x,y,z) → (x,-y,-z)`. Constraint hiện clamp
+rest-relative delta; khi delta bị clamp, target world của parent được tính lại trước khi solve
+child. Phase 3A thay production one-vector path bằng full arm frame dựng từ direction và
+elbow-offset pole, có hysteresis cùng previous/rest fallback. Swing–twist utility mới phục vụ
+test/diagnostics; palm twist và anatomical calibration thuộc Phase 3B/3C.
 
 #### 4.1.3. Communication Module
 
@@ -251,10 +277,10 @@ Trình bày dạng bảng bước-theo-bước thay vì sơ đồ UML, để đ�
 |----------|-----------------------------|-----------------------------------------------------------------------------------------------|
 | **1**    | Webcam                      | Sinh khung hình mới, đưa vào Tracking Module qua getUserMedia().                              |
 | **2**    | MediaPipe                   | Trích xuất landmark khuôn mặt/tay/thân từ khung hình.                                         |
-| **3**    | One Euro Filter             | Làm mượt vị trí landmark dựa trên lịch sử khung hình gần nhất (FR-07).                        |
-| **4**    | IK Constraint               | Giới hạn góc khớp trong phạm vi giải phẫu hợp lệ (FR-08).                                     |
-| **5**    | Communication Module        | — GỬI — Đóng gói thành JSON, gửi qua RTCDataChannel tới phía nhận.                            |
-| **6**    | Avatar Renderer (phía nhận) | — NHẬN — Nhận JSON từ RTCDataChannel, áp dụng lên model 3D, render khung hình mới lên canvas. |
+| **3**    | Motion Processor            | Cập nhật tracking-loss state; lọc segment direction khi có sample mới.                        |
+| **4**    | Arm Retargeting Solver      | Tính target world, parent-local target và rest-relative delta theo parent → child; optional constraint trên delta. |
+| **5**    | Communication Module        | — GỬI — Đóng gói `AvatarPosePacketV1`, gửi qua RTCDataChannel; không gửi raw landmarks.       |
+| **6**    | Avatar Renderer (phía nhận) | — NHẬN — Tái tạo `restLocal × deltaLocal`, áp normalized bone/morph target và render canvas. |
 
 ### 5.3. Luồng xác thực
 

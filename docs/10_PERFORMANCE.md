@@ -58,6 +58,18 @@ Phương pháp: đếm số lần requestAnimationFrame callback được gọi 
 
 Công cụ: Chrome DevTools Performance tab → Frame rate graph; hoặc counter nội bộ trong Renderer.
 
+### 3.2.1. Quy ước đo P4-T10
+
+DEV harness hiển thị riêng camera/pipeline FPS, renderer FPS, renderer frame-time p95 và
+processor-input-to-draw. Chỉ đo NFR-01 trong `LIVE` mode bằng packet mới. Trong `FROZEN`
+mode, packet timestamp được giữ nguyên nên `processor-input-to-draw`/pose age tăng liên tục;
+đây là tuổi của frozen evidence, không phải latency pipeline và không được dùng để PASS/FAIL
+NFR-01.
+
+Deterministic preset dùng để đo angular correctness với filter/constraint/smoothing tắt,
+không dùng để benchmark tracking FPS hoặc latency. Performance acceptance phải ghi browser,
+thiết bị, độ phân giải camera, delegate CPU/GPU, ánh sáng, khoảng cách, thời lượng và số lần đo.
+
 ### 3.3. NFR-03 — End-to-End Call Latency
 
 Phương pháp: gọi RTCPeerConnection.getStats() mỗi 1 giây trong cuộc gọi đang diễn ra. Lấy giá trị currentRoundTripTime từ candidate-pair statistics (đơn vị giây, nhân 1000 ra ms).
@@ -86,6 +98,18 @@ Phương pháp: dùng Postman Runner với 50 lần gọi liên tiếp cho mỗi
 | **Tracking-to-render latency (p95)** | \< 150ms (SAD SLO)  | \[\_\_\_\] ms     | —                 | **\[PASS/FAIL\]** | 95% khung hình dưới ngưỡng này           |
 | **Avatar Frame Rate (avg)**          | ≥ 24fps (NFR-02)    | \[\_\_\_\] fps    | —                 | **\[PASS/FAIL\]** | Đo bằng rAF counter trong 60 giây        |
 | **Avatar Frame Rate (min)**          | ≥ 20fps (tối thiểu) | \[\_\_\_\] fps    | —                 | **\[PASS/FAIL\]** | Giá trị thấp nhất trong chuỗi đo         |
+
+### 4.1.1. Bằng chứng phát triển P4-T09/P4-T10 — chưa thay thế benchmark chính thức
+
+| Hạng mục | Bằng chứng hiện có | Trạng thái |
+|---|---|---|
+| P4-T09 tracking benchmark | 1280×720, GPU, Face/Hands/Pose full-rate, 162.8 giây: camera 28.4 FPS, pipeline 28.5 FPS, inference khoảng 28.4–28.5 FPS | Development gate PASS |
+| P4-T10 deterministic render | Frozen presets trên model VRM thật: renderer khoảng 73–77 FPS, frame p95 khoảng 2.5–2.8 ms | Render-cost evidence; không phải LIVE latency |
+| P4-T10 live tracking | Các log quan sát khoảng 22–27 FPS tùy điều kiện camera/ánh sáng | INCONCLUSIVE cho NFR-02 vì chưa đủ 10 lần × 60 giây trong điều kiện chuẩn |
+| P4-T10 tracking-to-render | Chưa có chuỗi LIVE 60 giây với avg/p95 hợp lệ | UNVERIFIED |
+
+Các số phát triển trên phục vụ chẩn đoán và không được điền thay vào bảng NFR chính thức ở
+mục 4.1 cho tới khi hoàn thành đúng protocol mục 2–3.
 
 ### 4.2. NFR-03 & NFR-04 — WebRTC Performance
 
