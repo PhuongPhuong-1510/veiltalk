@@ -54,57 +54,59 @@ Aesthetic chủ đạo: Ethereal Dark — huyền bí, tinh tế, lấy cảm h�
 
 ### 2.1. Bảng màu (Color Palette)
 
+> **Cập nhật P4-T04 — Kokoro:** giao diện mẫu Kokoro do chủ dự án duyệt là nguồn
+> thẩm mỹ chính. Kiến trúc primitive/semantic token bên dưới vẫn bắt buộc; component
+> chỉ dùng semantic token, không hardcode primitive color.
+
 Hệ thống màu được chia làm hai lớp: Primitive Colors (màu gốc không thay đổi) và Semantic Tokens (alias có nghĩa ngữ cảnh, thay đổi giữa dark/light mode). Mọi component chỉ được dùng Semantic Tokens — không hardcode màu gốc trong component.
 
 Primitive Colors — trục màu chính
 
 | **Token**       | **Dark** | **Light** | **Mục đích**                           |
 |-----------------|----------|-----------|----------------------------------------|
-| **violet-50**   | \#F5F3FF | \#F5F3FF  | Nền violet nhạt nhất (light mode only) |
-| **violet-200**  | \#DDD6FE | \#DDD6FE  | Border violet nhạt                     |
-| **violet-400**  | \#A78BFA | \#A78BFA  | Violet trung tính                      |
-| **violet-600**  | \#7C3AED | \#7C3AED  | Primary brand color                    |
-| **violet-800**  | \#5B21B6 | \#5B21B6  | Violet đậm                             |
-| **violet-950**  | \#2E1065 | \#2E1065  | Violet sâu nhất                        |
-| **indigo-900**  | \#1E1B4B | \#1E1B4B  | Gần đen — text/nền dark                |
-| **midnight**    | \#0D0B14 | \#0D0B14  | Background dark mode                   |
-| **cyan-400**    | \#22D3EE | \#22D3EE  | Accent phụ — trạng thái active         |
-| **cyan-600**    | \#0891B2 | \#0891B2  | Accent phụ đậm hơn                     |
-| **neutral-50**  | \#FAFAFA | \#FAFAFA  | Background light mode                  |
-| **neutral-900** | \#171717 | \#171717  | Text đậm nhất                          |
+| **violet-50**   | \#F7F3FF | \#F7F3FF  | Nền violet nhạt nhất                   |
+| **violet-200**  | \#DDC9FF | \#DDC9FF  | Border violet nhạt                     |
+| **violet-400**  | \#B88AFF | \#B88AFF  | Violet sáng                            |
+| **violet-600**  | \#7650C8 | \#7650C8  | Primary brand color                    |
+| **violet-800**  | \#513293 | \#513293  | Violet đậm                             |
+| **violet-950**  | \#211337 | \#211337  | Violet sâu nhất                        |
+| **pink-400**    | \#F06FD7 | \#F06FD7  | Điểm cuối gradient thương hiệu         |
+| **midnight**    | \#08070D | \#08070D  | Background dark mode                   |
+| **cyan-400**    | \#61DEF3 | \#61DEF3  | Accent phụ — trạng thái active         |
+| **cyan-600**    | \#209EC1 | \#209EC1  | Accent phụ đậm hơn                     |
 
 Semantic Tokens — ánh xạ dark/light
 
 | **Token**          | **Dark**   | **Light**  | **Mục đích**                           |
 |--------------------|------------|------------|----------------------------------------|
-| **bg-base**        | \#0D0B14   | \#FAF8FF   | Background toàn trang                  |
-| **bg-surface**     | \#1A1528   | \#FFFFFF   | Card, modal, sidebar                   |
-| **bg-elevated**    | \#241E35   | \#F3EEFF   | Dropdown, tooltip, popover             |
-| **bg-overlay**     | \#312848   | \#EDE9FE   | Hover state, subtle emphasis           |
-| **border-subtle**  | \#312848   | \#E5DAF8   | Đường viền nhạt                        |
-| **border-default** | \#4C3A7A   | \#C4B5FD   | Đường viền thông thường                |
-| **text-primary**   | \#F5F3FF   | \#1E1B4B   | Text chính                             |
-| **text-secondary** | \#A78BFA   | \#6D28D9   | Text phụ, placeholder                  |
-| **text-muted**     | \#6B7280   | \#9CA3AF   | Text mờ, disabled                      |
-| **accent-primary** | \#7C3AED   | \#7C3AED   | Nút chính, link, focus ring            |
-| **accent-hover**   | \#6D28D9   | \#6D28D9   | Hover state của accent                 |
-| **accent-glow**    | \#7C3AED40 | \#7C3AED20 | Box shadow glow của accent             |
-| **accent-2**       | \#22D3EE   | \#0891B2   | Secondary accent — online status, live |
-| **success**        | \#10B981   | \#059669   | Thành công, connected                  |
-| **warning**        | \#F59E0B   | \#D97706   | Cảnh báo, reconnecting                 |
-| **error**          | \#EF4444   | \#DC2626   | Lỗi, disconnected                      |
+| **bg-base**        | \#08070D   | \#FAF8FF   | Background toàn trang                  |
+| **bg-surface**     | \#12101B   | \#FFFFFF   | Card, modal, sidebar                   |
+| **bg-elevated**    | \#191624   | \#F5F0FC   | Dropdown, tooltip, popover             |
+| **bg-overlay**     | \#211D2E   | \#EEE6FA   | Hover state, subtle emphasis           |
+| **border-subtle**  | \#FFFFFF14 | \#5132931F | Đường viền nhạt                        |
+| **border-default** | \#FFFFFF24 | \#5132933D | Đường viền thông thường                |
+| **text-primary**   | \#F8F6FF   | \#17121F   | Text chính                             |
+| **text-secondary** | \#C7C2D0   | \#655D70   | Text phụ                               |
+| **text-muted**     | \#9994AA   | \#91899D   | Placeholder, disabled                  |
+| **accent-primary** | \#A96CFF   | \#7650C8   | Nút chính, link, focus ring            |
+| **accent-hover**   | \#B980FF   | \#6541B6   | Hover state của accent                 |
+| **accent-glow**    | \#A96CFF40 | \#7650C82E | Box shadow glow của accent             |
+| **accent-2**       | \#61DEF3   | \#209EC1   | Secondary accent — active, live        |
+| **success**        | \#52D495   | \#168A62   | Thành công, connected                  |
+| **warning**        | \#F0AD4E   | \#B36A13   | Cảnh báo, reconnecting                 |
+| **error**          | \#F25F6E   | \#C33F50   | Lỗi, disconnected                      |
 
 ### 2.2. Typography
 
-Font chính: Outfit (Google Fonts) — geometric sans-serif, hiện đại, gợi cảm giác tech-futuristic phù hợp với aesthetic VeilTalk. Font phụ cho body text: Inter — tối ưu legibility cho đoạn văn dài. Hệ thống dùng modular scale với ratio 1.25 (Major Third). Typography không thay đổi theo dark/light mode.
+Font display: Manrope (Google Fonts) — dùng cho logo, hero và heading theo giao diện Kokoro. Font body: Inter — tối ưu legibility cho nội dung ứng dụng. Hệ thống dùng modular scale với ratio 1.25 (Major Third). Typography không thay đổi theo dark/light mode.
 
 | **Token**       | **Dark**           | **Light**  | **Mục đích**                    |
 |-----------------|--------------------|------------|---------------------------------|
 | **Token**       | Size / Line-height | Font       | Mục đích                        |
-| **display-2xl** | 72px / 80px        | Outfit 700 | Hero text — màn hình onboarding |
-| **display-xl**  | 60px / 72px        | Outfit 700 | Tên app lớn, splash screen      |
-| **display-lg**  | 48px / 56px        | Outfit 600 | Page title lớn                  |
-| **display-md**  | 36px / 44px        | Outfit 600 | Section header nổi bật          |
+| **display-2xl** | 72px / 80px        | Manrope 700 | Hero text — màn hình onboarding |
+| **display-xl**  | 60px / 72px        | Manrope 700 | Tên app lớn, splash screen      |
+| **display-lg**  | 48px / 56px        | Manrope 600 | Page title lớn                  |
+| **display-md**  | 36px / 44px        | Manrope 600 | Section header nổi bật          |
 | **text-xl**     | 20px / 30px        | Inter 600  | Header màn hình (h1 trong app)  |
 | **text-lg**     | 18px / 28px        | Inter 500  | Sub-header, card title          |
 | **text-md**     | 16px / 24px        | Inter 400  | Body text chính                 |
@@ -135,15 +137,15 @@ Dựa trên base unit 4px. Tất cả spacing, padding, margin dùng bội số 
 | **Token**         | **Dark**                                       | **Light**             | **Mục đích**                            |
 |-------------------|------------------------------------------------|-----------------------|-----------------------------------------|
 | **radius-sm**     | 6px                                            | 6px                   | Badge, tag, input nhỏ                   |
-| **radius-md**     | 12px                                           | 12px                  | Button, card nhỏ                        |
-| **radius-lg**     | 16px                                           | 16px                  | Card thông thường, modal                |
-| **radius-xl**     | 24px                                           | 24px                  | Bottom sheet, avatar card               |
+| **radius-md**     | 10px                                           | 10px                  | Input, control compact                  |
+| **radius-lg**     | 14px                                           | 14px                  | Button, card thông thường               |
+| **radius-xl**     | 20px                                           | 20px                  | Modal, auth frame, avatar card          |
 | **radius-2xl**    | 32px                                           | 32px                  | Avatar preview container                |
 | **radius-full**   | 9999px                                         | 9999px                | Pill button, badge tròn, avatar         |
-| **shadow-sm**     | 0 1px 3px \#7C3AED20                           | 0 1px 3px \#00000010  | Card nổi nhẹ                            |
-| **shadow-md**     | 0 4px 16px \#7C3AED30                          | 0 4px 12px \#00000015 | Modal, dropdown                         |
-| **shadow-glow**   | 0 0 32px \#7C3AED50, 0 0 8px \#7C3AED30        | 0 0 20px \#7C3AED30   | Avatar container khi active, nút call   |
-| **shadow-avatar** | 0 0 60px \#7C3AED60, inset 0 0 30px \#7C3AED10 | 0 0 40px \#7C3AED40   | Avatar trong video call — hiệu ứng aura |
+| **shadow-sm**     | 0 1px 3px \#0000002E                           | 0 1px 3px \#0000001A  | Card nổi nhẹ                            |
+| **shadow-md**     | 0 16px 40px \#00000047                         | 0 12px 32px \#5132931F | Modal, dropdown                        |
+| **shadow-glow**   | 0 0 28px \#A96CFF52                             | 0 0 24px \#7650C82E   | Avatar container khi active, nút call   |
+| **shadow-avatar** | 0 0 56px \#A96CFF61, inset 0 0 28px \#F06FD714 | 0 0 40px \#7650C83D | Avatar trong video call — hiệu ứng aura |
 
 ### 2.5. Motion & Animation
 
@@ -263,9 +265,29 @@ Thanh điều khiển xuất hiện dưới màn hình video call. Layout: căn 
 | **Background**      | bg-midnight (#0D0B14) — dark mode absolute, không phụ thuộc system theme để đảm bảo nhất quán lần đầu mở app.                                                                |
 | **Center element**  | Logo VeilTalk: icon mặt nạ trừu tượng (mask/visor) kích thước 80×80px, màu violet-400. Chữ VEILTALK bên dưới, font Outfit 700, 32px, gradient text từ violet-400 → cyan-400. |
 | **Animation**       | Logo fade in (0→1, 400ms ease-out), sau đó pulse glow nhẹ mỗi 2 giây. Loading spinner mỏng 2px màu violet dưới logo.                                                         |
-| **Chuyển màn hình** | Nếu có session hợp lệ → SCR-10 (Home). Lần đầu mở → SCR-02 (Onboarding). Session hết hạn → SCR-06 (Login).                                                                   |
+| **Chuyển màn hình** | Nếu có session hợp lệ → SCR-10 (Home). Không có/session hết hạn → Welcome Kokoro; người dùng tự chọn đăng ký hoặc đăng nhập.                                                    |
+
+#### 5.1a. Welcome — Kokoro Landing
+
+> **Cập nhật P4-T06 — Kokoro:** chủ dự án duyệt màn Welcome từ prototype Kokoro làm
+> điểm vào cho người dùng chưa có session. Splash không có session hợp lệ chuyển tới
+> Welcome; từ đây người dùng chọn đăng ký hoặc đăng nhập. Markup, tỷ lệ hình học,
+> breakpoint và vị trí asset của Welcome/Login phải bám prototype đã duyệt; khi tích hợp
+> nghiệp vụ không tự thiết kế lại layout.
+
+| **Thuộc tính** | **Đặc tả** |
+|---|---|
+| **Layout** | Full-screen dark, copy bên trái và nhân vật Kokoro bên phải; mobile đưa copy/CTA xuống dưới nhân vật |
+| **Brand** | Logo Kokoro, tên sản phẩm và tagline ở góc trên trái |
+| **Headline** | “Nhân vật của bạn. Thế giới của bạn.” |
+| **Privacy copy** | Nêu rõ trò chuyện/gọi video qua nhân vật và khuôn mặt thật luôn được bảo vệ |
+| **CTA** | “Tạo tài khoản” → SCR-05; “Đăng nhập” → SCR-06 |
 
 ### 5.2. SCR-02/03/04 — Onboarding (3 slides)
+
+> **Cập nhật P4-T07 — Kokoro:** prototype ban đầu chưa có ba slide này; P4-T07 bổ
+> sung theo yêu cầu đồ án nhưng giữ chung visual language Kokoro. Welcome “Tạo tài khoản”
+> đi tới Onboarding; Bỏ qua hoặc hoàn tất slide cuối đi tới Register.
 
 | **Thuộc tính**             | **Đặc tả**                                                                                                                                                                                              |
 |----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -282,6 +304,7 @@ Thanh điều khiển xuất hiện dưới màn hình video call. Layout: căn 
 |-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Header**            | Logo nhỏ + 'Tạo tài khoản' (text-xl, Outfit). Back button góc trái nếu có thể quay về onboarding.                                                              |
 | **Form fields**       | Email input, Password input (có toggle show/hide), Display name input. Thứ tự này vì email + password là thông tin bảo mật, tên hiển thị là thông tin cá nhân. |
+| **Không có username** | Prototype có bản nháp `@kokoro_name`, nhưng API/database không hỗ trợ field này nên không hiển thị và không tự lưu giả phía client.                     |
 | **Password strength** | 4-segment progress bar dưới password field: đỏ (yếu) → cam → vàng → xanh lá (mạnh). Label realtime: 'Cần chữ hoa và số'.                                       |
 | **CTA**               | Nút Primary 'Đăng ký' full-width. Disabled cho đến khi tất cả field hợp lệ.                                                                                    |
 | **Footer**            | Text-sm: 'Bằng cách đăng ký, bạn đồng ý với Điều khoản sử dụng và Chính sách bảo mật' — link underline violet.                                                 |
@@ -292,7 +315,7 @@ Thanh điều khiển xuất hiện dưới màn hình video call. Layout: căn 
 
 | **Thuộc tính** | **Đặc tả**                                                                                                                            |
 |----------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| **Header**     | Logo + 'Chào mừng trở lại' subtitle dạng greeting thay vì 'Đăng nhập' khô khan.                                                       |
+| **Header**     | Logo Kokoro + 'Chào mừng trở lại' dạng greeting thay vì 'Đăng nhập' khô khan.                                                        |
 | **Form**       | Email, Password. Nút 'Quên mật khẩu?' căn phải phía trên nút submit (ngoài phạm vi MVP — disabled với tooltip 'Sắp ra mắt').          |
 | **Error**      | Sai email/mật khẩu: error banner trên cùng form (không inline để tránh tiết lộ field nào sai — nhất quán với FR-02 anti-enumeration). |
 | **Footer**     | Link 'Chưa có tài khoản? Đăng ký ngay'                                                                                                |
@@ -300,10 +323,14 @@ Thanh điều khiển xuất hiện dưới màn hình video call. Layout: căn 
 
 ### 5.5. SCR-07 — Avatar Setup: Chọn Model
 
+> **Cập nhật P4-T08 — Kokoro:** layout đã duyệt theo prototype là 3 cột trên desktop,
+> 2 cột ở tablet/mobile. Dữ liệu model lấy từ API; trong giai đoạn CDN còn là placeholder,
+> frontend ánh xạ ảnh local theo model ID/index để card không bị vỡ.
+
 | **Thuộc tính**     | **Đặc tả**                                                                                                                                                                                                           |
 |--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Header**         | Progress indicator: 3 bước (Chọn → Tùy chỉnh → Xem trước). Bước 1 active.                                                                                                                                            |
-| **Layout**         | Grid 2 cột: các avatar model dựng sẵn. Mỗi card: avatar thumbnail 3D (animated idle), tên model bên dưới. Dùng animated ở đây vì số card ít (≤ 6), animation giúp user đánh giá tính cách từng model trước khi chọn. |
+| **Layout**         | Grid 3 cột desktop, 2 cột tablet/mobile. Mỗi card: thumbnail tĩnh + tên model; không animate đồng thời nhiều card để tránh tải không cần thiết.                                                   |
 | **Selected state** | Card selected: border 2px accent-primary + checkmark góc trên phải + shadow-glow nhạt. Không selected: border-subtle.                                                                                                |
 | **Card size**      | Hình vuông, khoảng 160×180px trên mobile. Corner radius-xl.                                                                                                                                                          |
 | **Model variety**  | Ít nhất 6 model dựng sẵn: phong cách anime, chibi, realistic, fantasy, sci-fi, minimal — đa dạng để ai cũng tìm được phong cách phù hợp.                                                                             |
