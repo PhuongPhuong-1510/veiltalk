@@ -1,0 +1,19 @@
+.avatar-renderer-dev { min-height: 100vh; padding: 20px; color: #f5f3ff; background: #0d0b14; font: 14px/1.45 Inter, sans-serif; }
+.avatar-renderer-dev header, .dev-controls, .dev-panels { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.avatar-renderer-dev header { justify-content: space-between; } .avatar-renderer-dev h1 { margin: 4px 0; }
+.avatar-renderer-dev button { padding: 8px 12px; border: 1px solid #6956d8; border-radius: 8px; color: white; background: #342a69; }
+.dev-controls { margin: 14px 0; padding: 12px; border-radius: 10px; background: #171326; }
+.dev-stage { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 13fr); height: min(56vh, 580px); gap: 12px; }
+.dev-stage canvas, .dev-stage video { width: 100%; height: 100%; min-height: 0; border-radius: 12px; object-fit: cover; background: #171326; }
+.dev-camera-preview { position: relative; min-height: 0; }
+.dev-camera-preview p { position: absolute; inset: 0; display: grid; place-content: center; margin: 0; padding: 16px; border: 1px dashed #6956d8; border-radius: 12px; text-align: center; color: #ddd6fe; background: #171326; }
+.dev-camera-preview small { color: #a8a1bd; }
+.dev-stage video { transform: scaleX(-1); }
+.dev-panels { align-items: stretch; margin-top: 12px; } .dev-panels article { flex: 1 1 280px; padding: 12px; border-radius: 10px; background: #171326; }
+.dev-panels pre { max-height: 300px; overflow: auto; white-space: pre-wrap; } .dev-error { padding: 10px; color: #fecaca; background: #531d2d; }
+.dev-diagnostic { margin-top: 12px; padding: 12px; overflow: auto; border-radius: 10px; background: #171326; }
+.dev-diagnostic table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dev-diagnostic th, .dev-diagnostic td { padding: 7px; border: 1px solid #342a69; vertical-align: top; text-align: left; }
+.dev-diagnostic code { white-space: pre-wrap; word-break: break-all; }
+.dev-controls select, .dev-controls input[type="text"], .dev-controls label > input:not([type]) { margin-left: 6px; padding: 5px; color: white; border: 1px solid #6956d8; background: #171326; }
+@media (max-width: 900px) { .dev-stage { grid-template-columns: 1fr; height: auto; } .dev-stage canvas { height: 48vh; } .dev-stage video { height: 280px; } }

@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 2 — P2-T01 đến P2-T17 đã hoàn thành.**
+> **Trạng thái: đang thực hiện Phase 4 — P4-T01 đến P4-T09 đã hoàn thành; P4-T10 đã rollback production về cuối Phase 2 sau regression Phase 3A.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -508,11 +508,25 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/package.json` | Vite React/TypeScript project và scripts `dev`, `build`, `lint`, `preview` |
 | `frontend/package-lock.json` | Khóa phiên bản dependency |
 | `frontend/src/main.tsx` | Entry-point React |
-| `frontend/src/App.tsx` | Router và màn hình P4-T06: Splash, Kokoro Welcome, Login; placeholder có nhãn task cho Register/Home chưa triển khai |
+| `frontend/src/App.tsx` | Router Phase 4: Splash/Welcome/Login/Register/Onboarding/Avatar Setup; nối auth lifecycle và Messaging WS; lazy-load route DEV `/dev/tracking` và `/dev/avatar-renderer` chỉ khi `import.meta.env.DEV` |
 | `frontend/src/App.css` | Layout responsive và interaction states cho Splash/Welcome/Login; hình học và breakpoint bám nguyên prototype Kokoro đã duyệt |
 | `frontend/src/lib/tracking/` | P4-T09: camera lifecycle, MediaPipe runtime dùng chung fileset, raw tracking contract local-only, mapper, cadence, metrics và test |
 | `frontend/src/components/dev/TrackingDevHarness.tsx` | Harness webcam thật tại `/dev/tracking`; overlay landmark local-only, chọn 720p/480p, CPU/GPU, từng task/cả ba, state ratio/loss counter; lazy-load chỉ DEV, không capture/upload |
 | `frontend/public/mediapipe/` | WASM 0.10.35 và ba model Face/Hand/Pose self-host cùng origin; provenance/checksum ở Deployment Guide mục 5.5 |
+| `frontend/src/lib/avatar-motion/avatarPoseTypes.ts` | P4-T10: contract `AvatarPosePacketV1`; `jointRotations` là quaternion delta normalized-humanoid parent-local, rest-relative, không chứa raw landmark |
+| `frontend/src/lib/avatar-motion/normalizedRigProfile.ts` | P4-T10 Phase 2: profile rig plain-data immutable, giữ rest local/world, parent rotation, child direction và hierarchy theo model generation |
+| `frontend/src/lib/avatar-motion/jointSolver.ts` | P4-T10 Phase 2: solver parent-local/rest-relative theo thứ tự upper arm → lower arm mỗi bên; child dùng target world của parent trong cùng pose, không đọc animated renderer state |
+| `frontend/src/lib/avatar-motion/avatarMotionProcessor.ts` | P4-T10 Phase 2: expression/direction filter → stateless parent-local solve → constraint → packet; chỉ solve khi profile và fresh tracked pose hợp lệ |
+| `frontend/src/lib/avatar-motion/coordinateAdapter.ts` | P4-T10: production conversion giữ nguyên `(x,y,z) → (x,-y,-z)`, normalize vector/quaternion và chống zero/NaN |
+| `frontend/src/lib/avatar-motion/oneEuroFilter.ts` / `jointConstraints.ts` / `trackingLoss.ts` | Lọc direction và safety radial clamp; semantic anatomical calibration để Phase 3C |
+| `frontend/src/lib/avatar-renderer/modelLoader.ts` | P4-T10 Phase 2: load GLTF/VRM, `rotateVRM0`, lấy normalized humanoid nodes, capture rig profile theo từng model generation, chống stale load và dispose tài nguyên |
+| `frontend/src/lib/avatar-renderer/avatarRenderer.ts` | P4-T10 Phase 2: tái tạo absolute local target bằng `restLocal × deltaLocal`, slerp absolute local nếu bật smoothing, gán normalized bone quaternion; giữ nguyên position/scale |
+| `frontend/src/lib/avatar-renderer/animationFrameLoop.ts` / `rendererMetrics.ts` / `renderSmoothing.ts` | P4-T10: một rAF loop có duplicate guard, metrics FPS/p95/resource và smoothing frame-rate-independent |
+| `frontend/src/lib/avatar-renderer/avatarDiagnostics.ts` | P4-T10 Phase 1/2 DEV-only: rest-basis, angular error, helpers, nine frozen presets và phép đo world direction từ rig profile |
+| `frontend/src/components/avatar/AvatarCanvas.tsx` | React adapter sở hữu canvas, `ResizeObserver` và renderer lifecycle; không chứa IK math |
+| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | Harness local-only tại `/dev/avatar-renderer`; freeze/replay, pose preset, normalized rest-basis/angular-error table, coordinate variants, axes/vector helpers và toggle filter/constraint/smoothing; route bị loại khỏi production build |
+| `docs/P4_T10_PHASE1_DIAGNOSTICS_REPORT.md` | Báo cáo nghiệm thu forensic Phase 1: model/rest basis, bằng chứng H1–H3, calibration webcam H6, deterministic replay, privacy và đề xuất Phase 2 chưa triển khai |
+| `docs/P4_T10_PHASE2_ACCEPTANCE_REPORT.md` | Báo cáo review/nghiệm thu Phase 2: H1 fixed, H2 còn mở, deterministic real-model evidence, automated/browser/privacy/lifecycle evidence và điều kiện chuyển phase |
 | `frontend/src/index.css` | Kokoro design system: Tailwind v4 theme, semantic CSS variables light/dark, typography, radius, shadow và reduced-motion baseline |
 | `frontend/tsconfig.app.json` | Cấu hình TypeScript và alias `@/*` → `src/*` |
 | `frontend/vite.config.ts` | Vite React plugin và alias `@` → `src` |
@@ -520,6 +534,21 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 Dependencies nền tảng theo P0-T05: `three`, `@mediapipe/tasks-vision`, `zustand`,
 `react-router-dom`, `tailwindcss`. Các thư viện mới chỉ được cài đặt; tích hợp tracking,
 rendering, state, routing và design system thuộc các task Phase 4.
+
+### Trạng thái triển khai Phase 4
+
+| Task | Trạng thái | Code chính |
+|---|---|---|
+| P4-T01 | Hoàn thành | `frontend/src/lib/api/` — API client, endpoint modules, refresh dedupe và error mapping |
+| P4-T02 | Hoàn thành | `frontend/src/lib/store/authStore.ts` — auth/session state và token lifecycle |
+| P4-T03 | Hoàn thành | `frontend/src/lib/ws/messagingWS.ts` — Messaging WebSocket singleton, reconnect và handler registry |
+| P4-T04 | Hoàn thành | `frontend/src/index.css`, `vite.config.ts` — Tailwind/design tokens/icon integration |
+| P4-T05 | Hoàn thành | `frontend/src/lib/theme/` — light/dark/system provider |
+| P4-T06 | Hoàn thành | `frontend/src/App.tsx`, `App.css` — Splash/Welcome/Login |
+| P4-T07 | Hoàn thành | `frontend/src/App.tsx`, auth helpers — Onboarding/Register |
+| P4-T08 | Hoàn thành | `frontend/src/lib/avatar/avatarSetup.ts`, Avatar Setup UI |
+| P4-T09 | Hoàn thành | `frontend/src/lib/tracking/`, `TrackingDevHarness.tsx` |
+| P4-T10 | IN PROGRESS | Production đang ở cuối Phase 2; Phase 3A thử nghiệm đã rollback và lưu trên nhánh backup, chưa nghiệm thu |
 
 ### Design system (P4-T04)
 
@@ -729,7 +758,45 @@ side-effect refresh.
 Toàn bộ 13 test `messagingWS.ts` + 30 test Frontend và `npx tsc --noEmit` PASS.
 
 ### Vòng lặp tracking
+
+P4-T09 phát `RawTrackingFrameV1` theo camera cadence. P4-T10 không xếp FIFO: motion
+processor tạo target packet mới nhất, còn renderer dùng đúng một `requestAnimationFrame`
+loop độc lập và tiếp tục vẽ khi chưa có target mới. `not-sampled` giữ sample còn fresh,
+khác với `lost`; One Euro Filter không update bằng cached sample.
+
 ### Bộ dựng hình nhân vật
+
+P4-T10 dùng `GLTFLoader + VRMLoaderPlugin`; VRM dùng humanoid/expression API chuẩn, còn
+GLB/glTF thường chỉ nhận mapping từ `AvatarModelRigProfile` đã kiểm chứng, không suy đoán
+node name. Model local `/models/avatars/reference-avatar.vrm` đã được xác nhận là VRM 0.x,
+có humanoid rig, nhưng metadata ghi `redistribution=disallow`, author/title trống và không
+có sidecar license. `.gitignore` chặn riêng binary này; model chưa phải asset production và
+không được commit/redistribute.
+
+P4-T10 được chia thành các phase con để không trộn forensic diagnosis với sửa production:
+
+1. **Phase 1 — Forensic diagnostics: HOÀN TẤT.** H1 world-like quaternion gán vào local và
+   H2 one-vector twist ambiguity được xác nhận; H3 rest-axis và H6 coordinate conversion bị
+   bác bỏ. Báo cáo: `docs/P4_T10_PHASE1_DIAGNOSTICS_REPORT.md`.
+2. **Phase 2 — Parent-local, rest-relative retargeting: HOÀN TẤT CÓ ĐIỀU KIỆN.** Normalized
+   rig profile được capture theo model generation. Solver tính `targetWorld`, chuyển bằng
+   `inverse(parentTargetWorld)`, phát `deltaLocal`; renderer áp `restLocal × deltaLocal`.
+   Sáu preset bắt buộc cùng `bothForward`, `twistReferenceA/B` đạt sai số `0.00°` trên model
+   tham chiếu với filter/constraint/smoothing tắt. Full suite 106/106, targeted 30/30,
+   lint và build PASS. Báo cáo: `docs/P4_T10_PHASE2_ACCEPTANCE_REPORT.md`.
+3. **Phase 3A — ROLLED BACK.** Bản thử nghiệm arm-frame/partial tracking/inferred elbow không đạt
+   manual stability và đã được loại khỏi production worktree. Snapshot đầy đủ được lưu trên
+   nhánh `backup/P4-T10-phase3a-regression-20260727`; không được coi là acceptance.
+
+4. **Các phase tiếp theo: CHƯA TRIỂN KHAI.** Palm orientation/recovery, twist distribution,
+   semantic anatomical constraints, calibration và full lifecycle/performance acceptance
+   phải được duyệt riêng; chưa được coi là hoàn thành.
+
+Browser real-model evidence đã có cho deterministic presets và webcam ổn định khi nhìn đủ
+vai–khuỷu–cổ tay ở Phase 2. Phase 3A manual gate đã FAIL và code thử nghiệm đã rollback;
+hand/palm loss vẫn chưa xử lý. Reload 10 lần và
+background/resume chưa có runtime evidence đủ để tuyên bố không leak. Vì vậy P4-T10 vẫn
+`IN PROGRESS`.
 ### Lớp WebRTC
 ### Các màn hình
 

@@ -279,6 +279,29 @@ cập nhật bảng này trước khi commit.
 Build/preview verification phải kiểm tra URL `/mediapipe/wasm/*` và
 `/mediapipe/models/*` trả file thật, không trả fallback `index.html`.
 
+### 5.6. Model tham chiếu P4-T10
+
+Dev harness dùng URL `/models/avatars/reference-avatar.vrm`, tương ứng file local
+`frontend/public/models/avatars/reference-avatar.vrm`. File local kiểm tra ngày 27/07/2026
+là VRM 0.x, 18,900,420 byte, SHA-256
+`28E2D34C84856F09ABD92672B5D0B83614CB5794A3421E5674E6E2DAAC4DD4A1`, có 289 node,
+3 mesh, 19 material và 33 texture. Metadata nhúng có URL license ghi rõ
+`redistribution=disallow`, yêu cầu credit nhưng author/title trống; không có
+`reference-avatar.license.txt` hoặc metadata sidecar. Vì vậy `.gitignore` chặn binary này,
+không được commit/redistribute và chưa phải model production. Developer phải tự cung cấp
+local đúng đường dẫn hoặc thay bằng model có license sạch. Loader dùng
+`@pixiv/three-vrm@3.5.5` (peer `three >=0.137`) với `three@0.185.1`.
+
+Model được load và normalized ở runtime; Phase 2 capture rest basis riêng theo mỗi model
+generation. Khi đổi model, motion processor phải xóa profile cũ trước khi cài profile mới;
+không được dùng rest basis của model trước. Model production thay thế phải có humanoid rig
+đủ head/neck/chest/shoulder/upperArm/lowerArm/hand hai bên, giấy phép redistribution rõ ràng
+và phải chạy lại nine deterministic presets cùng lifecycle reload acceptance.
+
+Production build không chứa route `/dev/avatar-renderer`, frozen preset hoặc diagnostic
+strings vì route được guard bằng `import.meta.env.DEV`. Việc cung cấp model local chỉ phục vụ
+development; không được biến file bị cấm redistribution thành build asset phát hành.
+
 ## 6. Health Check & Observability
 
 ### 6.1. Endpoint kiểm tra sức khỏe
