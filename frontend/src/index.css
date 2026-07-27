@@ -44,11 +44,7 @@
   --radius-lg: 0.875rem;
   --radius-xl: 1.25rem;
   --radius-2xl: 2rem;
-
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 18%);
-  --shadow-md: 0 16px 40px rgb(0 0 0 / 28%);
-  --shadow-glow: 0 0 28px rgb(169 108 255 / 32%);
-  --shadow-avatar: 0 0 56px rgb(169 108 255 / 38%), inset 0 0 28px rgb(240 111 215 / 8%);
+  --radius-full: 9999px;
 }
 
 @theme inline {
@@ -68,6 +64,13 @@
   --color-success: var(--status-success);
   --color-warning: var(--status-warning);
   --color-error: var(--status-error);
+
+  /* Shadows tra theo :root/.dark bên dưới — không cố định trong @theme
+     vì @theme đăng ký giá trị compile-time, không phản ứng khi đổi .dark. */
+  --shadow-sm: var(--shadow-token-sm);
+  --shadow-md: var(--shadow-token-md);
+  --shadow-glow: var(--shadow-token-glow);
+  --shadow-avatar: var(--shadow-token-avatar);
 }
 
 @utility type-display-2xl {
@@ -159,6 +162,11 @@
   --status-success: #168a62;
   --status-warning: #b36a13;
   --status-error: #c33f50;
+
+  --shadow-token-sm: 0 1px 3px rgb(0 0 0 / 10%);
+  --shadow-token-md: 0 12px 32px rgb(81 50 147 / 12%);
+  --shadow-token-glow: 0 0 24px rgb(118 80 200 / 18%);
+  --shadow-token-avatar: 0 0 40px rgb(118 80 200 / 24%);
 }
 
 .dark {
@@ -179,6 +187,11 @@
   --status-success: #52d495;
   --status-warning: #f0ad4e;
   --status-error: #f25f6e;
+
+  --shadow-token-sm: 0 1px 3px rgb(0 0 0 / 18%);
+  --shadow-token-md: 0 16px 40px rgb(0 0 0 / 28%);
+  --shadow-token-glow: 0 0 28px rgb(169 108 255 / 32%);
+  --shadow-token-avatar: 0 0 56px rgb(169 108 255 / 38%), inset 0 0 28px rgb(240 111 215 / 8%);
 }
 
 * {

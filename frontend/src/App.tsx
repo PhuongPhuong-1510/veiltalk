@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   ChevronLeft,
@@ -36,6 +36,9 @@ import {
 import "./App.css";
 
 const SPLASH_MIN_DURATION_MS = 2_000;
+const TrackingDevHarness = import.meta.env.DEV
+  ? lazy(() => import("./components/dev/TrackingDevHarness"))
+  : null;
 
 function SplashScreen() {
   const navigate = useNavigate();
@@ -526,6 +529,9 @@ function AppRoutes() {
       <Route path="/avatar/setup" element={<AvatarSelectScreen />} />
       <Route path="/avatar/customize" element={<TaskPlaceholder title="Tùy chỉnh avatar" task="P4-T11" />} />
       <Route path="/home" element={<TaskPlaceholder title="Kokoro của bạn" task="P4-T12" />} />
+      {TrackingDevHarness && (
+        <Route path="/dev/tracking" element={<Suspense fallback={<div>Đang tải tracking harness…</div>}><TrackingDevHarness /></Suspense>} />
+      )}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

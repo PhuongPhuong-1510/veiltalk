@@ -510,6 +510,9 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/src/main.tsx` | Entry-point React |
 | `frontend/src/App.tsx` | Router và màn hình P4-T06: Splash, Kokoro Welcome, Login; placeholder có nhãn task cho Register/Home chưa triển khai |
 | `frontend/src/App.css` | Layout responsive và interaction states cho Splash/Welcome/Login; hình học và breakpoint bám nguyên prototype Kokoro đã duyệt |
+| `frontend/src/lib/tracking/` | P4-T09: camera lifecycle, MediaPipe runtime dùng chung fileset, raw tracking contract local-only, mapper, cadence, metrics và test |
+| `frontend/src/components/dev/TrackingDevHarness.tsx` | Harness webcam thật tại `/dev/tracking`; overlay landmark local-only, chọn 720p/480p, CPU/GPU, từng task/cả ba, state ratio/loss counter; lazy-load chỉ DEV, không capture/upload |
+| `frontend/public/mediapipe/` | WASM 0.10.35 và ba model Face/Hand/Pose self-host cùng origin; provenance/checksum ở Deployment Guide mục 5.5 |
 | `frontend/src/index.css` | Kokoro design system: Tailwind v4 theme, semantic CSS variables light/dark, typography, radius, shadow và reduced-motion baseline |
 | `frontend/tsconfig.app.json` | Cấu hình TypeScript và alias `@/*` → `src/*` |
 | `frontend/vite.config.ts` | Vite React plugin và alias `@` → `src` |
@@ -526,6 +529,19 @@ token phía code: primitive palette Kokoro, semantic utilities (`bg-bg-base`,
 `type-display-*`/`type-text-*`, radius và shadow. `:root` chứa light theme; `.dark` override
 semantic variables cho dark theme. P4-T05 chịu trách nhiệm chọn theme và gắn class `.dark`.
 Component phải dùng semantic token; primitive color chỉ dùng khi khai báo design system.
+
+Tên `accent-secondary` trong code tương ứng `accent-2` trong `docs/05_UI_UX.md` mục 2.1 —
+cùng một token, giữ tên `accent-secondary` vì đã dùng nhất quán trong `index.css`; tài liệu
+đã ghi chú alias, không tạo token thứ hai.
+
+Radius (`--radius-sm` → `--radius-2xl`, cộng `--radius-full: 9999px`) khai báo trong `@theme`
+vì là thuộc tính hình học, không đổi theo theme (đúng `docs/05_UI_UX.md` mục 2.4). Bốn token
+shadow (`--shadow-sm`, `--shadow-md`, `--shadow-glow`, `--shadow-avatar`) khai báo trong
+`@theme inline`, trỏ tới biến trung gian `--shadow-token-*` định nghĩa riêng ở `:root` (light)
+và `.dark` — giống cách các semantic color khác đã làm — để giá trị đổi thật theo theme thay vì
+cố định một bộ dùng chung cho cả hai như trước P4-T04 follow-up. Giá trị khớp đúng bảng 2.4;
+build production đã xác nhận `--shadow-token-*` sinh ra hai giá trị khác nhau tại `:root` và
+`.dark` trong CSS output.
 
 Font display là Manrope, font body là Inter. `lucide-react` được duyệt làm bộ icon cho các
 màn hình Phase 4. P4-T04 được xác minh bằng `npm run build`, `npm run lint` và `npm test`

@@ -91,7 +91,7 @@ Semantic Tokens — ánh xạ dark/light
 | **accent-primary** | \#A96CFF   | \#7650C8   | Nút chính, link, focus ring            |
 | **accent-hover**   | \#B980FF   | \#6541B6   | Hover state của accent                 |
 | **accent-glow**    | \#A96CFF40 | \#7650C82E | Box shadow glow của accent             |
-| **accent-2**       | \#61DEF3   | \#209EC1   | Secondary accent — active, live        |
+| **accent-2** (code: `accent-secondary`) | \#61DEF3   | \#209EC1   | Secondary accent — active, live        |
 | **success**        | \#52D495   | \#168A62   | Thành công, connected                  |
 | **warning**        | \#F0AD4E   | \#B36A13   | Cảnh báo, reconnecting                 |
 | **error**          | \#F25F6E   | \#C33F50   | Lỗi, disconnected                      |
