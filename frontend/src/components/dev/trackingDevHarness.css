@@ -1,0 +1,23 @@
+.tracking-dev { min-height: 100vh; padding: 24px; color: #e8edf7; background: #090d17; }
+.tracking-dev header, .tracking-dev-controls, .tracking-dev-grid, .tracking-dev section { max-width: 1200px; margin: 0 auto 20px; }
+.tracking-dev header { display: flex; justify-content: space-between; gap: 24px; align-items: end; }
+.tracking-dev header strong { color: #64d8ff; }
+.tracking-dev h1, .tracking-dev h2 { margin: 6px 0 12px; }
+.tracking-dev-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 16px; border: 1px solid #27324a; border-radius: 12px; background: #111827; }
+.tracking-dev-controls label { display: grid; gap: 4px; }
+.tracking-dev button, .tracking-dev select { border: 1px solid #405175; border-radius: 8px; padding: 8px 12px; background: #182239; color: inherit; }
+.tracking-dev button:disabled { opacity: .45; cursor: not-allowed; }
+.tracking-dev-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr); gap: 20px; }
+.tracking-dev-grid > div, .tracking-dev > section:not(.tracking-dev-controls):not(.tracking-dev-grid) { padding: 16px; border: 1px solid #27324a; border-radius: 12px; background: #111827; }
+.tracking-preview-stage { position: relative; width: 100%; }
+.tracking-preview-stage.is-hidden { display: none; }
+.tracking-dev video { display: block; width: 100%; max-height: 60vh; border-radius: 10px; background: #030712; transform: scaleX(-1); }
+.tracking-dev canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.tracking-dev canvas.is-hidden { display: none; }
+.tracking-dev dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tracking-dev dt, .tracking-dev dd { margin: 0; }
+.tracking-dev dd { text-align: right; font-weight: 700; }
+.tracking-dev table { width: 100%; border-collapse: collapse; }
+.tracking-dev th, .tracking-dev td { padding: 8px; border-bottom: 1px solid #27324a; text-align: left; }
+.tracking-dev-error { max-width: 1200px; margin: 0 auto 20px; padding: 12px; border: 1px solid #ff6b81; border-radius: 8px; color: #ffb5c0; }
+@media (max-width: 760px) { .tracking-dev header, .tracking-dev-grid { display: grid; grid-template-columns: 1fr; } .tracking-dev { padding: 14px; } .tracking-dev table { font-size: 12px; } }

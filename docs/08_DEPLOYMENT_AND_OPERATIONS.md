@@ -248,6 +248,37 @@ Sau khi cấu hình/restart MinIO, xác minh request có header `Authorization: 
 | **docker compose restart backend**                                 | Restart chỉ Backend (sau khi update image) |
 | **docker compose pull && docker compose up -d**                    | Cập nhật lên image mới nhất                |
 
+### 5.5. MediaPipe assets tự host
+
+P4-T09 không phụ thuộc CDN khi chạy. Vite phục vụ WASM và model cùng origin dưới
+`/mediapipe/`; một `FilesetResolver` dùng chung cho Face, Hand và Pose Landmarker.
+
+Nguồn được đối chiếu ngày 27/07/2026:
+
+| Asset | Nguồn/version | Byte | SHA-256 |
+|---|---|---:|---|
+| `models/face_landmarker.task` | `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task` — float16 revision 1 | 3,758,596 | `64184E229B263107BC2B804C6625DB1341FF2BB731874B0BCC2FE6544E0BC9FF` |
+| `models/hand_landmarker.task` | `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task` — float16 revision 1 | 7,819,105 | `FBC2A30080C3C557093B5DDFC334698132EB341044CCEE322CCF8BCF3607CDE1` |
+| `models/pose_landmarker_lite.task` | `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task` — lite float16 revision 1 | 5,777,746 | `59929E1D1EE95287735DDD833B19CF4AC46D29BC7AFDDBBF6753C459690D574A` |
+| `wasm/vision_wasm_internal.js` | npm `@mediapipe/tasks-vision@0.10.35` | 322,044 | `E7FD9858E8E8F221D9B96EDDC11F8E077F263E0B7BBD79D3CBE882B134274F8C` |
+| `wasm/vision_wasm_internal.wasm` | npm `@mediapipe/tasks-vision@0.10.35` | 11,153,617 | `6A5C64584C2AB61C763B6E204AFBDBC7CE1CAF7F5216187322BCA8DF94F646BC` |
+| `wasm/vision_wasm_nosimd_internal.js` | npm `@mediapipe/tasks-vision@0.10.35` | 321,847 | `438D1FE8FF7F4D946025BC211C291543C037D8A3785ED4EEE60F1F521B236296` |
+| `wasm/vision_wasm_nosimd_internal.wasm` | npm `@mediapipe/tasks-vision@0.10.35` | 10,481,398 | `8A3092D34C79D3F57E6BA8592105E8A90F6B07C27891FFECD14CCA428BFD3E31` |
+
+Tổng dung lượng: **39,634,353 byte** (~37.80 MiB). WASM được copy nguyên trạng từ
+package đã khóa trong `package-lock.json`; model được tải từ URL chính thức MediaPipe
+công bố trong package documentation.
+
+MediaPipe và npm package dùng **Apache License 2.0**. Khi redistribution phải giữ
+copyright/license và NOTICE nếu upstream cung cấp, ghi rõ thay đổi nếu sửa artifact,
+không dùng nhãn hiệu để ngụ ý Google chứng thực, và chấp nhận điều khoản không bảo hành.
+VeilTalk lưu nguyên trạng các artifact, không sửa binary. Khi nâng version phải tải lại
+từ nguồn chính thức, tính lại byte/SHA-256, đối chiếu license/NOTICE của version mới và
+cập nhật bảng này trước khi commit.
+
+Build/preview verification phải kiểm tra URL `/mediapipe/wasm/*` và
+`/mediapipe/models/*` trả file thật, không trả fallback `index.html`.
+
 ## 6. Health Check & Observability
 
 ### 6.1. Endpoint kiểm tra sức khỏe
