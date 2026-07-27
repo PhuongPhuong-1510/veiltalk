@@ -28,7 +28,7 @@ function persistRefreshToken(token: string | null): void {
   }
 }
 
-type AuthStatus = "idle" | "authenticated" | "unauthenticated";
+export type AuthStatus = "idle" | "authenticated" | "unauthenticated";
 
 interface AuthState {
   user: User | null;

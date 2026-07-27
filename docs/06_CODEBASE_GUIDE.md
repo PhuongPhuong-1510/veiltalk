@@ -508,13 +508,91 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/package.json` | Vite React/TypeScript project và scripts `dev`, `build`, `lint`, `preview` |
 | `frontend/package-lock.json` | Khóa phiên bản dependency |
 | `frontend/src/main.tsx` | Entry-point React |
-| `frontend/src/App.tsx` | Component mẫu của Vite; chưa có màn hình VeilTalk |
+| `frontend/src/App.tsx` | Router và màn hình P4-T06: Splash, Kokoro Welcome, Login; placeholder có nhãn task cho Register/Home chưa triển khai |
+| `frontend/src/App.css` | Layout responsive và interaction states cho Splash/Welcome/Login; hình học và breakpoint bám nguyên prototype Kokoro đã duyệt |
+| `frontend/src/index.css` | Kokoro design system: Tailwind v4 theme, semantic CSS variables light/dark, typography, radius, shadow và reduced-motion baseline |
 | `frontend/tsconfig.app.json` | Cấu hình TypeScript và alias `@/*` → `src/*` |
 | `frontend/vite.config.ts` | Vite React plugin và alias `@` → `src` |
 
 Dependencies nền tảng theo P0-T05: `three`, `@mediapipe/tasks-vision`, `zustand`,
 `react-router-dom`, `tailwindcss`. Các thư viện mới chỉ được cài đặt; tích hợp tracking,
 rendering, state, routing và design system thuộc các task Phase 4.
+
+### Design system (P4-T04)
+
+Tailwind v4 được nối vào Vite qua `@tailwindcss/vite`. `frontend/src/index.css` là nguồn
+token phía code: primitive palette Kokoro, semantic utilities (`bg-bg-base`,
+`text-text-primary`, `border-border-subtle`, `text-accent-primary`, ...), type utilities
+`type-display-*`/`type-text-*`, radius và shadow. `:root` chứa light theme; `.dark` override
+semantic variables cho dark theme. P4-T05 chịu trách nhiệm chọn theme và gắn class `.dark`.
+Component phải dùng semantic token; primitive color chỉ dùng khi khai báo design system.
+
+Font display là Manrope, font body là Inter. `lucide-react` được duyệt làm bộ icon cho các
+màn hình Phase 4. P4-T04 được xác minh bằng `npm run build`, `npm run lint` và `npm test`
+(34/34 test PASS).
+
+### Theme provider (P4-T05)
+
+| Đường dẫn | Nội dung |
+|---|---|
+| `frontend/src/lib/theme/ThemeProvider.tsx` | Provider đồng bộ auth/settings, theo dõi system theme, áp `.dark` lên `<html>` và lưu thay đổi qua API |
+| `frontend/src/lib/theme/ThemeContext.ts` | Context cùng hook `useTheme()`; trả `theme`, `resolvedTheme`, `setTheme()` |
+| `frontend/src/lib/theme/theme.ts` | Type và hàm thuần resolve/apply theme, tách khỏi React để test không cần DOM |
+| `frontend/src/lib/theme/ThemeProvider.test.ts` | Unit test explicit/system resolution và thao tác class/color-scheme |
+
+`ThemeProvider` mặc định dùng `system`, lắng nghe thay đổi từ
+`matchMedia('(prefers-color-scheme: dark)')` và không lưu preference trong browser storage.
+Khi auth store chuyển sang `authenticated`, provider gọi `GET /users/me/settings`; `setTheme()`
+áp dụng lạc quan rồi gọi `PUT /users/me/settings`, rollback nếu API lỗi. Logout đưa theme về
+`system`. `frontend/src/main.tsx` bọc toàn ứng dụng bằng provider. P4-T05 được xác minh bằng
+build, lint và 38/38 test Frontend PASS.
+
+### Splash, Welcome và Login (P4-T06)
+
+`frontend/src/App.tsx` dùng React Router với `/` (Splash), `/welcome`, `/login`,
+`/register` và `/home`. Hai route cuối là placeholder Kokoro có ghi rõ task P4-T07/P4-T12,
+không còn nội dung starter Vite. Splash gọi `authStore.restoreSession()`, giữ animation tối
+thiểu 2 giây theo UI/UX rồi điều hướng session hợp lệ tới Home, còn session thiếu/hết hạn tới
+Welcome. Welcome là bổ sung được chủ dự án duyệt từ prototype Kokoro.
+
+Không tự “chuẩn hóa lại” tỷ lệ màn hình khi chuyển prototype: các giá trị width/height,
+grid ratio, padding, transform, object-position và breakpoint của Welcome/Login trong
+`App.css` được giữ theo file giao diện chủ dự án cung cấp. Chỉ auth state, router, API,
+error/loading và accessibility được nối vào markup.
+
+Login gọi `authStore.login()`, hỗ trợ password manager autocomplete, show/hide password,
+loading/disabled state và luôn dùng một error banner chung cho mọi lỗi để chống dò tài khoản.
+Logic route/error thuần nằm tại `frontend/src/lib/auth/authFlow.ts` và được unit test không cần
+DOM. P4-T06 được xác minh bằng build, lint, HTTP smoke `/` + `/welcome` và 41/41 test PASS.
+
+### Onboarding và Register (P4-T07)
+
+`/onboarding` gồm ba slide theo UI/UX: CTA tiếp theo, Bỏ qua, dots navigation và swipe ngang
+trên touch device. Visual dùng asset Kokoro hiện có; slide privacy nhấn mạnh ảnh khuôn mặt
+không rời thiết bị. Welcome và link đăng ký từ Login đều đi qua Onboarding; slide cuối hoặc
+Bỏ qua chuyển tới `/register`.
+
+Register tái dùng auth frame Kokoro, chỉ gửi ba field API hỗ trợ: `email`, `password`,
+`display_name`. Không có username phía client vì backend/database không có field tương ứng.
+Form dùng `authStore.register()` → `POST /auth/register`; thành công chuyển tới
+`/avatar/setup` placeholder P4-T08. Password strength có 4 segment; submit chỉ bật khi email,
+mật khẩu (>= 8, chữ hoa, số) và display name hợp lệ. HTTP 409 hiển thị lỗi inline dưới email;
+lỗi khác dùng banner form. Helper validation/error mapping nằm tại
+`frontend/src/lib/auth/authFlow.ts`. P4-T07 được xác minh bằng build, lint và 44/44 test PASS.
+
+### Chọn model avatar (P4-T08)
+
+`/avatar/setup` gọi public `GET /avatars/models` qua `avatarsApi.getModels()`, có loading,
+error và retry. Grid giữ layout prototype Kokoro: 3 cột desktop, 2 cột tablet/mobile;
+selected state có border, glow, checkmark và CTA chỉ bật sau khi chọn. Model ID được encode
+vào `/avatar/customize?model=...`; P4-T08 chưa gọi PUT và chưa lưu avatar.
+
+Catalog backend hiện đọc `backend/src/main/resources/avatar-models.json`, không phải database.
+Các `thumbnail_url`/`model_url` dùng domain `cdn.veiltalk.example.com` placeholder. Trong giai
+đoạn này, `frontend/src/lib/avatar/avatarSetup.ts` nhận diện domain `.example.com` và dùng sáu
+asset local đã duyệt làm thumbnail fallback; ID, tên và customization metadata vẫn luôn lấy từ
+API. Khi URL CDN thật được cấu hình, helper tự giữ URL backend mà không cần đổi UI. P4-T08 được
+xác minh bằng build, lint và 47/47 test PASS.
 
 P0-T05 đã được xác minh bằng `npm run build` và `npm run lint`.
 
