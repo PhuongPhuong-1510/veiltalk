@@ -39,6 +39,9 @@ const SPLASH_MIN_DURATION_MS = 2_000;
 const TrackingDevHarness = import.meta.env.DEV
   ? lazy(() => import("./components/dev/TrackingDevHarness"))
   : null;
+const AvatarRendererDevHarness = import.meta.env.DEV
+  ? lazy(() => import("./components/dev/AvatarRendererDevHarness"))
+  : null;
 
 function SplashScreen() {
   const navigate = useNavigate();
@@ -531,6 +534,9 @@ function AppRoutes() {
       <Route path="/home" element={<TaskPlaceholder title="Kokoro của bạn" task="P4-T12" />} />
       {TrackingDevHarness && (
         <Route path="/dev/tracking" element={<Suspense fallback={<div>Đang tải tracking harness…</div>}><TrackingDevHarness /></Suspense>} />
+      )}
+      {AvatarRendererDevHarness && (
+        <Route path="/dev/avatar-renderer" element={<Suspense fallback={<div>Đang tải avatar renderer…</div>}><AvatarRendererDevHarness /></Suspense>} />
       )}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

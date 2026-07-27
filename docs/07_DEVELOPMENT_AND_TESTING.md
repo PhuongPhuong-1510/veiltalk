@@ -263,4 +263,68 @@ Các TC này được đo chi tiết trong Performance Test Report. Dưới đâ
 | **NFR-24/25 — Idempotency / Ordering** | TC-24, TC-25, TC-55                                        |
 | **NFR-32 — CORS/HSTS**                 | TC-45                                                      |
 
+## 6. P4-T10 — Quy trình kiểm thử Avatar Retargeting
+
+### 6.1. Automated gates
+
+Chạy từ `frontend/`:
+
+```powershell
+npm.cmd test -- --run
+npm.cmd test -- --run src/lib/avatar-motion/jointSolver.test.ts src/lib/avatar-motion/avatarMotionProcessor.test.ts src/lib/avatar-renderer/avatarRendererMath.test.ts src/lib/avatar-renderer/avatarDiagnostics.test.ts src/lib/avatar-renderer/modelLoader.test.ts
+npm.cmd run lint
+npm.cmd run build
+```
+
+Test Phase 2 phải bao phủ rest pose, parent/grandparent rotation, elbow bend trái/phải,
+left/right symmetry, A-B-A determinism, zero/missing direction, finite/normalized quaternion,
+profile model generation và renderer `restLocal × deltaLocal`. Không dùng unit fixture để
+tuyên bố model thật PASS; phải có deterministic browser evidence riêng.
+
+### 6.2. Deterministic real-model acceptance
+
+Mở `http://localhost:5173/dev/avatar-renderer` trong development build, load normalized VRM
+model và đặt:
+
+```text
+Filtered = OFF
+Constraints = OFF
+Render smoothing = OFF
+```
+
+Chạy lần lượt: `tPose`, `armsDown`, `leftArmUp`, `rightArmUp`, `leftElbow90`,
+`rightElbow90`, `bothForward`, `twistReferenceA`, `twistReferenceB`.
+
+Với bốn khớp upper/lower arm, ghi tracked direction, applied world direction, packet
+`deltaLocal`, target local, applied local và angular error. Tiêu chí Phase 2:
+
+- mỗi controlled segment error `≤2°`;
+- packet/target/applied quaternion finite và normalized;
+- cùng frozen input không drift;
+- twist A/B giữ upper-arm output giống nhau nhưng đổi lower-arm direction — đây là bằng
+  chứng H2 còn mở, không phải H2 PASS;
+- `Processor→draw`/pose age của frozen packet tăng theo thời gian không được ghi thành
+  tracking latency failure.
+
+### 6.3. Webcam manual acceptance
+
+Bật lại Filtered, Constraints và Render smoothing. Đảm bảo camera thấy vai, khuỷu và cổ tay;
+thực hiện dang tay, hạ tay, nâng từng tay, gập từng khuỷu, đưa tay ra trước và giữ yên 5 giây.
+
+Ghi riêng ba trường hợp:
+
+1. đủ landmark: đúng bên, không lật 180°, không trôi/giật đáng kể;
+2. cổ tay rời khung: hold/snap/return behavior;
+3. tracking trở lại: có nhảy hay phục hồi mềm.
+
+Phase 2 chỉ nghiệm thu H1 retargeting khi input ổn định. Snap do loss transition phải ghi
+open issue cho phase tracking-loss; không được che bằng kết luận chung “webcam kém”.
+
+### 6.4. Lifecycle và resource acceptance
+
+Thực hiện start/stop/start, reload model ít nhất 10 lần, unmount/remount route và
+background/resume. Ghi trước/sau: số rAF loop, WebGL context, geometries, textures và programs.
+Unit test `dispose()` không đủ để tuyên bố không leak. Nếu chưa đo browser thật, kết quả phải
+là `UNVERIFIED`.
+
 *— Hết tài liệu —*
