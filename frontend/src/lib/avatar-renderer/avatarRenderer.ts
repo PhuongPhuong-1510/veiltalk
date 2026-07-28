@@ -21,6 +21,10 @@ export class AvatarRenderer {
   private currentExpressions: Record<string, number> = {}; private currentRotations: Partial<Record<AvatarJointName | "head", QuaternionData>> = {};
   private readonly loop: AnimationFrameLoop; private lastDrawAt: number | null = null; private disposed = false; private smoothing: boolean;
   private readonly contextLostHandler: (event: Event) => void; readonly canvas: HTMLCanvasElement;
+  // >1 phóng to (camera lại gần), <1 thu nhỏ; áp lên khoảng cách camera tính trong frameModel.
+  private zoom = 1;
+  // Lệch theo tỉ lệ chiều cao model (âm = xem phần dưới cao hơn, dương = xem phần trên).
+  private verticalOffsetRatio = 0;
 
   constructor(canvas: HTMLCanvasElement, options: AvatarRendererOptions = {}, loader?: AvatarModelLoader) {
     this.canvas = canvas;
@@ -43,6 +47,26 @@ export class AvatarRenderer {
   stop(): void { this.loop.stop(); this.lastDrawAt = null; }
   applyPose(packet: AvatarPosePacketV1): void { this.assertUsable(); if (!this.target || packet.sequence >= this.target.sequence) this.target = packet; }
   setSmoothing(enabled: boolean): void { this.smoothing = enabled; }
+  /** >1 phóng to nhân vật, <1 thu nhỏ. Áp dụng ngay nếu model đã tải. */
+  setZoom(zoom: number): void {
+    this.assertUsable();
+    if (!Number.isFinite(zoom) || zoom <= 0) return;
+    this.zoom = zoom;
+    if (this.model) this.frameModel(this.model);
+  }
+  getZoom(): number { return this.zoom; }
+  /**
+   * Dịch điểm nhìn theo chiều dọc, tính theo tỉ lệ chiều cao model (không phải đơn vị thế
+   * giới cố định) để cùng một giá trị cho cảm giác dịch chuyển giống nhau ở mọi model.
+   * ratio dương đẩy khung nhìn lên trên (thấy phần đầu rõ hơn), âm đẩy xuống dưới.
+   */
+  setVerticalOffset(ratio: number): void {
+    this.assertUsable();
+    if (!Number.isFinite(ratio)) return;
+    this.verticalOffsetRatio = ratio;
+    if (this.model) this.frameModel(this.model);
+  }
+  getVerticalOffset(): number { return this.verticalOffsetRatio; }
   resize(width: number, height: number): void { this.assertUsable(); if (width <= 0 || height <= 0) return; this.webgl.setSize(width, height, false); this.camera.aspect = width / height; this.camera.updateProjectionMatrix(); }
   getMetrics(): RendererMetricsSnapshot { return this.metrics.snapshot(this.webgl); }
   getCapability() { return this.model?.capability ?? null; }
@@ -97,11 +121,12 @@ export class AvatarRenderer {
     const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(this.camera.aspect, .1));
     const heightDistance = size.y / (2 * Math.tan(verticalFov / 2));
     const widthDistance = size.x / (2 * Math.tan(horizontalFov / 2));
-    const distance = Math.max(heightDistance, widthDistance, .5) * 1.18;
+    const distance = Math.max(heightDistance, widthDistance, .5) * 1.18 / this.zoom;
+    const targetY = center.y + size.y * this.verticalOffsetRatio;
     // VRM 0.x đã được rotateVRM0(); camera phía +Z nhìn vào mặt model đã chuẩn hóa.
-    this.camera.position.set(center.x, center.y, center.z + distance);
+    this.camera.position.set(center.x, targetY, center.z + distance);
     this.camera.near = Math.max(.01, distance / 100); this.camera.far = Math.max(100, distance * 10);
-    this.camera.lookAt(center); this.camera.updateProjectionMatrix();
+    this.camera.lookAt(center.x, targetY, center.z); this.camera.updateProjectionMatrix();
   }
   private assertUsable(): void { if (this.disposed) throw new Error("AvatarRenderer đã dispose."); }
 }

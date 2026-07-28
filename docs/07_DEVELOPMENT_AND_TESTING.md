@@ -265,6 +265,11 @@ Các TC này được đo chi tiết trong Performance Test Report. Dưới đâ
 
 ## 6. P4-T10 — Quy trình kiểm thử Avatar Retargeting
 
+Trạng thái Phase 3B và acceptance gate chi tiết nằm tại
+`docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`. Automated PASS không thay thế webcam
+acceptance; tính đến 2026-07-29, Phase 3B vẫn **IN PROGRESS** vì chiều pronation/supination tay
+phải còn sai trên webcam.
+
 ### 6.1. Automated gates
 
 Chạy từ `frontend/`:
@@ -272,6 +277,7 @@ Chạy từ `frontend/`:
 ```powershell
 npm.cmd test -- --run
 npm.cmd test -- --run src/lib/avatar-motion/jointSolver.test.ts src/lib/avatar-motion/avatarMotionProcessor.test.ts src/lib/avatar-renderer/avatarRendererMath.test.ts src/lib/avatar-renderer/avatarDiagnostics.test.ts src/lib/avatar-renderer/modelLoader.test.ts
+npm.cmd test -- --run src/lib/avatar-motion/handPoseMatching.test.ts src/lib/avatar-motion/handPalmBasis.test.ts src/lib/avatar-motion/handForearmTwist.test.ts src/lib/avatar-motion/handTwistConfidence.test.ts src/lib/avatar-motion/handTwistStabilization.test.ts src/lib/avatar-motion/handTwistTemporal.test.ts src/lib/avatar-motion/handTwistRig.test.ts src/lib/avatar-motion/handTwistRootCauseValidation.test.ts src/lib/avatar-motion/avatarMotionProcessor.test.ts
 npm.cmd run lint
 npm.cmd run build
 ```
@@ -326,5 +332,97 @@ Thực hiện start/stop/start, reload model ít nhất 10 lần, unmount/remoun
 background/resume. Ghi trước/sau: số rAF loop, WebGL context, geometries, textures và programs.
 Unit test `dispose()` không đủ để tuyên bố không leak. Nếu chưa đo browser thật, kết quả phải
 là `UNVERIFIED`.
+
+### 6.5. 2B-5C pronation/supination root-cause validation
+
+Tại `/dev/avatar-renderer`, bật Hand twist, mở bàn tay, gập khuỷu khoảng 90°, giữ cẳng tay không
+chĩa thẳng vào camera. Bắt đầu ở handshake/neutral, xoay palm-up 45–60°, trở lại neutral, rồi
+xoay palm-down 45–60°. Freeze và ghi snapshot riêng cho neutral, palm-up và palm-down.
+
+Với từng side, đối chiếu đủ chuỗi: `rawWrappedTwistRadians`, `rawUnwrappedTwistRadians`,
+`neutralTwistRadians`, `correctedTwistRadians`, `deadZoneOutputRadians`,
+`filteredTargetTwistRadians`, `clampedTwistRadians`, `targetInfluenceWeight`,
+`temporalInfluenceWeight`, `appliedTwistRadians`, `trusted`, `rejectionReason`, `clampApplied`,
+`observationMode`. Không kết luận từ riêng raw wrapped vì có biên ±π.
+
+Acceptance gate trước khi đánh dấu 2B-5 PASS:
+
+- palm-up/palm-down tạo correction trái dấu, biên độ phù hợp và shortest-path qua ±π;
+- trusted/influence không triệt tiêu observation hợp lệ;
+- lowerArm primary và wrist position không đổi đáng kể chỉ vì axial twist;
+- hand child kế thừa rotation, renderer không ghi hand local nếu packet không có hand joint;
+- cả left/right cùng convention giải phẫu, không double-negate;
+- nắm đấm, wrist flexion/extension, radial-ulnar deviation và finger bones nằm ngoài task.
+
+### 6.6. 2B-5D arm stability root-cause audit
+
+Tại `/dev/avatar-renderer`, giữ nguyên camera, ánh sáng và tư thế rồi chạy hai lượt: trước hết tắt
+**Hand twist (2B-5)**, sau đó bật lại mà không đổi Pose. Snapshot `motionDiagnostics.armStability`
+được UI cập nhật mỗi 400 ms; không dùng log mỗi frame.
+
+Chụp cho từng side ở tám tình huống: Pose-only giữ yên; twist-on giữ yên; tay gần duỗi; khuỷu 90°;
+palm nhìn cạnh; Hand miss ngắn rồi quay lại; elbow confidence dao động quanh ngưỡng; FPS/dt thay đổi.
+Đối chiếu theo thứ tự:
+
+1. Pose target delta có xuất hiện trước Pose applied delta không;
+2. `elbowSourceChanged` hoặc `poleBranchChanged` có trùng spike không;
+3. khi Pose target đứng yên, `handRawTwistDeltaRadians` có xuất hiện trước
+   `handAppliedTwistDeltaRadians` không;
+4. influence/neutral/observation mode có đổi cùng spike không;
+5. spike có tương quan với `frameDtMs`, tuổi sample hoặc tracking state không.
+
+Automated audit dùng exact hold, nhiễu tổng hợp nhỏ, pole degeneracy, edge-on palm, loss/reacquire,
+visibility hysteresis và dt 16/50/33/100 ms. Automated result không thay thế webcam snapshot và chưa
+cho phép tune smoothing/clamp hoặc đánh dấu 2B-5 hoàn thành.
+
+### 6.7. 2B-6 — Hand Twist Integration and Regression
+
+Processor phải phân loại Hand sample trước matching/palm: `unsampled`, `duplicate`, `new-sample`.
+Duplicate không được chạy matching, dựng palm, cập nhật wrist continuity hay tạo observation mới;
+temporal vẫn tiến theo `dt` về target cuối hoặc tiếp tục hold/fade đã bắt đầu.
+
+Mỗi side có tracking epoch riêng. Trusted observation đầu tiên của epoch mới anchor neutral đúng một
+lần. Short loss/reacquired và source-index reorder không đổi epoch. Reset/dispose, rig/model change,
+tracking discontinuity, recovery sau confirmed lower-arm geometry loss và long-loss reset phải xóa
+matching cùng state twist tương ứng; long loss chỉ reset sau khi temporal đạt điều kiện reset, không
+reset lúc vừa missing.
+Lower-arm geometry invalid một frame phải fallback Pose-only nhưng giữ epoch/neutral. Loss chỉ được
+xác nhận bởi observation invalid tiếp theo sau `invalidGraceMs`; recovery sau confirmed loss mở đúng
+một epoch, còn chuỗi invalid/valid từng frame không được pumping epoch hoặc re-anchor neutral.
+
+Automated regression bắt buộc chứng minh: flag-off/Pose fallback tuyệt đối; duplicate gating trước
+matching/palm nhưng vẫn temporal tick; right-only/both-hands độc lập; chỉ lowerArm đổi; upperArm/elbow
+output và lowerArm primary không đổi do pure twist; short reacquire giữ neutral; long loss/rig/reset/
+dispose mở epoch mới và không rò quaternion; malformed profile fail-fast; runtime geometry invalid
+fallback Pose-only; chuỗi neutral → +twist → neutral → -twist đổi dấu đúng và không tăng epoch.
+Right-hand webcam regression phải ghi đồng thời `configuredPositiveSign`, `rigApplicationSign`,
+`filteredTargetTwistRadians`, `appliedTwistRadians` và world orientation thật sau renderer. Không
+được kết luận chiều đúng chỉ vì scalar diagnostic đổi dấu. Thử nghiệm `rigApplicationSign=-1` hiện
+vẫn cho chuyển động ngược trên webcam, nên gate này đang **FAIL** và convention chưa được khóa.
+
+### 6.8. Phase 3B — Manual acceptance matrix
+
+Chạy cùng một matrix trên `reference-avatar.vrm`, `reference-avatar-1.vrm` và
+`reference-avatar-2.vrm`. Trước mỗi model/side: reload model, giữ bàn tay ngoài khung cho tới khi
+state ổn định, sau đó đưa tay vào tư thế handshake neutral. Bật Filter, Constraints, Render
+smoothing và Hand twist; ghi rõ mọi khác biệt nếu phải thay cấu hình.
+
+| Case | Động tác | Evidence bắt buộc | Kết quả đạt |
+|---|---|---|---|
+| B1 | Right neutral | Snapshot palm basis → applied quaternion | correction gần 0, không re-anchor lặp |
+| B2 | Right palm-up 45–60° | Snapshot toàn chuỗi scalar + avatar | avatar xoay đúng chiều giải phẫu |
+| B3 | Right palm-down 45–60° | Như B2 | trái dấu B2, không flip 180° |
+| B4 | Left neutral/up/down | Như B1–B3 | cùng convention giải phẫu, không double-negate |
+| B5 | Giữ từng tư thế 5 giây | rolling stability snapshot | không drift, influence pumping hoặc twist spike |
+| B6 | Short miss/reacquire | epoch/neutral/matching diagnostics | giữ neutral/epoch, phục hồi không snap |
+| B7 | Flag off | packet/quaternion A/B | giống Pose-only tuyệt đối |
+| B8 | Pure twist | lowerArm primary, elbow, wrist | primary/elbow/wrist position gần như không đổi |
+
+Nếu một model thiếu humanoid bone/profile hợp lệ, kết quả phải là rejection có lý do; không được
+hard-code tên node, tên model hoặc một dấu/tỉ lệ riêng mà chưa đưa thành rig-profile data có test.
+Wrist flexion/extension, finger pose và nắm đấm không phải failure của matrix Phase 3B.
+
+Known issue ngoài matrix: khi bàn tay che mặt, Face tracking có thể làm đầu/mặt quay hoặc biến dạng.
+Lỗi này xảy ra cả khi Hand twist tắt và phải được theo dõi như task Face-occlusion riêng.
 
 *— Hết tài liệu —*

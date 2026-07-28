@@ -49,6 +49,48 @@ describe("MediaPipeRuntime", () => {
     runtime.dispose();
   });
 
+  it("loads the full pose model by default and honours an explicit variant", async () => {
+    const build = () => {
+      const createPose = vi.fn().mockResolvedValue(task());
+      const dependencies = {
+        resolveFileset: vi.fn().mockResolvedValue({ wasmLoaderPath: "/loader", wasmBinaryPath: "/binary" }),
+        createFace: vi.fn().mockResolvedValue(task()), createHands: vi.fn().mockResolvedValue(task()), createPose,
+      } as unknown as MediaPipeRuntimeDependencies;
+      return { dependencies, createPose };
+    };
+    const preset = build();
+    const defaultRuntime = new MediaPipeRuntime(preset.dependencies);
+    await defaultRuntime.initialize();
+    // `full` giảm nhiễu toạ độ z so với `lite`; z nhiễu làm hướng xương cánh tay lệch và rung.
+    expect(preset.createPose.mock.calls[0][1].baseOptions.modelAssetPath).toContain("pose_landmarker_full.task");
+    expect(defaultRuntime.selectedPoseModel).toBe("full");
+    defaultRuntime.dispose();
+
+    const explicit = build();
+    const liteRuntime = new MediaPipeRuntime(explicit.dependencies, "AUTO", { face: true, hands: true, pose: true }, "lite");
+    await liteRuntime.initialize();
+    expect(explicit.createPose.mock.calls[0][1].baseOptions.modelAssetPath).toContain("pose_landmarker_lite.task");
+    expect(liteRuntime.selectedPoseModel).toBe("lite");
+    liteRuntime.dispose();
+  });
+
+  it("raises pose confidence thresholds above the MediaPipe defaults", async () => {
+    // Mặc định 0.5 giữ lại landmark đoán mò khi tay bị che; solver dựng hướng xương từ đó
+    // và làm tay xoắn. Ngưỡng cao hơn để arm-frame reject và giữ tư thế theo FR-09.
+    const createPose = vi.fn().mockResolvedValue(task());
+    const dependencies = {
+      resolveFileset: vi.fn().mockResolvedValue({ wasmLoaderPath: "/loader", wasmBinaryPath: "/binary" }),
+      createFace: vi.fn().mockResolvedValue(task()), createHands: vi.fn().mockResolvedValue(task()), createPose,
+    } as unknown as MediaPipeRuntimeDependencies;
+    const runtime = new MediaPipeRuntime(dependencies);
+    await runtime.initialize();
+    const options = createPose.mock.calls[0][1];
+    expect(options.minPoseDetectionConfidence).toBeGreaterThan(0.5);
+    expect(options.minPosePresenceConfidence).toBeGreaterThan(0.5);
+    expect(options.minTrackingConfidence).toBeGreaterThan(0.5);
+    runtime.dispose();
+  });
+
   it("uses an explicit delegate and initializes only the selected task", async () => {
     const face = task();
     const createFace = vi.fn().mockResolvedValue(face);

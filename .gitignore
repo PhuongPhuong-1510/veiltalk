@@ -49,8 +49,8 @@ postgres-data/
 # ===== Model 3D lớn (dùng Git LFS nếu cần) =====
 # *.vrm
 # *.glb
-# Model tham chiếu P4-T10 hiện ghi redistribution=disallow; chỉ dùng local, không commit.
-frontend/public/models/avatars/reference-avatar.vrm
+# Các model tham chiếu P4-T10 là asset local chưa xác minh quyền phân phối; không commit.
+frontend/public/models/avatars/*.vrm
 
 # ===== File tạm =====
 *.tmp

@@ -27,6 +27,7 @@ const emptyMetrics: TrackingMetricsSnapshot = {
   mainThreadLongTasks: 0,
   mainThreadBlockedMs: 0,
   selectedDelegate: null,
+  poseModel: null,
   stateRatio: {
     face: { tracked: 0, lost: 0, "not-sampled": 0 },
     leftHand: { tracked: 0, lost: 0, "not-sampled": 0 },
@@ -182,7 +183,7 @@ export default function TrackingDevHarness() {
             <tr><td>Pose</td><td>{number(metrics.inferenceFps.pose)}</td><td>{number(metrics.inferenceTimeMs.pose.average)}</td><td>{number(metrics.inferenceTimeMs.pose.p95)}</td><td>{number(metrics.sampleAgeMs.pose.average)} / {number(metrics.sampleAgeMs.pose.p95)} / {number(metrics.sampleAgeMs.pose.max)}</td></tr>
           </tbody>
         </table>
-        <p>Run: <b>{number(metrics.runDurationMs / 1000)}s</b> · Camera FPS: <b>{number(metrics.cameraFps)}</b> · Pipeline FPS: <b>{number(metrics.pipelineFps)}</b> · Configured delegate: <b>{metrics.selectedDelegate ?? "—"}</b></p>
+        <p>Run: <b>{number(metrics.runDurationMs / 1000)}s</b> · Camera FPS: <b>{number(metrics.cameraFps)}</b> · Pipeline FPS: <b>{number(metrics.pipelineFps)}</b> · Configured delegate: <b>{metrics.selectedDelegate ?? "—"}</b> · Pose model: <b>{metrics.poseModel ?? "—"}</b></p>
         <p>Main-thread long tasks: <b>{metrics.mainThreadLongTasks}</b> · blocked: <b>{number(metrics.mainThreadBlockedMs)} ms</b></p>
         <h3>Tracking quality ratios</h3>
         <table><thead><tr><th>Group</th><th>Tracked</th><th>Lost</th><th>Not sampled</th><th>Loss events</th></tr></thead><tbody>

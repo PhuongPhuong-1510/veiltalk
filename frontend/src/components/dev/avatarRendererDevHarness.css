@@ -17,3 +17,8 @@
 .dev-diagnostic code { white-space: pre-wrap; word-break: break-all; }
 .dev-controls select, .dev-controls input[type="text"], .dev-controls label > input:not([type]) { margin-left: 6px; padding: 5px; color: white; border: 1px solid #6956d8; background: #171326; }
 @media (max-width: 900px) { .dev-stage { grid-template-columns: 1fr; height: auto; } .dev-stage canvas { height: 48vh; } .dev-stage video { height: 280px; } }
+.dev-hand-calibration { flex-direction: column; align-items: stretch; }
+.dev-hand-calibration-banner { padding: 8px 10px; border-radius: 8px; background: #2a2140; }
+.dev-hand-calibration-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+.dev-hand-calibration-table th, .dev-hand-calibration-table td { padding: 6px; border: 1px solid #342a69; text-align: left; vertical-align: top; }
+.verdict-PASS { color: #4ade80; } .verdict-WARN { color: #facc15; } .verdict-FAIL { color: #f87171; }

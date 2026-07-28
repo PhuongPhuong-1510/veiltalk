@@ -7,7 +7,9 @@ const frame = {
   face: { state: "tracked", sampledAtMs: 100, landmarks: [], blendshapes: {}, facialTransform: null },
   leftHand: { state: "not-sampled", sampledAtMs: 80, handedness: "left", handednessScore: 1, landmarks: [], worldLandmarks: [] },
   rightHand: { state: "lost", sampledAtMs: 100, handedness: "right", handednessScore: null, landmarks: null, worldLandmarks: null },
+  rawHands: [], handSampledThisFrame: false, handSampledAtMs: 80,
   pose: { state: "not-sampled", sampledAtMs: 70, landmarks: [], worldLandmarks: [] },
+  videoWidth: 1280, videoHeight: 720,
 } as RawTrackingFrameV1;
 
 describe("TrackingMetricsCollector", () => {
@@ -32,6 +34,13 @@ describe("TrackingMetricsCollector", () => {
     metrics.reset();
     expect(metrics.snapshot(100, "GPU").lossEvents.rightHand).toBe(0);
     vi.unstubAllGlobals();
+  });
+
+  it("reports the pose model variant so lite and full can be compared in one snapshot", () => {
+    const metrics = new TrackingMetricsCollector();
+    expect(metrics.snapshot(100, "GPU").poseModel).toBeNull();
+    expect(metrics.snapshot(100, "GPU", "full").poseModel).toBe("full");
+    expect(metrics.snapshot(100, "CPU", "lite").poseModel).toBe("lite");
   });
 
   it("uses elapsed time instead of a full 10-second denominator during warm-up", () => {

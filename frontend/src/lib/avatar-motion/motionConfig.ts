@@ -14,6 +14,14 @@ export interface AvatarMotionConfig {
   /** Ngưỡng Phase 3A ban đầu; calibration production thuộc Phase 3C. */
   armFrame: {
     minimumPoseVisibility: number;
+    /**
+     * Hysteresis cho quyết định "landmark quan sát được" (P0-4/5, theo chuyên gia tư vấn).
+     * Đang coi là tracked thì cần tụt dưới `visibilityExit` mới rớt trạng thái; đang coi là
+     * mất thì cần vượt `visibilityEnter` mới được tính lại — tránh vách đá tại đúng một
+     * ngưỡng khiến landmark dao động quanh 0.5 làm cả đoạn xương bật/tắt liên tục.
+     */
+    visibilityEnter: number;
+    visibilityExit: number;
     minimumSegmentLength: number;
     minimumSegmentRatio: number;
     maximumSegmentRatio: number;
@@ -26,6 +34,24 @@ export interface AvatarMotionConfig {
     minimumNormalizedElbowOffset: number;
     depthDegenerateEnterAlignment: number;
     depthDegenerateExitAlignment: number;
+    /**
+     * A2: khoảng smoothstep cho `depthQuality`, RỘNG HƠN cặp enter/exit ở trên (theo tư vấn
+     * chuyên gia: 0.75→tin khá nhiều, 0.85→tin ít hơn, 0.95→gần như không tin). Tái dùng cặp
+     * enter/exit hẹp (0.82–0.90) khiến depthQuality vẫn dốc như vách đá cũ — đo được weight
+     * rơi dưới ngưỡng chấp nhận ngay khi vừa chạm enter, không mở rộng được vùng chấp nhận.
+     */
+    depthQualityFullTrustAlignment: number;
+    depthQualityNoTrustAlignment: number;
+    /**
+     * A2+A4: ngưỡng chấp nhận pole quan sát theo trọng số liên tục
+     * `depthQuality * bendPlaneQuality`, có hysteresis (theo tư vấn chuyên gia — "không đổi
+     * mode chỉ vì một frame"): đang có pole tươi thì cần weight tụt dưới `Exit` mới rớt; đang
+     * không có thì cần vượt `Enter` mới nhận lại. Nếu không, khi thời gian giữa các frame vượt
+     * `poleFallbackTimeoutMs`, weight dao động nhẹ quanh một ngưỡng duy nhất làm poleSource
+     * nhảy liên tục fresh↔rest — đã đo được hiện tượng này trước khi thêm hysteresis.
+     */
+    minimumObservedPoleWeightEnter: number;
+    minimumObservedPoleWeightExit: number;
     maximumPoleAngularVelocityRadiansPerSecond: number;
     invalidGraceMs: number;
     validRecoveryConfirmMs: number;
@@ -35,6 +61,13 @@ export interface AvatarMotionConfig {
     calibrationWindowSamples: number;
     elbowInferenceTimeoutMs: number;
     elbowInferenceReachSlackRatio: number;
+  };
+  /** Mức 2B-5 POC webcam; mọi giá trị theo thời gian thực, không theo frame count. */
+  handTwist: {
+    missingHoldMs: number;
+    deadZoneRadians: number;
+    targetFilterTimeConstantSeconds: number;
+    correctionLimits: Record<"left" | "right", { minRadians: number; maxRadians: number }>;
   };
 }
 
@@ -52,6 +85,8 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
   },
   armFrame: {
     minimumPoseVisibility: 0.5,
+    visibilityEnter: 0.6,
+    visibilityExit: 0.3,
     minimumSegmentLength: 0.02,
     minimumSegmentRatio: 0.35,
     maximumSegmentRatio: 2.85,
@@ -64,6 +99,10 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     minimumNormalizedElbowOffset: 0.025,
     depthDegenerateEnterAlignment: 0.9,
     depthDegenerateExitAlignment: 0.82,
+    depthQualityFullTrustAlignment: 0.75,
+    depthQualityNoTrustAlignment: 0.95,
+    minimumObservedPoleWeightEnter: 0.08,
+    minimumObservedPoleWeightExit: 0.03,
     maximumPoleAngularVelocityRadiansPerSecond: 7,
     invalidGraceMs: 80,
     validRecoveryConfirmMs: 80,
@@ -73,5 +112,14 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     calibrationWindowSamples: 30,
     elbowInferenceTimeoutMs: 1_200,
     elbowInferenceReachSlackRatio: 0.12,
+  },
+  handTwist: {
+    missingHoldMs: 200,
+    deadZoneRadians: 3 * Math.PI / 180,
+    targetFilterTimeConstantSeconds: 0.08,
+    correctionLimits: {
+      left: { minRadians: -75 * Math.PI / 180, maxRadians: 75 * Math.PI / 180 },
+      right: { minRadians: -75 * Math.PI / 180, maxRadians: 75 * Math.PI / 180 },
+    },
   },
 };
