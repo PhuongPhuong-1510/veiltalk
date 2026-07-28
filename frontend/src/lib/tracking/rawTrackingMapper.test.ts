@@ -71,4 +71,57 @@ describe("mapRawTrackingFrame", () => {
     expect(frame.pose.sampledAtMs).toBe(9_970);
     expect(frame.overall).toBe("full");
   });
+
+  it("keeps every raw hand candidate without deduplicating by handedness", () => {
+    const frame = mapRawTrackingFrame(100, { face: face(), hands: hands(["Left", "Left"]), pose: pose() });
+    expect(frame.rawHands).toHaveLength(2);
+    expect(frame.rawHands[0]).toEqual({
+      sourceIndex: 0, sampledAtMs: 100, handedness: "left", handednessScore: 0.95,
+      landmarks: [point], worldLandmarks: [point],
+    });
+    expect(frame.rawHands[1]).toEqual({
+      sourceIndex: 1, sampledAtMs: 100, handedness: "left", handednessScore: 0.95,
+      landmarks: [point], worldLandmarks: [point],
+    });
+    // leftHand/rightHand giữ nguyên hành vi cũ: chỉ nhận candidate đầu tiên mỗi label.
+    expect(frame.leftHand.state).toBe("tracked");
+    expect(frame.rightHand.state).toBe("lost");
+  });
+
+  it("marks unrecognized handedness labels as unknown in rawHands", () => {
+    const frame = mapRawTrackingFrame(100, { face: face(), hands: hands(["Left", "Unsure"]), pose: pose() });
+    expect(frame.rawHands[1].handedness).toBe("unknown");
+  });
+
+  it("returns an empty rawHands array when hands were not sampled this frame", () => {
+    const initial = mapRawTrackingFrame(100, { face: face(), hands: hands(["Left", "Right"]), pose: pose() });
+    const skipped = mapRawTrackingFrame(140, { face: face() }, initial);
+    expect(skipped.rawHands).toEqual([]);
+  });
+
+  it("distinguishes not-sampled-this-frame from sampled-but-no-hands-detected", () => {
+    const detected = mapRawTrackingFrame(100, { face: face(), hands: hands(["Left", "Right"]), pose: pose() });
+    expect(detected.handSampledThisFrame).toBe(true);
+    expect(detected.handSampledAtMs).toBe(100);
+    expect(detected.rawHands).toHaveLength(2);
+
+    // Staggered mode: frame kế tiếp không lấy mẫu hands (kết quả undefined) — không phải mất tay.
+    const notSampled = mapRawTrackingFrame(140, { face: face() }, detected);
+    expect(notSampled.handSampledThisFrame).toBe(false);
+    expect(notSampled.rawHands).toEqual([]);
+    // handSampledAtMs giữ nguyên mốc lần chạy gần nhất để matcher tính độ trễ/staleness.
+    expect(notSampled.handSampledAtMs).toBe(100);
+
+    // Detector thực sự chạy lại nhưng không thấy tay nào — đây LÀ một observation mới.
+    const noHandsDetected = mapRawTrackingFrame(180, { face: face(), hands: hands([]), pose: pose() }, notSampled);
+    expect(noHandsDetected.handSampledThisFrame).toBe(true);
+    expect(noHandsDetected.rawHands).toEqual([]);
+    expect(noHandsDetected.handSampledAtMs).toBe(180);
+  });
+
+  it("starts with handSampledAtMs null before hands have ever been sampled", () => {
+    const frame = mapRawTrackingFrame(100, { face: face() });
+    expect(frame.handSampledThisFrame).toBe(false);
+    expect(frame.handSampledAtMs).toBeNull();
+  });
 });

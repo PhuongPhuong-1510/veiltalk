@@ -1,4 +1,5 @@
 import type { TrackingSampleState } from "../tracking/rawTrackingTypes";
+import type { HandMotionDiagnosticsSnapshot } from "./handMotionDiagnostics";
 
 export type AvatarSourceTrackingState = TrackingSampleState;
 export type AvatarOutputMotionState = "active" | "held" | "returning" | "idle";
@@ -45,6 +46,13 @@ export interface AvatarPosePacketV1 {
    * Không phải world rotation, raw-model rotation hoặc accumulated delta.
    */
   jointRotations: Partial<Record<AvatarJointName, QuaternionData>>;
+  /**
+   * Mức 2A — Việc 4: diagnostic Hand Landmarker matching + palm basis, CHỈ để hiển thị/quan
+   * sát. Không có field nào ở đây được dùng để tính `jointRotations` — xem AGENTS.md Mức 2A
+   * mục 5/7. null khi chưa có rigProfile (processor chưa chạy phần arm-frame, đối xứng với
+   * `jointRotations` rỗng trong trường hợp đó).
+   */
+  handMotion: HandMotionDiagnosticsSnapshot | null;
 }
 
 export const IDENTITY_QUATERNION: QuaternionData = { x: 0, y: 0, z: 0, w: 1 };

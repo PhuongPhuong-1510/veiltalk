@@ -5,6 +5,10 @@ export const vector = (value: Vector3Data) => new Vector3(value.x, value.y, valu
 export const quaternion = (value: QuaternionData) => new Quaternion(value.x, value.y, value.z, value.w);
 export const vectorData = (value: Vector3): Vector3Data => ({ x: value.x, y: value.y, z: value.z });
 export const quaternionData = (value: Quaternion): QuaternionData => ({ x: value.x, y: value.y, z: value.z, w: value.w });
+/** Mức 1B-3: góc quay (độ) giữa hai quaternion, dùng cho diagnostic angular-delta liên frame. */
+export const angularDeltaDegrees = (a: QuaternionData, b: QuaternionData): number => quaternion(a).angleTo(quaternion(b)) * 180 / Math.PI;
+/** Góc lệch (độ) giữa hai hướng vector đơn vị, dùng cho poleAngularDeltaDeg. */
+export const vectorAngularDeltaDegrees = (a: Vector3Data, b: Vector3Data): number => vector(a).angleTo(vector(b)) * 180 / Math.PI;
 
 export function quaternionFromBasis(primary: Vector3Data, secondary: Vector3Data, binormal: Vector3Data): QuaternionData | null {
   const x = vector(primary).normalize();

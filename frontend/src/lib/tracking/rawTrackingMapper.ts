@@ -8,6 +8,7 @@ import type {
 import {
   DEFAULT_TRACKING_FRESHNESS,
   type RawFaceSampleV1,
+  type RawHandCandidateV1,
   type RawHandSampleV1,
   type RawNormalizedLandmarkV1,
   type RawPoseSampleV1,
@@ -24,6 +25,8 @@ export interface MediaPipeFrameResults {
     hands?: number;
     pose?: number;
   };
+  /** Kích thước pixel thật của `<video>` nguồn tại thời điểm lấy mẫu frame này. */
+  videoDimensions?: { width: number; height: number };
 }
 
 const mapLandmark = (landmark: NormalizedLandmark | Landmark): RawNormalizedLandmarkV1 => ({
@@ -96,6 +99,27 @@ function mapHands(
   };
 }
 
+/**
+ * Mức 2A — Việc 0: bảo toàn nguyên vẹn từng candidate của Hand Landmarker, không dedupe theo
+ * handedness và không thực hiện temporal matching — việc đó thuộc Việc 1.
+ */
+function mapRawHandCandidates(result: HandLandmarkerResult | undefined, now: number): RawHandCandidateV1[] {
+  if (result === undefined) return [];
+  return result.landmarks.map((landmarks, sourceIndex) => {
+    const category = result.handedness[sourceIndex]?.[0];
+    const label = category?.categoryName.toLowerCase();
+    const handedness: RawHandCandidateV1["handedness"] = label === "left" ? "left" : label === "right" ? "right" : "unknown";
+    return {
+      sourceIndex,
+      sampledAtMs: now,
+      handedness,
+      handednessScore: category?.score ?? null,
+      landmarks: landmarks.map(mapLandmark),
+      worldLandmarks: (result.worldLandmarks[sourceIndex] ?? []).map(mapLandmark),
+    };
+  });
+}
+
 function mapPose(result: PoseLandmarkerResult | undefined, now: number, previous?: RawPoseSampleV1): RawPoseSampleV1 {
   if (result === undefined) {
     return previous
@@ -127,6 +151,9 @@ export function mapRawTrackingFrame(
   const poseSampledAt = results.sampledAtMs?.pose ?? frameTimestampMs;
   const face = mapFace(results.face, faceSampledAt, previous?.face);
   const hands = mapHands(results.hands, handSampledAt, previous?.leftHand, previous?.rightHand);
+  const handSampledThisFrame = results.hands !== undefined;
+  const rawHands = mapRawHandCandidates(results.hands, handSampledAt);
+  const handSampledAtMs = handSampledThisFrame ? handSampledAt : previous?.handSampledAtMs ?? null;
   const pose = mapPose(results.pose, poseSampledAt, previous?.pose);
   const fresh = [
     isFresh(face.sampledAtMs, face.landmarks, faceSampledAt, freshness.faceMaxAgeMs),
@@ -142,6 +169,11 @@ export function mapRawTrackingFrame(
     face,
     leftHand: hands.left,
     rightHand: hands.right,
+    rawHands,
+    handSampledThisFrame,
+    handSampledAtMs,
     pose,
+    videoWidth: results.videoDimensions?.width ?? previous?.videoWidth ?? null,
+    videoHeight: results.videoDimensions?.height ?? previous?.videoHeight ?? null,
   };
 }

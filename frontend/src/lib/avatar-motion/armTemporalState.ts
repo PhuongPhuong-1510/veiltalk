@@ -4,13 +4,27 @@ import type { ControlledArmJoint } from "./normalizedRigProfile";
 import { IDENTITY_QUATERNION } from "./avatarPoseTypes";
 import { slerpQuaternionData } from "./motionMath";
 
+/**
+ * Mức 1B-1 (theo tư vấn chuyên gia): `q` và `-q` biểu diễn cùng một rotation nhưng khi gán
+ * trực tiếp (không qua slerp — đúng nhánh solver trả kết quả mới liên tiếp, không recovering)
+ * dấu có thể đảo bất chợt giữa hai frame liền kề. Renderer có tự xử lý hemisphere khi
+ * smoothing bật, nhưng khi tắt smoothing (`rotationAlpha=1`, dùng cho preset/debug xác định)
+ * giá trị được gán thẳng — cú lật dấu tại nguồn vẫn lộ ra. Đảo dấu `next` cho cùng hemisphere
+ * với `previous` trước khi lưu, để output liên tục về dấu bất kể tầng nào đọc nó sau này.
+ */
+function sameHemisphere(previous: QuaternionData | null, next: QuaternionData): QuaternionData {
+  if (!previous) return next;
+  const dot = previous.x * next.x + previous.y * next.y + previous.z * next.z + previous.w * next.w;
+  return dot < 0 ? { x: -next.x, y: -next.y, z: -next.z, w: -next.w } : next;
+}
+
 export type ArmLossState = "idle" | "active" | "held" | "returning" | "recovering";
 export type ArmDeltaOutput = Partial<Record<ControlledArmJoint, QuaternionData>>;
 export interface SegmentTemporalState {
   lastValidDelta: QuaternionData | null; currentOutputDelta: QuaternionData;
   lossState: ArmLossState; lastValidAtMs: number | null; recoveryOrigin: QuaternionData | null; recoveryStartedAtMs: number | null;
 }
-export const createSegmentTemporalState = (): SegmentTemporalState => ({ lastValidDelta: null, currentOutputDelta: IDENTITY_QUATERNION, lossState: "idle", lastValidAtMs: null, recoveryOrigin: null, recoveryStartedAtMs: null });
+export const createSegmentTemporalState = (resting: QuaternionData = IDENTITY_QUATERNION): SegmentTemporalState => ({ lastValidDelta: null, currentOutputDelta: resting, lossState: "idle", lastValidAtMs: null, recoveryOrigin: null, recoveryStartedAtMs: null });
 
 export interface ArmTemporalState {
   previousPole: { x: number; y: number; z: number } | null;
@@ -34,6 +48,9 @@ export interface ArmTemporalState {
   previousObservedElbow: { x: number; y: number; z: number } | null;
   inferenceStartedAtMs: number | null;
   elbowSource: ElbowSource;
+  /** P0-4/5: trạng thái hysteresis visibility, mang theo giữa các frame. */
+  elbowWasVisible: boolean;
+  wristWasVisible: boolean;
 }
 
 export const createArmTemporalState = (): ArmTemporalState => ({
@@ -43,16 +60,28 @@ export const createArmTemporalState = (): ArmTemporalState => ({
   segments: { upper: createSegmentTemporalState(), lower: createSegmentTemporalState() },
   previousPrimary: { upper: null, lower: null }, previousSecondary: { upper: null, lower: null },
   lengthSamples: { upper: [], lower: [] }, calibratedLength: { upper: null, lower: null }, previousObservedElbow: null, inferenceStartedAtMs: null,
-  elbowSource: "unavailable",
+  elbowSource: "unavailable", elbowWasVisible: false, wristWasVisible: false,
 });
 
-export function updateSegmentTemporalOutput(state: SegmentTemporalState, solved: QuaternionData | null, isNewSample: boolean, nowMs: number, holdMs: number, returnMs: number, recoveryMs: number, invalidGraceMs = 0): { output: QuaternionData; state: ArmLossState; progress: number } {
+export function updateSegmentTemporalOutput(state: SegmentTemporalState, solved: QuaternionData | null, isNewSample: boolean, nowMs: number, holdMs: number, returnMs: number, recoveryMs: number, invalidGraceMs = 0, restingDelta: QuaternionData = IDENTITY_QUATERNION, forceReacquireBlend = false): { output: QuaternionData; state: ArmLossState; progress: number } {
   if (solved && isNewSample) {
-    const recovering = state.lastValidDelta !== null && state.lossState !== "active";
+    // Mức 1B-1: đưa `solved` về cùng hemisphere với đầu ra liên tục gần nhất TRƯỚC khi dùng —
+    // áp dụng cả khi recovering (so với recoveryOrigin, vì slerp giữa hai quaternion khác
+    // hemisphere sẽ đi đường vòng dài) lẫn khi gán thẳng (progress=1, không qua slerp nào cả).
+    const continuityReference = state.currentOutputDelta;
+    const solvedContinuous = sameHemisphere(continuityReference, solved);
+    // Mức 1B-2 (theo tư vấn chuyên gia): tracking chưa hề "mất" theo lossState (geometry vẫn
+    // solved liên tục mỗi frame) khi nguồn dữ liệu hình học đổi loại — ví dụ elbowSource đổi
+    // từ inferred sang observed, hay poleSource đổi từ rest/previous sang fresh/hand. Trước
+    // đây trường hợp này không kích hoạt `recovering` (chỉ dựa vào lossState), nên góc nhảy
+    // ngay tức thời — đo được hơn 100° khi elbow từ bị che chuyển sang lộ rõ. `forceReacquireBlend`
+    // do caller (processor) truyền vào khi phát hiện đổi loại nguồn, ép blend dù lossState
+    // đang "active".
+    const recovering = (state.lastValidDelta !== null && state.lossState !== "active") || (state.lastValidDelta !== null && forceReacquireBlend);
     if (recovering && state.recoveryStartedAtMs === null) { state.recoveryStartedAtMs = nowMs; state.recoveryOrigin = state.currentOutputDelta; }
-    state.lastValidDelta = solved; state.lastValidAtMs = nowMs;
+    state.lastValidDelta = solvedContinuous; state.lastValidAtMs = nowMs;
     const progress = recovering ? Math.min(1, (nowMs - state.recoveryStartedAtMs!) / Math.max(1, recoveryMs)) : 1;
-    state.currentOutputDelta = recovering ? slerpQuaternionData(state.recoveryOrigin!, solved, progress) : solved;
+    state.currentOutputDelta = recovering ? slerpQuaternionData(state.recoveryOrigin!, solvedContinuous, progress) : solvedContinuous;
     state.lossState = progress < 1 ? "recovering" : "active";
     if (progress >= 1) { state.recoveryOrigin = null; state.recoveryStartedAtMs = null; }
     return { output: state.currentOutputDelta, state: state.lossState, progress };
@@ -61,9 +90,10 @@ export function updateSegmentTemporalOutput(state: SegmentTemporalState, solved:
     const lostFor = nowMs - state.lastValidAtMs;
     if (lostFor <= invalidGraceMs) { state.lossState = "active"; state.currentOutputDelta = state.lastValidDelta; return { output: state.currentOutputDelta, state: state.lossState, progress: lostFor / Math.max(1, invalidGraceMs) }; }
     if (lostFor <= holdMs) { state.lossState = "held"; state.currentOutputDelta = state.lastValidDelta; return { output: state.currentOutputDelta, state: state.lossState, progress: lostFor / Math.max(1, holdMs) }; }
-    if (lostFor <= holdMs + returnMs) { const progress = (lostFor - holdMs) / Math.max(1, returnMs); state.lossState = "returning"; state.currentOutputDelta = slerpQuaternionData(state.lastValidDelta, IDENTITY_QUATERNION, progress); return { output: state.currentOutputDelta, state: state.lossState, progress }; }
+    if (lostFor <= holdMs + returnMs) { const progress = (lostFor - holdMs) / Math.max(1, returnMs); state.lossState = "returning"; state.currentOutputDelta = slerpQuaternionData(state.lastValidDelta, restingDelta, progress); return { output: state.currentOutputDelta, state: state.lossState, progress }; }
   }
-  state.lossState = "idle"; state.currentOutputDelta = IDENTITY_QUATERNION; return { output: state.currentOutputDelta, state: state.lossState, progress: 1 };
+  // Mất theo dõi lâu thì về tư thế buông tay, không phải T-pose dang ngang của rest pose.
+  state.lossState = "idle"; state.currentOutputDelta = restingDelta; return { output: state.currentOutputDelta, state: state.lossState, progress: 1 };
 }
 
 const names = (side: ArmSide): ControlledArmJoint[] => side === "left" ? ["leftUpperArm", "leftLowerArm"] : ["rightUpperArm", "rightLowerArm"];

@@ -121,5 +121,5 @@ export function createDebugPreset(name: DebugPresetName, timestamp = 1000): RawT
   if (name === "bothForward") { points[13] = lm(.2, 0, -.3); points[15] = lm(.2, 0, -.6); points[14] = lm(-.2, 0, -.3); points[16] = lm(-.2, 0, -.6); }
   const lost = { state: "lost" as const, sampledAtMs: null, landmarks: null, worldLandmarks: null };
   const imagePoints = points.map((point) => lm(.5 + point.x * .5, .5 + point.y * .5, point.z));
-  return { version: 1, frameTimestampMs: timestamp, overall: "partial", face: { state: "lost", sampledAtMs: null, landmarks: null, blendshapes: null, facialTransform: null }, leftHand: { ...lost, handedness: "left", handednessScore: null }, rightHand: { ...lost, handedness: "right", handednessScore: null }, pose: { state: "tracked", sampledAtMs: timestamp, landmarks: imagePoints, worldLandmarks: points } };
+  return { version: 1, frameTimestampMs: timestamp, overall: "partial", face: { state: "lost", sampledAtMs: null, landmarks: null, blendshapes: null, facialTransform: null }, leftHand: { ...lost, handedness: "left", handednessScore: null }, rightHand: { ...lost, handedness: "right", handednessScore: null }, rawHands: [], handSampledThisFrame: false, handSampledAtMs: null, videoWidth: 1280, videoHeight: 720, pose: { state: "tracked", sampledAtMs: timestamp, landmarks: imagePoints, worldLandmarks: points } };
 }

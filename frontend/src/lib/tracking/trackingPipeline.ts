@@ -1,6 +1,6 @@
 import type { FaceLandmarkerResult, HandLandmarkerResult, PoseLandmarkerResult } from "@mediapipe/tasks-vision";
 import { CameraController, type CameraResolution } from "./cameraController";
-import { MediaPipeRuntime, type DelegateSelection, type TrackingTaskSelection } from "./mediaPipeRuntime";
+import { MediaPipeRuntime, type DelegateSelection, type PoseModelVariant, type TrackingTaskSelection } from "./mediaPipeRuntime";
 import { mapRawTrackingFrame, type MediaPipeFrameResults } from "./rawTrackingMapper";
 import type { RawTrackingFrameV1 } from "./rawTrackingTypes";
 import { TrackingMetricsCollector, type TrackingMetricsSnapshot } from "./trackingMetrics";
@@ -15,6 +15,7 @@ export interface TrackingPipelineOptions {
   resolution?: CameraResolution;
   delegate?: DelegateSelection;
   tasks?: TrackingTaskSelection;
+  poseModel?: PoseModelVariant;
   onFrame: (frame: RawTrackingFrameV1) => void;
   onMetrics?: (metrics: TrackingMetricsSnapshot) => void;
   onError?: (error: unknown) => void;
@@ -29,7 +30,7 @@ export interface TrackingPipelineDependencies {
 
 const defaultDependencies = (options: TrackingPipelineOptions): TrackingPipelineDependencies => ({
   camera: new CameraController(options.resolution),
-  runtime: new MediaPipeRuntime(undefined, options.delegate, options.tasks),
+  runtime: new MediaPipeRuntime(undefined, options.delegate, options.tasks, options.poseModel),
   metrics: new TrackingMetricsCollector(),
 });
 
@@ -151,6 +152,9 @@ export class TrackingPipeline {
     try {
       const results: MediaPipeFrameResults = {};
       results.sampledAtMs = {};
+      if (this.video.videoWidth > 0 && this.video.videoHeight > 0) {
+        results.videoDimensions = { width: this.video.videoWidth, height: this.video.videoHeight };
+      }
       const tasks = this.dependencies.runtime.tasks;
       if (tasks.face) {
         results.face = this.measure("face", () => tasks.face!.detectForVideo(this.video!, mediaPipeTimestampMs));
@@ -176,7 +180,7 @@ export class TrackingPipeline {
       try { this.options.onFrame(frame); } catch (error) { this.safeError(error); }
       if (completedAt - this.lastMetricsEmitMs >= 500) {
         this.lastMetricsEmitMs = completedAt;
-        this.options.onMetrics?.(this.dependencies.metrics.snapshot(completedAt, this.dependencies.runtime.selectedDelegate));
+        this.options.onMetrics?.(this.dependencies.metrics.snapshot(completedAt, this.dependencies.runtime.selectedDelegate, this.dependencies.runtime.selectedPoseModel));
       }
     } catch (error) {
       this.safeError(error);

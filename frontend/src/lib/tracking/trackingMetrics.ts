@@ -1,4 +1,4 @@
-import type { ConfiguredDelegate } from "./mediaPipeRuntime";
+import type { ConfiguredDelegate, PoseModelVariant } from "./mediaPipeRuntime";
 import type { RawTrackingFrameV1 } from "./rawTrackingTypes";
 
 export type MetricGroup = "face" | "hands" | "pose" | "pipeline";
@@ -19,6 +19,8 @@ export interface TrackingMetricsSnapshot {
   mainThreadLongTasks: number;
   mainThreadBlockedMs: number;
   selectedDelegate: ConfiguredDelegate | null;
+  /** Ghi kèm để so sánh chi phí suy luận giữa `lite` và `full` trong cùng một snapshot. */
+  poseModel: PoseModelVariant | null;
   stateRatio: Record<"face" | "leftHand" | "rightHand" | "pose", Record<"tracked" | "lost" | "not-sampled", number>>;
   lossEvents: Record<"face" | "leftHand" | "rightHand" | "pose", number>;
 }
@@ -116,7 +118,7 @@ export class TrackingMetricsCollector {
     }
   }
 
-  snapshot(now: number, selectedDelegate: ConfiguredDelegate | null): TrackingMetricsSnapshot {
+  snapshot(now: number, selectedDelegate: ConfiguredDelegate | null, poseModel: PoseModelVariant | null = null): TrackingMetricsSnapshot {
     this.trimTicks(now);
     const fps = (ticks: number[]) => {
       if (ticks.length < 2) return 0;
@@ -148,6 +150,7 @@ export class TrackingMetricsCollector {
       mainThreadLongTasks: this.longTasks,
       mainThreadBlockedMs: this.blockedMs,
       selectedDelegate,
+      poseModel,
       stateRatio: Object.fromEntries((Object.keys(this.stateCounts) as Array<keyof typeof this.stateCounts>).map((group) => {
         const counts = this.stateCounts[group];
         const total = counts.tracked + counts.lost + counts["not-sampled"] || 1;

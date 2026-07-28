@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 4 — P4-T01 đến P4-T09 đã hoàn thành; P4-T10 Phase 3A đã implement, manual browser acceptance còn pending.**
+> **Trạng thái: đang thực hiện Phase 4 — P4-T01 đến P4-T09 đã hoàn thành; P4-T10 Phase 3A đã implement, Phase 3B Hand forearm twist đang làm và chưa qua webcam acceptance.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -516,13 +516,18 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/src/lib/avatar-motion/avatarPoseTypes.ts` | P4-T10: contract `AvatarPosePacketV1`; `jointRotations` là quaternion delta normalized-humanoid parent-local, rest-relative, không chứa raw landmark |
 | `frontend/src/lib/avatar-motion/normalizedRigProfile.ts` | P4-T10 Phase 3A: profile plain-data có torso rest reference và anatomical rest basis local/world (primary, secondary, binormal); validate và deep-freeze |
 | `frontend/src/lib/avatar-motion/jointSolver.ts` | P4-T10 Phase 2: solver parent-local/rest-relative theo thứ tự upper arm → lower arm mỗi bên; child dùng target world của parent trong cùng pose, không đọc animated renderer state |
-| `frontend/src/lib/avatar-motion/avatarMotionProcessor.ts` | P4-T10: filter → solve → constraint → packet; chỉ solve khi profile hợp lệ đã được cài; giữ geometry diagnostics qua missing sample, không làm temporal state già đi với duplicate timestamp, torso fallback fresh/previous/rest |
+| `frontend/src/lib/avatar-motion/avatarMotionProcessor.ts` | P4-T10 orchestration: Pose filter/solve/constraint/temporal, Hand matching/palm/twist, tracking epoch theo side và packet output; Hand chỉ được sửa lowerArm khi feature flag bật và observation hợp lệ |
 | `frontend/src/lib/avatar-motion/torsoBasis.ts` / `armFrameSolver.ts` | Phase 3A: per-segment direction validity tách khỏi pole/twist confidence; parallel-transport secondary; two-bone inferred elbow từ Pose shoulder/wrist với calibrated human lengths, reachability/confidence/timeout gate |
 | `frontend/src/lib/avatar-motion/armTemporalState.ts` | Phase 3A: temporal state riêng upper/lower trong shared arm state, phát rotation parent-local cho hold → return-to-identity → recovery |
 | `frontend/src/lib/avatar-motion/swingTwist.ts` / `motionMath.ts` | Phase 3A foundation: basis/quaternion math và swing–twist round-trip; production clamp để Phase 3C |
-| `frontend/src/lib/avatar-motion/avatarMotionDiagnostics.ts` | Diagnostic snapshot internal/DEV-only, tách khỏi `AvatarPosePacketV1`; phân biệt sample disposition với geometry validity và ghi torso basis source |
+| `frontend/src/lib/avatar-motion/avatarMotionDiagnostics.ts` | Diagnostic snapshot internal/DEV-only, tách khỏi `AvatarPosePacketV1`; chứa arm geometry/stability và toàn bộ chuỗi Hand twist theo side |
 | `frontend/src/lib/avatar-motion/coordinateAdapter.ts` | P4-T10: production conversion giữ nguyên `(x,y,z) → (x,-y,-z)`, normalize vector/quaternion và chống zero/NaN |
 | `frontend/src/lib/avatar-motion/oneEuroFilter.ts` / `jointConstraints.ts` / `trackingLoss.ts` | Lọc direction và safety radial clamp; semantic anatomical calibration để Phase 3C |
+| `frontend/src/lib/avatar-motion/handPoseMatching.ts` / `handPalmBasis.ts` / `handMotionDiagnostics.ts` | Phase 3B input: ghép Hand candidate với wrist Pose, dựng image/world palm basis và xuất diagnostic không tham gia motion |
+| `frontend/src/lib/avatar-motion/handForearmTwist.ts` / `handTwistConfidence.ts` | Phase 3B geometry/trust: đo signed axial twist quanh forearm và quyết định trusted/influence từ quality, projection, age và handedness |
+| `frontend/src/lib/avatar-motion/handTwistStabilization.ts` / `handTwistTemporal.ts` | Phase 3B state riêng từng side: unwrap, neutral, dead zone, filter, clamp, acquire/hold/fade/reset |
+| `frontend/src/lib/avatar-motion/handTwistRig.ts` | Phase 3B coordinate/rig boundary: đổi toàn bộ world palm basis sang motion frame trước solver và ghép `poseLowerDelta × handTwistDelta` quanh primaryLocal |
+| `frontend/src/lib/avatar-motion/handCalibrationAnalysis.ts` / `handTwistRootCauseValidation.test.ts` | Phase 3B calibration snapshot, synthetic geometry và rig-only regression cho dấu, ±π, primary direction, wrist inheritance |
 | `frontend/src/lib/avatar-renderer/modelLoader.ts` | P4-T10 Phase 2: load GLTF/VRM, `rotateVRM0`, lấy normalized humanoid nodes, capture rig profile theo từng model generation, chống stale load và dispose tài nguyên |
 | `frontend/src/lib/avatar-renderer/avatarRenderer.ts` | P4-T10 Phase 2: tái tạo absolute local target bằng `restLocal × deltaLocal`, slerp absolute local nếu bật smoothing, gán normalized bone quaternion; giữ nguyên position/scale |
 | `frontend/src/lib/avatar-renderer/animationFrameLoop.ts` / `rendererMetrics.ts` / `renderSmoothing.ts` | P4-T10: một rAF loop có duplicate guard, metrics FPS/p95/resource và smoothing frame-rate-independent |
@@ -532,6 +537,7 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `docs/P4_T10_PHASE1_DIAGNOSTICS_REPORT.md` | Báo cáo nghiệm thu forensic Phase 1: model/rest basis, bằng chứng H1–H3, calibration webcam H6, deterministic replay, privacy và đề xuất Phase 2 chưa triển khai |
 | `docs/P4_T10_PHASE2_ACCEPTANCE_REPORT.md` | Báo cáo review/nghiệm thu Phase 2: H1 fixed, H2 còn mở, deterministic real-model evidence, automated/browser/privacy/lifecycle evidence và điều kiện chuyển phase |
 | `docs/P4_T10_PHASE3A_ACCEPTANCE_REPORT.md` | Phase 3A arm-frame evidence; automated gate và trạng thái manual browser pending |
+| `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md` | Nguồn trạng thái/kế hoạch Phase 3B: phạm vi Hand forearm twist, file map, lỗi chiều xoay webcam còn mở và acceptance gate đa avatar |
 | `frontend/src/index.css` | Kokoro design system: Tailwind v4 theme, semantic CSS variables light/dark, typography, radius, shadow và reduced-motion baseline |
 | `frontend/tsconfig.app.json` | Cấu hình TypeScript và alias `@/*` → `src/*` |
 | `frontend/vite.config.ts` | Vite React plugin và alias `@` → `src` |
@@ -553,7 +559,7 @@ rendering, state, routing và design system thuộc các task Phase 4.
 | P4-T07 | Hoàn thành | `frontend/src/App.tsx`, auth helpers — Onboarding/Register |
 | P4-T08 | Hoàn thành | `frontend/src/lib/avatar/avatarSetup.ts`, Avatar Setup UI |
 | P4-T09 | Hoàn thành | `frontend/src/lib/tracking/`, `TrackingDevHarness.tsx` |
-| P4-T10 | IN PROGRESS | Phase 3A anatomical arm-frame đã implement: torso/rest frame, elbow-offset pole và pose-arm hold/return/recovery; browser gate pending, Phase 3B/3C chưa làm |
+| P4-T10 | IN PROGRESS | Phase 3A anatomical arm-frame đã implement. Phase 3B Hand forearm twist đã có production pipeline và automated regression nhưng webcam gate vẫn FAIL vì chiều pronation/supination tay phải còn sai; Phase 3C chưa bắt đầu |
 
 ### Design system (P4-T04)
 
@@ -773,10 +779,25 @@ khác với `lost`; One Euro Filter không update bằng cached sample.
 
 P4-T10 dùng `GLTFLoader + VRMLoaderPlugin`; VRM dùng humanoid/expression API chuẩn, còn
 GLB/glTF thường chỉ nhận mapping từ `AvatarModelRigProfile` đã kiểm chứng, không suy đoán
-node name. Model local `/models/avatars/reference-avatar.vrm` đã được xác nhận là VRM 0.x,
-có humanoid rig, nhưng metadata ghi `redistribution=disallow`, author/title trống và không
-có sidecar license. `.gitignore` chặn riêng binary này; model chưa phải asset production và
-không được commit/redistribute.
+node name. Thư mục local `frontend/public/models/avatars/` hiện có ba model thử nghiệm:
+`reference-avatar.vrm`, `reference-avatar-1.vrm` và `reference-avatar-2.vrm`. Loader capture
+normalized humanoid rig profile mới theo mỗi model generation; motion state cũ không được dùng
+lại sau reload. Có file không đồng nghĩa model đã qua acceptance: từng model phải có humanoid
+upper/lower arm hợp lệ, rest basis finite và chạy cùng deterministic/webcam matrix. Các binary
+local này chưa được coi là asset production và không được commit/redistribute khi chưa xác minh
+license/metadata riêng cho từng file.
+
+Các thư mục avatar/tracking quan trọng:
+
+| Thư mục | Vai trò và ranh giới |
+|---|---|
+| `frontend/src/lib/tracking/` | Sở hữu camera, MediaPipe runtime, cadence, raw local-only landmarks và tracking metrics; không render VRM |
+| `frontend/src/lib/avatar-motion/` | Chuyển raw tracking thành `AvatarPosePacketV1`; sở hữu coordinate convention, rig-independent math, Pose/Hand temporal state và diagnostics |
+| `frontend/src/lib/avatar-renderer/` | Load/dispose VRM, capture rig profile và áp packet lên normalized humanoid; không đọc webcam/raw landmarks |
+| `frontend/src/components/avatar/` | React lifecycle adapter cho canvas/renderer; không chứa solver math |
+| `frontend/src/components/dev/` | Harness DEV-only cho tracking/renderer, freeze/replay/calibration/diagnostics; không được dùng như production UI |
+| `frontend/public/mediapipe/` | WASM và Face/Hand/Pose task self-host cùng origin; raw frame không rời trình duyệt |
+| `frontend/public/models/avatars/` | Model VRM local phục vụ kiểm thử nhiều rig; không mặc nhiên là asset được phép phân phối |
 
 P4-T10 được chia thành các phase con để không trộn forensic diagnosis với sửa production:
 
@@ -795,7 +816,34 @@ P4-T10 được chia thành các phase con để không trộn forensic diagnosi
    normalized offset, projected previous/rest pole, pole filter và time-based hysteresis. Torso basis chỉ làm semantic reference, không animate
    chest. Processor phát rotation thật qua hold/return/recovery và idle identity; state tách
    trái/phải. Diagnostics không đi vào packet. `headRotation` giữ legacy/unverified và bị
-   loại khỏi arm acceptance. Phase 3B palm và Phase 3C calibration chưa triển khai.
+   loại khỏi arm acceptance.
+
+4. **Phase 3B — Hand forearm twist: IMPLEMENTED, MANUAL ACCEPTANCE FAILED — IN PROGRESS.**
+   Matching, world palm basis, motion-frame conversion, confidence, stabilization, temporal và
+   lowerArm quaternion composition đã có production wiring cùng automated regression. Tuy nhiên
+   webcam mới nhất vẫn cho thấy chiều pronation/supination tay phải ngược với động tác thật, kể cả
+   sau thử nghiệm tách application sign. Do đó Phase 3B chưa hoàn thành và không được mô tả là đã
+   xác nhận convention. Chi tiết, phạm vi còn lại và acceptance gate nằm tại
+   `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`.
+
+5. **Phase 3C — Rig calibration/constraint extension: NOT STARTED.** Không dùng Phase 3C để che
+   lỗi dấu/convention còn mở của Phase 3B; hand-bone orientation và finger bones vẫn ngoài phạm vi.
+
+   **Sửa lỗi ổn định pole (trong phạm vi 3A, không lấn 3B/3C).** Ba lỗi gây xoắn/rung tay đã
+   được sửa trong `armFrameSolver.ts`, mỗi lỗi có regression test được kiểm chứng bằng cách
+   hoàn nguyên bản sửa để xác nhận test thật sự bắt được lỗi:
+   - Outlier pole chỉ bị loại khi `flags.length > 0`, nên pole nhiễu lọt qua đúng lúc tracking
+     sạch (không near-edge/depth-degenerate/weak-offset). Nay luôn loại theo ngưỡng vận tốc góc.
+   - `poleFilter` chỉ chạy trên candidate tươi, khiến One Euro đóng băng suốt lúc pole bị loại
+     rồi nhả một cú nhảy khi pole quay lại. Nay lọc cả pole `previous`; pole `rest` vẫn không
+     đưa vào filter vì là hằng số suy từ rig, không phải quan sát.
+   - `lowerSecondary` luôn ưu tiên parallel transport kể cả khi lịch sử đã quá
+     `poleFallbackTimeoutMs`, làm cẳng tay xoắn độc lập với cánh tay trên sau đợt mất theo dõi
+     dài. Nay transport chỉ dùng khi còn trong thời hạn đó.
+
+   Hysteresis `elbowOffsetEnterMagnitude`/`ExitMagnitude` có tên đọc ngược với vai trò thực tế
+   (Enter dùng cho trạng thái "đang trong", Exit cho "đang ngoài"); chiều hoạt động hiện đúng,
+   đã ghi comment cảnh báo, đổi tên để dành cho Phase 3C.
 
 4. **Các phase tiếp theo: CHƯA TRIỂN KHAI.** Palm orientation/recovery, twist distribution,
    semantic anatomical constraints, calibration và full lifecycle/performance acceptance
@@ -806,7 +854,309 @@ vai–khuỷu–cổ tay ở Phase 2. Phase 3A manual gate chưa chạy lại v�
 hand/palm loss vẫn chưa xử lý. Reload 10 lần và
 background/resume chưa có runtime evidence đủ để tuyên bố không leak. Vì vậy P4-T10 vẫn
 `IN PROGRESS`.
+
+**Phân biệt hai nguồn lỗi: hướng xương và twist.** Preset `bothForward` cho `depthAlignment = 1.0`
+và `elbowOffset = 0` — tệ nhất theo mọi tiêu chí của solver — nhưng vẫn render đúng. Lý do:
+hướng xương dựng trực tiếp từ `elbow − shoulder` và `wrist − elbow` trong world landmark, không
+cần pole; pole chỉ quyết định twist, mà tay duỗi thẳng thì twist gần như không nhìn thấy. Preset
+nạp thẳng world landmark lý tưởng nên bỏ qua hoàn toàn khâu MediaPipe suy ra `z`.
+
+Vì vậy hiện tượng "tay xoắn/rung trên webcam nhưng preset vẫn đẹp" **không phải** lỗi twist/pole
+mà là **hướng xương lệch do `z` nhiễu**. Rig, solver và retargeting đã đúng — preset chứng minh.
+
+**Model pose: `full` thay cho `lite`.** `pose_landmarker_lite` có sai số `z` lớn hơn `full` rõ rệt,
+là nghi phạm chính của nhiễu hướng xương. `MediaPipeRuntime` nhận tham số `PoseModelVariant`
+(`DEFAULT_POSE_MODEL = "full"`), truyền qua `TrackingPipelineOptions.poseModel` để so sánh trực
+tiếp `lite` vs `full` trên dev harness. Ba ngưỡng `minPoseDetectionConfidence`/
+`minPosePresenceConfidence`/`minTrackingConfidence` nâng từ mặc định 0.5 lên 0.6: giữ landmark
+tin cậy thấp khiến solver dựng hướng từ toạ độ đoán mò, thà để arm-frame reject và giữ tư thế
+theo FR-09. Cái giá hiệu năng đo bằng `inferenceTimeMs.pose` và `pipelineFps` sẵn có trong
+`TrackingMetricsCollector` — **phải xác nhận còn đạt 24fps trên máy tầm trung trước khi chốt**.
+
+**Tư thế nghỉ là buông tay, không phải T-pose.** `idleArmPose.ts` dựng delta hạ cánh tay
+trên 90° và cẳng tay 0° (thẳng hàng) so với rest T-pose — khớp chính xác preset `armsDown`
+trong bảng Frozen presets của dev harness, đo trực tiếp từ world landmark của preset đó thay
+vì ước lượng. Áp cho `IDENTITY_QUATERNION` ở nhánh `idle`
+và đích của nhánh `returning` trong `armTemporalState`. Rest pose humanoid là T-pose nên
+identity cho ra hai tay dang ngang — dáng không ai giữ khi ngồi trước webcam, và chính nó làm
+mọi lần mất theo dõi trông như nhân vật giật về tư thế lạ. Trạng thái khởi tạo cũng đặt sẵn ở
+tư thế này để lúc chưa có sample đầu tiên avatar không đứng T-pose. Góc lấy từ
+`IDLE_ARM_ANGLES`; test kiểm bằng hướng thế giới sau khi áp delta, không so quaternion thô.
+
+**Giới hạn còn lại.** Twist quanh trục xương khi tay chĩa dọc trục quang học vẫn không quan sát
+được từ ảnh đơn — cờ `depth-degenerate` là chỗ hệ thống thừa nhận và chuyển sang pole fallback.
+Điều này ảnh hưởng hướng lòng bàn tay, không ảnh hưởng hướng xương, nên tác động thị giác nhỏ
+hơn nhiều so với nhiễu `z`. Hướng khắc phục là lấy thêm tín hiệu từ Hand landmarks ở Phase 3B.
+Che khuất hoàn toàn đã được FR-09 quy định là giữ tư thế hợp lệ gần nhất, không phải đoán lại.
+
+**Đã sửa: tay giật/nhảy loạn xạ khi tracking một phần (P0, theo tư vấn chuyên gia bên ngoài).**
+Nguyên nhân gốc: pipeline biến tín hiệu `visibility` liên tục thành quyết định nhị phân. Ba sửa:
+
+1. **Bone-length prior không đợi calibration** (`boneLengthPrior()` trong `armFrameSolver.ts`).
+   Trước đây `elbow-inference` chỉ chạy được sau khi đã "hiệu chuẩn" độ dài xương từ quan sát
+   — mà hiệu chuẩn lại chỉ cập nhật khi khuỷu quan sát được, nên đúng lúc khuỷu bị che (cần
+   suy luận nhất, chưa từng hiệu chuẩn trước đó) thì bị reject `elbow-inference-uncalibrated`.
+   Nay dùng tỉ lệ giải phẫu cố định (`upper:lower ≈ 1:1`, `upperArm ≈ 0.65 × shoulderWidth`)
+   scale theo bề rộng vai đo được ngay frame đó, chạy được từ frame đầu tiên.
+2. **Hysteresis cho quyết định "quan sát được"** (`visibleWithHysteresis()`, config
+   `visibilityEnter=0.6`/`visibilityExit=0.3`). Trước đây `visibility=0.50` chạy bình thường
+   còn `0.49` vứt bỏ toàn bộ đoạn xương — chênh 0.01 nhưng nhị phân hoàn toàn, và dao động
+   quanh 0.5 (rất phổ biến khi tay bị che một phần) làm cẳng tay bật/tắt mỗi frame. Nay đang
+   tracked thì cần tụt dưới exit mới rớt, đang lost thì cần vượt enter mới tính lại. State lưu
+   theo landmark (`elbowWasVisible`/`wristWasVisible`) trong `ArmGeometryHistory` và
+   `ArmTemporalState`, đưa ra ngoài qua `AnatomicalArmSolveResult.visibilityStates`.
+3. **Bảo toàn độ dài xương sau inference** — không cần sửa, đã đúng sẵn: `inferElbow()` chính
+   là công thức 2-bone IK hình học (Pythagore), nên khuỷu suy luận luôn cách vai đúng
+   `upperLength` và cách cổ tay đúng `lowerLength` tuyệt đối. Đã thêm assertion khoá invariant
+   này vào test, không phải thêm code.
+
+Chưa làm (P1/P2 theo đề xuất chuyên gia, để dành nếu occlusion vẫn còn khó chịu sau khi thử
+P0 trên webcam thật): One Euro riêng cho landmark position, reacquire blend 100–250ms khi
+tracking quay lại, quaternion hemisphere continuity, constant-velocity Kalman cho dropout
+ngắn. Không nên làm tiếp nếu P0 đã đủ — đo lại trên webcam thật trước khi quyết định.
+
+**Đã sửa: twist "chỉ biết phía trước" khi tay chĩa gần thẳng vào camera (Phase A / Mức 1,
+theo tư vấn chuyên gia bên ngoài lần 2).** Trước đó tài liệu này (và giải thích cho người dùng)
+từng gọi hiện tượng này là "giới hạn vật lý" — **không chính xác**: chỉ trường hợp cực đoan
+(tay thẳng camera VÀ bàn tay cũng biến mất) mới thật sự vô phương; phần lớn thời gian dữ liệu
+vẫn còn (bàn tay thường vẫn thấy được) nhưng code cũ bỏ phí, fallback thẳng về pole "rest"
+(hằng số từ rig, không phải quan sát thật) ngay khi `depthDegenerate` bật — một công tắc nhị
+phân dốc như vách đá. Năm sửa (A1–A5), đặt trong `armFrameSolver.ts`/`motionConfig.ts`:
+
+- **A1 — Diagnostic liên tục.** Thêm `depthQuality`, `bendPlaneQuality`, `elbowBendDegrees` vào
+  `ArmFrameDiagnostic`, tách rõ pole yếu vì hướng camera hay vì tay duỗi thẳng hay vì landmark
+  kém — chỉ đo, không đổi hành vi solver ở bước này.
+- **A2 — Bỏ công tắc nhị phân `depthDegenerate` cho quyết định CHẤP NHẬN pole** (biến
+  `depthDegenerate` gốc vẫn giữ nguyên vai trò cũ cho nhãn chẩn đoán và hysteresis alignment
+  theo thời gian). Thay bằng `observedPoleWeight = depthQuality × bendPlaneQuality` so với
+  ngưỡng liên tục. Quan trọng: `depthQuality` phải dùng khoảng smoothstep RỘNG
+  (`depthQualityFullTrustAlignment=0.75` → `depthQualityNoTrustAlignment=0.95`, đúng số chuyên
+  gia đề xuất) — tái dùng cặp enter/exit hẹp cũ (0.82–0.90) khiến weight vẫn dốc như vách đá cũ
+  dù công thức đã đổi, đo được bằng probe trước khi phát hiện ra.
+- **A3+A5 — Pole từ hướng bàn tay** (`handPalmPole()`), dùng index/pinky (landmark 19/17,
+  17-22 nói chung — có sẵn trong MediaPipe Pose 33 điểm, KHÔNG cần Hand Landmarker riêng) làm
+  nguồn thay thế khi elbow-offset pole không dùng được. Chèn vào chuỗi fallback ngay sau
+  `fresh`, trước `previous`: `fresh → hand → previous → rest`. `PoleSource` thêm giá trị
+  `"hand"`. Twist cue yếu hơn elbow-offset (đúng nhận định chuyên gia) nên KHÔNG được lưu làm
+  `history.previousPole` (`acceptedFreshPole` vẫn chỉ true khi `poleSource === "fresh"`) —
+  tránh một frame hand-pole nhiễu làm hỏng lịch sử dùng cho các frame sau.
+- **A4 — Hysteresis cho ngưỡng weight** (`minimumObservedPoleWeightEnter=0.08`/
+  `Exit=0.03`, tái dùng state `previousPoleWasFresh` đã có sẵn từ trước). Không có bước này,
+  đo được: khi khoảng cách giữa các frame vượt `poleFallbackTimeoutMs` (pole "previous" không
+  kịp cứu), cùng một mức weight dao động nhẹ quanh MỘT ngưỡng duy nhất làm `poleSource` nhảy
+  liên tục `fresh↔rest` mỗi frame.
+
+27 test trong `armFrameSolver.test.ts`, mỗi cái cho A1–A5 được kiểm chứng bằng cách tạm hoàn
+nguyên bản sửa và xác nhận test đỏ đúng chỗ trước khi khôi phục — cùng phương pháp xuyên suốt.
+
+**MỨC 1: KHOÁ LẠI — kết quả audit cuối cùng (không cố chỉnh threshold Pose fingers để cứu
+riêng một ảnh chụp).** Đối chiếu gate:
+
+| Gate | Trạng thái | Bằng chứng |
+|---|---|---|
+| Dao động quanh ngưỡng không snap | Đạt | Test A4, xác nhận lại bằng dữ liệu thật (xem dưới) |
+| Tay duỗi không làm pole flip | Đạt | `bendPlaneQuality` tách riêng, test A1 |
+| Tay hướng camera không lập tức về rest | Đạt CÓ ĐIỀU KIỆN | Phụ thuộc trạng thái trước đó — xem phân tích dưới |
+| Mất elbow nhưng shoulder/wrist còn thì arm cập nhật | Đạt | Từ P0 |
+| Không NaN/quaternion flip | Đạt | Test cũ (Phase 2 acceptance) vẫn xanh |
+| `bothForward` có joint rotation thật | Đạt | Test A3+A5 |
+| Reacquire không nhảy (quaternion continuity, angularDelta log) | **Đạt — làm ở Mức 1B** | Xem chi tiết bên dưới |
+| Chạy ổn định ≥24fps + latency <100ms | **Cần đo trên webcam thật** | Không đo được bằng unit test — Việc 6 của Mức 1B |
+
+**MỨC 1B — hoàn thành 5/6 việc (theo tư vấn chuyên gia, lần audit thứ hai).** Chuyên gia chỉ
+đúng: Mức 1A (A1-A5) mới khoá phần *chấp nhận pole quan sát*, chưa xử lý *tính liên tục của
+output* qua các frame — đây là khoảng trống thật, không phải việc thừa.
+
+1. **Quaternion hemisphere continuity** (`sameHemisphere()` trong `armTemporalState.ts`).
+   `q` và `-q` biểu diễn cùng một rotation; khi solver trả về dấu khác nhau giữa hai frame liên
+   tiếp cho cùng một góc thật, `updateSegmentTemporalOutput` giờ đảo dấu `solved` về cùng phía
+   với `currentOutputDelta` trước khi gán/slerp — áp dụng cả nhánh gán thẳng (`progress=1`,
+   không qua slerp nào, nơi renderer tắt smoothing sẽ lộ cú lật ngay lập tức) lẫn nhánh
+   recovering. 2 test, kiểm chứng bằng hoàn nguyên.
+
+2. **Reacquire blend khi đổi NGUỒN dữ liệu, không chỉ khi mất/còn tracking** — phát hiện quan
+   trọng nhất của Mức 1B. Cơ chế cũ (có sẵn từ P0, dòng theo dõi `elbowSource`) chỉ trigger
+   `recovering` khi *elbow* đổi nguồn quan sát/suy luận. Nhưng khi *pole* đổi nguồn (`rest→fresh`)
+   mà elbow không đổi, không có blend nào — đo được qua chính `AvatarMotionProcessor` (không
+   phải solver cô lập): **57.94° nhảy thẳng, không qua bất kỳ blend nào**. Sửa bằng
+   `poleSourceStrength()` xếp hạng độ tin cậy (`fresh=3 > hand=2 > previous=1 > rest=0`), phát
+   hiện "nâng cấp" nguồn, ép `recovering` qua tham số mới `forceReacquireBlend` trong
+   `updateSegmentTemporalOutput`. Sau sửa: `progress=0, jump=0.00°`. 1 test tích hợp, kiểm
+   chứng bằng hoàn nguyên.
+
+3. **5 diagnostic mới** trong `ArmFrameDiagnostic`: `upperArmAngularDeltaDeg`,
+   `lowerArmAngularDeltaDeg`, `poleAngularDeltaDeg`, `poleSourceChanged`, `trackingReacquired`.
+   Đo trên OUTPUT thực tế (đã qua Việc 1+2), không phải `deltas` thô của solver — phản ánh đúng
+   những gì renderer thực sự nhận mỗi frame. Hàm mới `angularDeltaDegrees()`/
+   `vectorAngularDeltaDegrees()` trong `motionMath.ts`. `GeometryDiagnostic` (kiểu solver dùng)
+   loại trừ 5 field này vì chúng cần "frame trước" mà solver không giữ state — chỉ
+   `AvatarMotionProcessor` tính được. 2 test, kiểm chứng bằng hoàn nguyên.
+
+4. **Test ép đúng chuỗi fallback fresh-reject → hand-reject → previous/rest**, xác nhận qua
+   `handPoleRejectionReason` rằng A5 THỰC SỰ được thử và bị reject (không chỉ "không thử") —
+   phân biệt với bug tiềm ẩn "A5 thành công nhưng vẫn chọn previous". 2 test, kiểm chứng bằng
+   hoàn nguyên (tạm tắt nhánh gọi A5).
+
+5. **Sequence test 4 pha** qua `AvatarMotionProcessor` thật: fresh → degraded (elbow bị che,
+   rơi về previous qua elbow-inference, `lossState=recovering`) → previous ổn định → reacquired
+   fresh. Xác nhận không pole flip, `upperArmAngularDeltaDeg < 1°` ở frame reacquire. Kiểm
+   chứng bằng hoàn nguyên: tắt cả elbowSourceChanged detection, sequence test bắt được ngay ở
+   pha 2 (`segmentLossState` không đúng `"recovering"`).
+
+163/163 test, build, lint sạch.
+
+**Còn lại: Việc 6 — browser performance gate (FPS ≥24, end-to-end latency <100ms) trên webcam
+thật.** Không đo được bằng unit test — cần chạy dev harness thật, đọc `TrackingMetricsCollector`
+(`pipelineFps`, `inferenceTimeMs`) và `RendererMetricsCollector`
+(`processorInputToDrawMs`) đã có sẵn trong harness.
+
+**Phân tích chuỗi fallback pole khi A5 reject (`low-index-visibility`) — đo bằng chính dữ liệu
+thật, không phải unit test tự dựng.** Ba kịch bản khác nhau tuỳ trạng thái trước đó:
+1. `previousPoleWasFresh=true` (tay vừa ở tư thế rõ ràng ngay trước đó): A4 hysteresis hạ
+   ngưỡng xuống `Exit=0.03`; `weight=0.0517` đã đủ vượt → **không cần rơi tới A5**, candidatePole
+   (elbow-offset) được chấp nhận thẳng, `poleSource=fresh`.
+2. `previousPoleWasFresh=false` nhưng có `previousPole` còn hạn (trong `poleFallbackTimeoutMs`):
+   weight không đủ vượt `Enter=0.08` → thử A5 → A5 reject → rơi xuống `previous`.
+3. Frame đầu tiên / không có lịch sử: A5 reject → không có gì để rơi xuống → `rest`.
+
+Panel người dùng chụp (đưa tay lên áp má) rất có thể rơi vào kịch bản 2 hoặc 3 (mở harness/tư
+thế mới), không đại diện cho hành vi liên tục khi camera đã chạy ổn định một lúc — **hành vi
+A1-A4 đúng theo thiết kế, không phải bug**, chỉ có A5 là điểm còn hạn chế thật sự.
+
+**Known limitation của A5 (Mức 1), chốt lại — không sửa thêm ở Mức 1.** `depthQuality=0.0549`
+thấp (armAxis lệch 22.8° khỏi trục camera) trong khi `bendPlaneQuality=0.9424` rất cao (khuỷu
+gập 109.5°, hoàn toàn không duỗi thẳng) — chứng minh tay quan sát được tốt ở mức hình học. A5
+được thiết kế đúng để cứu đúng trường hợp này nhưng **không chạy được vì thiếu landmark
+index/pinky (17/19) trong chính MediaPipe Pose** — bản chất là dữ liệu Pose-fingers yếu, không
+phải lỗi logic A1-A4 và không phải giới hạn vật lý của twist. Đã thêm
+`handPoleRejectionReason` vào `ArmFrameDiagnostic` để chẩn đoán chính xác lý do thay vì chỉ
+thấy `poleSource: "rest"` mà không biết tại sao. **Không tiếp tục chỉnh ngưỡng visibility của
+Pose index/pinky để cứu riêng trường hợp này** — dữ liệu nguồn (Pose 33-điểm) vốn không đủ
+chính xác ở ngón tay, hạ ngưỡng chỉ che giấu vấn đề bằng dữ liệu nhiễu, không giải quyết gốc rễ.
+
+**Kế hoạch Mức 2 — spike bằng image landmarks trước khi đụng tới world frame.** Đã cân nhắc
+nối thẳng Hand Landmarker world landmarks vào A5 và dừng lại: theo tài liệu MediaPipe,
+`HandLandmarker.worldLandmarks` có gốc toạ độ riêng của bàn tay đó (hand-centric), khác gốc
+với `PoseLandmarker.worldLandmarks` (gốc tại hông) — không thể trừ trực tiếp hai world position
+từ hai nguồn này. Nhưng vector tương đối **bên trong** hệ Hand (ví dụ `indexMcp - pinkyMcp`,
+cùng một frame, cùng gốc) vẫn hợp lệ. Thứ tự làm Mức 2:
+1. **Spike đầu tiên: dùng image landmarks (2D, không phải world).** Cả Pose và Hand đều có
+   `landmarks` (normalized image space, 0-1) cùng hệ quy chiếu camera — không có vấn đề gốc
+   toạ độ khác nhau như world landmarks. Ghép `palmAcross`/`palmForward` từ Hand image
+   landmarks, chiếu lên mặt phẳng vuông góc `armAxis` (tính từ Pose world) để làm pole — cách
+   này vòng qua rủi ro hệ quy chiếu mà vẫn tận dụng độ chính xác cao hơn của Hand Landmarker.
+2. **Sau khi spike 2D chứng minh được cải thiện thật**, mới nghiên cứu kỹ tài liệu MediaPipe về
+   phép chuyển Hand world frame sang Pose world frame (cần điểm neo chung, ví dụ dùng
+   `handedness` + vị trí wrist tương ứng bên Pose để ước lượng phép biến đổi rigid) — chỉ làm
+   nếu spike 2D chưa đủ tốt.
+3. Chưa đụng tới Mức 3 (ML suy twist từ appearance) — theo đúng khuyến nghị chuyên gia, chỉ xét
+   sau khi Mức 2 đã thử và biết rõ giới hạn.
+
+2. **Self-collision: cẳng tay xuyên qua thân khi áp tay vào ngực/mặt.** Không có collision
+   detection nào trong `jointConstraints.ts` — file đó chỉ giới hạn góc xoay tối đa so với
+   rest pose, không biết hình dạng chiếm không gian của thân người. Đã thử một hướng và thất
+   bại có kiểm soát: nghiêng hướng xương ra ngoài khi khuỷu/cổ tay lấn gần **trục** dọc thân
+   (khoảng cách ngang) — thất bại vì tay buông tự nhiên và tay áp ngực đều có khoảng cách
+   ngang gần bằng 0, đo được lệch hướng xương tới 31° ở preset `armsDown` (tư thế đúng bị phá
+   để sửa tư thế sai). Đã hoàn nguyên toàn bộ, không còn dấu vết trong code.
+
+   Tư vấn từ chuyên gia bên ngoài (không phải quyết định, cần duyệt riêng trước khi code):
+   dùng khoảng cách có dấu tới **bề mặt** (signed distance tới rounded-box torso-local), không
+   phải khoảng cách tới trục — đây là điểm khác biệt cốt lõi giải thích tại sao cách đã thử
+   thất bại. Kiến trúc đề xuất: `raw pose → soft target → torso/arm SDF constraint → PBD
+   projection (2-4 vòng) → 2-bone IK → quaternion + twist`, không cần physics engine
+   (Cannon.js/Rapier). Đề xuất giai đoạn hoá: Giai đoạn 1 chỉ forearm-vs-torso (3 sample, 2
+   vòng lặp, ưu tiên correction theo chiều sâu camera thay vì đẩy đều XYZ để tránh lặp lại lỗi
+   lệch 31° cũ); Giai đoạn 2 thêm contact hysteresis + head sphere + rest corridor cho tay
+   buông tự nhiên; Giai đoạn 3 mới thêm arm-arm collision. Chi phí ước tính nhỏ so với ngân
+   sách 41.7ms/frame ở 24fps. **Đây là gợi ý cần đánh giá kỹ trước khi triển khai, không phải
+   kế hoạch đã chốt** — quy mô kiến trúc (hệ trục torso-local mới, SDF, PBD, state machine
+   contact) lớn hơn một bản vá, cần coi là task con riêng khi bắt đầu Phase 3B/3C.
 ### Lớp WebRTC
+
+### Mức 2B-5 — áp Hand twist lên rig
+
+- `frontend/src/lib/avatar-motion/handTwistRig.ts` là coordinate boundary tập trung, convention v1
+  và phép ghép quaternion. Hand world basis đổi đồng bộ `across/forward/normal` từ raw frame sang
+  motion frame bằng `(x,y,z)→(x,-y,-z)` trước chirality. Sau đó
+  `palmDirectionAxis="normal"`; bên phải giữ normal đã đổi frame, bên trái negate đúng một lần và
+  truyền `positiveSign=+1` cho cả hai bên.
+- Code hiện có tách `rigApplicationSign` khỏi measurement sign để thử nghiệm tại boundary tạo
+  lowerArm quaternion. Tuy nhiên webcam gate mới nhất cho thấy tay phải **vẫn xoay ngược** sau khi
+  đặt right `-1`; vì vậy giá trị này chưa phải convention đã được nghiệm thu và không được dùng làm
+  bằng chứng Phase 3B PASS. Raw/corrected diagnostic, chirality policy và application sign phải được
+  đối chiếu đồng thời với world orientation sau renderer trước lần sửa production tiếp theo.
+- `AvatarMotionProcessor` có feature flag runtime `handTwistEnabled` (mặc định `false`) và setter
+  `setHandTwistEnabled()`. Dev harness có checkbox **Hand twist (2B-5)** để so sánh trực tiếp với
+  Pose-only.
+- Pose vẫn tạo toàn bộ swing và temporal output Mức 1. Pipeline Hand twist riêng mỗi side là:
+  raw wrapped twist → unwrap → correction tương đối với neutral → dead zone liên tục 3° → target
+  filter 80 ms → clamp correction ±75° → temporal velocity/influence → lower arm. Chỉ
+  `handTwistStabilization.ts` được unwrap; `handTwistTemporal.ts` nhận correction liên tục và
+  không unwrap lần hai.
+- Observation Hand và temporal/render tick được tách riêng. Frame unsampled hoặc duplicate không
+  chạy lại matching/palm/twist/confidence, không đổi wrist continuity/neutral và không tạo missing observation; temporal vẫn tiến
+  theo `dt` về target hợp lệ cuối cùng. Sampled no-hand/unmatched mới đặt `missingSinceMs`; hold 200
+  ms rồi fade theo `nowMs-missingSinceMs`, không theo số frame detector.
+- 2B-6 quản lý `trackingEpochId` độc lập từng side thay cho suy đoán identity từ source index.
+  Observation trusted đầu tiên của epoch mới anchor neutral đúng một lần. Short loss/reacquire và
+  source-index reorder giữ nguyên epoch/neutral. Reset/dispose, đổi rig/model, discontinuity theo
+  side, long-loss reset, hoặc recovery sau lower-arm geometry loss đã được xác nhận đồng bộ temporal
+  + stabilization + matching rồi mở epoch mới; quaternion từ epoch cũ không được tái sử dụng. Một
+  geometry observation invalid chỉ fallback Pose-only và bắt đầu pending interval; nó không đổi
+  epoch/neutral. Chỉ observation invalid tiếp theo vượt `armFrame.invalidGraceMs` mới xác nhận loss.
+- 2B-6 là integration/regression state-management, không được coi là bằng chứng chiều twist đúng.
+  Automated gate hiện xanh nhưng manual right-hand direction gate đang đỏ; trạng thái tổng thể vẫn
+  là Phase 3B IN PROGRESS.
+- Processor chỉ ghép `outputDelta = poseLowerDelta * handTwistDelta`; trục twist là
+  `rigProfile.joints[lowerArm].anatomicalRestBasis.primaryLocal`.
+- Không xoay `hand` bone và không phân phối lowerArm/hand. Hand bone hiện chỉ là child nên thừa
+  hưởng rotation của lower arm. Phân phối twist cần rig profile có hand rest basis và thuộc phase
+  riêng.
+- Nếu flag tắt, chưa từng có target hợp lệ, influence đã về 0, output non-finite hoặc thiếu
+  geometry/profile, processor trả lại chính quaternion Pose hiện có, không clone/normalize/đổi
+  dấu. Short missing vẫn áp held twist cho tới khi temporal fade về 0. Diagnostics từng tầng nằm
+  tại `AvatarMotionDiagnosticSnapshot.handTwist.{left,right}`, gồm wrapped/unwrapped target,
+  neutral, influence, trust, temporal state, rejection reason và applied twist. Diagnostic 2B-6
+  bổ sung sample classification, matching continuity, epoch/reset reason, epoch đã anchor và
+  `lastAppliedTwistRadians` (derive từ temporal angle × influence, không phải control state thứ hai).
+
+### 2B-5C — Pronation/Supination Root-Cause Validation (WEBCAM GATE PENDING)
+
+- Investigation chỉ thêm test/diagnostic evidence, chưa sửa production. File mới
+  `frontend/src/lib/avatar-motion/handTwistRootCauseValidation.test.ts` kiểm tra rig-only
+  inheritance, lowerArm primary invariance, wrist position, ±45°, A-B-A drift, left/right,
+  renderer không ghi đè hand local rotation, synthetic palm normal, unwrap ±π và scalar pipeline.
+- Root cause offline đã sửa tối thiểu tại `handTwistRig.ts`: đổi toàn bộ Hand world basis sang
+  motion frame trước chirality và trước `computeHandForearmTwist()`. RED contract test đã GREEN;
+  synthetic physical ±45° cho đúng ±45° ở cả hai side, basis giữ length/orthogonality/cross và
+  không double-negate trái. Processor chỉ dùng `worldBasis`, không fallback image basis vào Pose
+  world axis.
+- Chưa kết luận 2B-5 PASS cho tới khi webcam neutral/palm-up/palm-down xác nhận chuỗi diagnostic
+  cùng dấu, đúng biên độ, không bị tầng temporal/renderer triệt tiêu.
+
+### 2B-5D — Arm Stability Root-Cause Audit (PRODUCTION FIX PENDING)
+
+- `AvatarMotionDiagnosticSnapshot.armStability.{left,right}` tách delta quaternion target/applied
+  của Pose khỏi delta scalar raw/applied của Hand twist; đồng thời chụp elbow/pole source và cờ đổi
+  nhánh, pole quality, Pose confidence/tracking, trust/influence/neutral/observation mode, `frameDtMs`
+  và tuổi sample Pose/Hand. Đây chỉ là instrumentation; dev harness đọc snapshot theo chu kỳ 400 ms,
+  không `console.log` mỗi frame và không tham gia quyết định motion.
+- Audit deterministic 8 sequence cho thấy input Pose giống hệt không tự sinh chuyển động, kể cả khi
+  `dt` lần lượt thay đổi 16/50/33/100 ms. Khi tiêm nhiễu landmark nhỏ ở tư thế khuỷu 90°, jitter xuất
+  hiện đầu tiên tại Pose solver target (`upper=0.0096615 rad`, `lower=0.0026063 rad`) rồi đi 1:1 tới
+  Pose applied khi filter tắt; elbow/pole source vẫn không đổi.
+- Ở Hand steady-state, nhiễu raw twist `0.0062892 rad` còn `0.0007082 rad` tại applied twist; target và
+  temporal influence cùng ổn định ở `0.9830449`. Vì vậy Hand temporal đang giảm nhiễu ổn định, không
+  phải tầng khuếch đại trong sequence này. Pure twist vẫn giữ lowerArm primary và wrist position theo
+  rig-only contract.
+- Vùng tay gần duỗi thẳng có thể đổi nhánh pole `fresh → previous → fresh`; đây là nguồn target
+  discontinuity có điều kiện ở solver. Elbow visibility hysteresis chỉ đổi nguồn tại exit 0.29 và
+  enter 0.61, không flap tại 0.50/0.59. Short Hand miss/unsampled/reacquire giữ neutral, không re-anchor.
+- Chưa sửa production solver/filter/temporal từ kết quả audit này. Cần snapshot webcam A/B cùng một
+  tư thế để định lượng tỷ lệ thời gian Pose-target jitter, pole/elbow branch change và Hand-only jitter
+  trước khi duyệt kế hoạch fix riêng.
+
 ### Các màn hình
 
 ## Luồng dữ liệu chính
