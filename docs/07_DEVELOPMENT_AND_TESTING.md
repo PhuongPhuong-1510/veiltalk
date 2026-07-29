@@ -425,4 +425,81 @@ Wrist flexion/extension, finger pose và nắm đấm không phải failure củ
 Known issue ngoài matrix: khi bàn tay che mặt, Face tracking có thể làm đầu/mặt quay hoặc biến dạng.
 Lỗi này xảy ra cả khi Hand twist tắt và phải được theo dõi như task Face-occlusion riêng.
 
+### 6.9. Phase 3C — Bằng chứng kiểm thử các task 3C-01→07
+
+Kế hoạch và gate chi tiết là
+`docs/P4_T10_PHASE3C_FACE_EXPRESSION_AND_LOCAL_LIPSYNC_PLAN.md`. Phase 3C cũ về arm
+calibration/constraint đã hủy; mục này chỉ áp dụng cho face expression và local lip-sync.
+Không còn task acceptance tổng hợp 3C-09; 3C-08/09 đã bỏ khỏi phạm vi theo quyết định người dùng
+ngày 2026-07-30. Các bảng dưới đây được giữ làm bằng chứng/hướng dẫn, không phải gate của task 3C-09.
+
+Automated test bắt buộc bao phủ neutral calibration; dead zone/gain; per-group attack/release;
+mouth close hysteresis; conflict jaw/close/press/pucker/stretch; independent blink; blink/wide
+priority; smile/squint composition; left/right preservation; face hold/return/recovery; model
+mapped/fallback/unsupported; morph reset về zero; lifecycle reset và privacy packet.
+
+Chạy cùng manual matrix trên `reference-avatar.vrm`, `reference-avatar-1.vrm` và
+`reference-avatar-2.vrm`. Model thiếu capability phải bị từ chối với lý do rõ ràng, không hard-code
+tên morph ngoài model profile.
+
+| Case | Động tác | Evidence bắt buộc | Kết quả đạt |
+|---|---|---|---|
+| C1 | Neutral 10 giây | raw/calibrated/rendered + latency | mặt ổn định, miệng đóng, không expression giả |
+| C2 | Nói chậm/nhanh và ngắt âm tiết | jaw/close/audio envelope/rendered | đóng rõ khi nghỉ, không jaw-only kéo dài |
+| C3 | Chu môi, mím môi, kéo khóe | semantic + mapping/fallback + avatar | ba hình dạng phân biệt, không méo do cộng xung đột |
+| C4 | Blink trái/phải/hai mắt | per-side raw/final + avatar | đúng bên, chớp ngắn không bị triệt tiêu |
+| C5 | Cười nhẹ/mạnh và nheo mắt | smile/squint/cheek composition | tăng tự nhiên, không ép squint quá mức |
+| C6 | Cau/nhíu/nhướng mày | per-side brow channels | phản ứng đúng và giữ bất đối xứng khi có |
+| C7 | Phồng má | calibrated cheekPuff + capability | có phản ứng nếu model hỗ trợ, không scale đầu giả |
+| C8 | Biểu cảm một bên | left/right values + model result | không mirror hoặc average sớm |
+| C9 | Che/mở mặt ngắn và dài | loss state/filter/calibration epoch | hold ngắn, neutral dài, recovery không snap |
+| C10 | Chạy liên tục 3 phút | FPS, p95 latency, diagnostics | ≥24 fps, phản ứng <100 ms, không kẹt morph/NaN |
+
+Phase 3C không nghiệm thu WebRTC jitter buffer hoặc audio–expression skew phía nhận; các gate dưới
+120 ms đó thuộc P4-T19.
+
+Cập nhật 3C-01 sau design audit: regression bắt buộc còn chứng minh mapped thắng fallback khi cùng
+target, VRM expression không đồng sở hữu raw morph bind, physical target độc lập vẫn chạy, value
+được clamp và stale target được nhận diện để reset. Full gate 38 test files, 396/396 PASS, lint và
+production build PASS. Manual browser gate cho capability/ownership/rejection, ba tầng value và
+slider trên model thật được người dùng xác nhận đạt ngày 2026-07-30.
+
+Cập nhật 3C-02: regression bao phủ ready normalization, expressive/duplicate/invalid rejection,
+explicit failure/recalibration, short/long loss, timestamp regression và cancel/reset. Full gate
+39 test files, 401/401 PASS; lint/build PASS. Manual webcam matrix được người dùng xác nhận đạt
+ngày 2026-07-30.
+
+Cập nhật 3C-03: targeted regression phải bao phủ asymmetric jaw attack/release; weighted
+close/press/roll suppression; strong-close confirmation/hysteresis; duplicate, loss, timestamp
+regression và reset; null/simulated/audio RMS source; processor packet giữ `jawOpen === aa`; renderer
+không smooth lại `jawOpen`, `aa`, `mouthClose`. Chỉ chạy các file test liên quan theo yêu cầu hiện tại,
+kèm lint/build; manual webcam/audio matrix được người dùng xác nhận đạt ngày 2026-07-30.
+
+Cập nhật 3C-04: targeted regression bao phủ cười mím không phát `happy`, cười mở có fallback,
+close/press chặn `happy`, vertical-lip evidence cho cười lộ răng, dominance pucker↔horizontal,
+left/right, invalid input/immutability/reset, processor integration, direct smile thắng aggregate,
+`funnel → oh|ou` và synonym mạnh hơn sở hữu shared fallback target.
+Manual matrix theo `docs/P4_T10_PHASE3C_04_MOUTH_SHAPE_COMPOSITION_PLAN.md` được người dùng xác nhận
+PASS ngày 2026-07-30.
+
+Cập nhật 3C-05: targeted regression bao phủ blink độc lập, pulse hold/release, blink-vs-wide,
+eye/cheek/smile squint composition, wide/gaze dead zone, gaze direction/clamp/loss, packet privacy,
+capability priority một owner, neutral gaze centering, model loading và eye-bone renderer math.
+Targeted gate 9 files, 94/94 PASS; lint/build PASS. Manual webcam matrix tại
+`docs/P4_T10_PHASE3C_05_EYES_AND_GAZE_PLAN.md` được người dùng xác nhận PASS ngày 2026-07-30.
+
+Cập nhật 3C-06: targeted regression bao phủ brow/frown bất đối xứng và không cross-coupling,
+cheek-puff dead-zone/hysteresis, speech suppression, strong-puff bypass, invalid/reset, packet
+integration, detailed VRoid morph alias, portable VRM preset fallback và renderer ownership.
+Targeted gate 6 files, 91/91 PASS, gồm regression chứng minh overdrive chỉ chạy khi binding khai báo
+`modelGain/outputMax` và vẫn bị chặn ở 1.6; lint/build PASS. Manual webcam matrix tại
+`docs/P4_T10_PHASE3C_06_BROWS_SMILE_FROWN_CHEEKS_PLAN.md` được người dùng xác nhận PASS ngày
+2026-07-30.
+
+Cập nhật 3C-07: targeted regression bao phủ exact short hold, not-sampled/duplicate, return-to-neutral,
+mouth close, gaze neutral, two-sample confirmation, recovery blend, one-shot long-loss reset,
+calibration lifecycle, packet integration và stale renderer target. Targeted gate 9 files,
+105/105 PASS; lint/build PASS. Manual webcam matrix tại
+`docs/P4_T10_PHASE3C_07_FACE_LOSS_RECOVERY_PLAN.md` được người dùng xác nhận PASS ngày 2026-07-30.
+
 *— Hết tài liệu —*

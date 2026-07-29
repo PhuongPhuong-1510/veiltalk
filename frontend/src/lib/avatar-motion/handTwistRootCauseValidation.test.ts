@@ -62,10 +62,11 @@ function rendererProbe(lowerName: "leftLowerArm" | "rightLowerArm", handName: "l
   Object.assign(renderer as unknown as Record<string, unknown>, {
     smoothing: false,
     currentRotations: {},
+    currentExpressions: {}, renderedExpressions: {}, appliedExpressionTargets: new Map(), pendingRawExpressionValues: new Map(), rejectedExpressions: [], diagnosticExpressionOverrides: {},
     model: {
       bones: { [lowerName]: lower, [handName]: hand },
       restRotations: { [lowerName]: qData(new Quaternion()), [handName]: qData(handRest) },
-      expressionMap: {}, morphTargets: new Map(), vrm: null,
+      expressionMap: {}, faceExpressionMap: {}, faceExpressionBindings: [], morphTargets: new Map(), vrm: null,
     },
   });
   const applyTarget = (renderer as unknown as { applyTarget(value: AvatarPosePacketV1, dt: number): void }).applyTarget.bind(renderer);

@@ -2,6 +2,14 @@ import type { RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
 import type { AvatarPartTrackingInfo, AvatarPosePacketV1, QuaternionData } from "./avatarPoseTypes";
 import { quaternionFromRotationMatrix } from "./coordinateAdapter";
 import { mapMediaPipeExpressions } from "./expressionMapper";
+import { FaceCalibrationProcessor, type FaceCalibrationSnapshot } from "./faceCalibration";
+import { MouthTimingProcessor, type MouthTimingDiagnostics } from "./mouthTiming";
+import { MOUTH_SHAPE_EXPRESSION_NAMES, MouthShapeComposer, type MouthShapeDiagnostics } from "./mouthShapeComposer";
+import { EYE_EXPRESSION_NAMES, EyeExpressionProcessor, type EyeExpressionDiagnostics } from "./eyeExpression";
+import { GazeProcessor, type GazeDiagnostics } from "./gaze";
+import { BROW_CHEEK_EXPRESSION_NAMES, BrowCheekExpressionProcessor, type BrowCheekExpressionDiagnostics } from "./browCheekExpression";
+import { FaceExpressionLossProcessor, type FaceExpressionLossDiagnostics, type FaceMotionSample } from "./faceExpressionLoss";
+import type { AudioActivitySource } from "./audioActivity";
 import { solveAnatomicalArmFrames, type GeometryDiagnostic } from "./armFrameSolver";
 import { validateRigProfile, type NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import { DEFAULT_AVATAR_MOTION_CONFIG, type AvatarMotionConfig } from "./motionConfig";
@@ -189,9 +197,20 @@ function poleSourceStrength(source: PoleSource): number {
   }
 }
 
+const PROCESSOR_OWNED_FACE_EXPRESSIONS = new Set<string>(["jawOpen", "aa", "mouthClose", ...MOUTH_SHAPE_EXPRESSION_NAMES, ...EYE_EXPRESSION_NAMES, ...BROW_CHEEK_EXPRESSION_NAMES]);
+
 export class AvatarMotionProcessor {
   private sequence = 0;
   private readonly expressionFilters = new Map<string, OneEuroScalarFilter>();
+  private readonly faceCalibration = new FaceCalibrationProcessor();
+  private readonly mouthTiming: MouthTimingProcessor;
+  private readonly mouthShape: MouthShapeComposer;
+  private readonly eyeExpression: EyeExpressionProcessor;
+  private readonly gaze: GazeProcessor;
+  private readonly browCheekExpression: BrowCheekExpressionProcessor;
+  private readonly faceExpressionLoss: FaceExpressionLossProcessor;
+  private lastFaceProcessedSampledAtMs: number | null = null;
+  private mouthTimingEnabled = true;
   private readonly directionFilters = new Map<AvatarJointName, OneEuroVectorFilter>();
   private readonly poleFilters = new Map<ArmSide, OneEuroVectorFilter>();
   private readonly loss = {
@@ -224,6 +243,12 @@ export class AvatarMotionProcessor {
   constructor(options: AvatarMotionProcessorOptions = {}) {
     this.now = options.now ?? (() => performance.now());
     this.config = options.config ?? DEFAULT_AVATAR_MOTION_CONFIG;
+    this.mouthTiming = new MouthTimingProcessor(this.config.mouthTiming);
+    this.mouthShape = new MouthShapeComposer(this.config.mouthShape);
+    this.eyeExpression = new EyeExpressionProcessor(this.config.eyeExpression);
+    this.gaze = new GazeProcessor(this.config.gaze);
+    this.browCheekExpression = new BrowCheekExpressionProcessor(this.config.browCheekExpression);
+    this.faceExpressionLoss = new FaceExpressionLossProcessor({ holdMs: this.config.loss.holdMs, returnMs: this.config.loss.returnMs, recoveryMs: this.config.loss.recoveryMs, confirmationSamples: 2 });
     this.filtered = options.filtered ?? true;
     this.constraints = options.constraints ?? true;
     this.handTwistEnabled = options.handTwistEnabled ?? false;
@@ -279,6 +304,22 @@ export class AvatarMotionProcessor {
     this.resetArmState(); this.resetHandTrackingState("rig-profile-change"); this.resetHandSampleClassification(); this.resetFilters();
   }
   getLastDiagnostics(): AvatarMotionDiagnosticSnapshot | null { return this.diagnostics ? structuredClone(this.diagnostics) : null; }
+  startFaceCalibration(): void { this.faceCalibration.start(this.now()); this.expressionFilters.clear(); }
+  cancelFaceCalibration(): void { this.faceCalibration.cancel(); this.expressionFilters.clear(); }
+  resetFaceCalibration(): void { this.faceCalibration.reset(); this.expressionFilters.clear(); }
+  getFaceCalibrationSnapshot(): FaceCalibrationSnapshot { return this.faceCalibration.snapshot(); }
+  setMouthTimingEnabled(enabled: boolean): void { if (this.mouthTimingEnabled !== enabled) this.mouthTiming.reset(); this.mouthTimingEnabled = enabled; }
+  setAudioActivitySource(source: AudioActivitySource | null): void { this.mouthTiming.setAudioSource(source); }
+  resetMouthTiming(): void { this.mouthTiming.reset(); }
+  getMouthTimingDiagnostics(): MouthTimingDiagnostics | null { return this.mouthTiming.snapshot(); }
+  resetMouthShape(): void { this.mouthShape.reset(); }
+  getMouthShapeDiagnostics(): MouthShapeDiagnostics | null { return this.mouthShape.snapshot(); }
+  resetEyes(): void { this.eyeExpression.reset(); this.gaze.reset(); }
+  getEyeExpressionDiagnostics(): EyeExpressionDiagnostics | null { return this.eyeExpression.snapshot(); }
+  getGazeDiagnostics(): GazeDiagnostics | null { return this.gaze.snapshot(); }
+  resetBrowCheekExpressions(): void { this.browCheekExpression.reset(); }
+  getBrowCheekExpressionDiagnostics(): BrowCheekExpressionDiagnostics | null { return this.browCheekExpression.snapshot(); }
+  getFaceExpressionLossDiagnostics(): FaceExpressionLossDiagnostics { return this.faceExpressionLoss.snapshot(); }
 
   process(frame: RawTrackingFrameV1): AvatarPosePacketV1 {
     const processedTimestampMs = this.now();
@@ -288,10 +329,25 @@ export class AvatarMotionProcessor {
       rightHand: this.part("rightHand", frame.rightHand.state, frame.rightHand.sampledAtMs, processedTimestampMs, this.config.freshnessMs.hand),
       pose: this.part("pose", frame.pose.state, frame.pose.sampledAtMs, processedTimestampMs, this.config.freshnessMs.pose),
     };
-    const semantic = frame.face.blendshapes && tracking.face.outputState === "active"
-      ? mapMediaPipeExpressions(frame.face.blendshapes) : {};
+    const calibratedFace = this.faceCalibration.process(frame.face.state, frame.face.sampledAtMs, frame.face.blendshapes, frame.face.facialTransform, processedTimestampMs);
+    const faceSampleIsNew = frame.face.state === "tracked" && frame.face.blendshapes !== null && frame.face.sampledAtMs !== null && frame.face.sampledAtMs !== this.lastFaceProcessedSampledAtMs;
+    let faceCandidate: FaceMotionSample | null = null;
+    if (faceSampleIsNew) {
+      const mappedSemantic = mapMediaPipeExpressions(calibratedFace);
+      const timedSemantic = this.mouthTimingEnabled
+        ? this.mouthTiming.process(mappedSemantic, frame.face.sampledAtMs, processedTimestampMs, true)
+        : mappedSemantic;
+      const mouthSemantic = this.mouthShape.compose(timedSemantic);
+      const eyeSemantic = this.eyeExpression.process(mouthSemantic, processedTimestampMs, true);
+      faceCandidate = { expressions: this.browCheekExpression.process(eyeSemantic, processedTimestampMs), gaze: this.gaze.process(mappedSemantic, processedTimestampMs, true) };
+      this.lastFaceProcessedSampledAtMs = frame.face.sampledAtMs;
+    }
+    const faceOutput = this.faceExpressionLoss.process(faceCandidate, frame.face.state, frame.face.sampledAtMs, processedTimestampMs);
+    if (this.faceExpressionLoss.snapshot().longLossResetRequested) this.resetFaceTemporalAfterLongLoss();
+    const semantic = faceOutput.expressions;
+    const gaze = faceOutput.gaze;
     const expressions = this.filtered && frame.face.sampledAtMs !== null && frame.face.state === "tracked"
-      ? Object.fromEntries(Object.entries(semantic).map(([name, value]) => [name, this.expressionFilter(name).filter(value, frame.face.sampledAtMs!)]))
+      ? Object.fromEntries(Object.entries(semantic).map(([name, value]) => [name, PROCESSOR_OWNED_FACE_EXPRESSIONS.has(name) ? value : this.expressionFilter(name).filter(value, frame.face.sampledAtMs!)]))
       : semantic;
     const headRotation = tracking.face.outputState === "active" && frame.face.facialTransform
       ? quaternionFromRotationMatrix(frame.face.facialTransform.data) : null;
@@ -492,7 +548,7 @@ export class AvatarMotionProcessor {
       }
       this.diagnostics = { version: 1, processedAtMs: processedTimestampMs, torso: { right: torso.right, up: torso.up, forward: torso.forward, source: torsoSource }, arms: armDiagnostics, handTwist: handTwistDiagnostics, armStability: armStabilityDiagnostics, headRotationSemantic: "legacy-unverified" };
     } else this.diagnostics = null;
-    return { version: 1, sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, headRotation, jointRotations, handMotion: handContext.diagnostics };
+    return { version: 1, sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze, headRotation, jointRotations, handMotion: handContext.diagnostics };
   }
 
   /**
@@ -799,11 +855,11 @@ export class AvatarMotionProcessor {
   }
 
   reset(): void {
-    this.sequence = 0; this.resetArmState(); this.resetHandTrackingState("processor-reset"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
+    this.sequence = 0; this.faceCalibration.reset(); this.mouthTiming.reset(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.faceExpressionLoss.reset(); this.lastFaceProcessedSampledAtMs = null; this.resetArmState(); this.resetHandTrackingState("processor-reset"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
   dispose(): void {
     this.rigProfile = null;
-    this.sequence = 0; this.resetArmState(); this.resetHandTrackingState("dispose"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
+    this.sequence = 0; this.faceCalibration.reset(); this.mouthTiming.dispose(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.faceExpressionLoss.reset(); this.lastFaceProcessedSampledAtMs = null; this.resetArmState(); this.resetHandTrackingState("dispose"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
 
   private part(key: keyof AvatarMotionProcessor["loss"], sourceState: AvatarPartTrackingInfo["sourceState"], sampledAtMs: number | null, now: number, freshness: number): AvatarPartTrackingInfo {
@@ -836,6 +892,7 @@ export class AvatarMotionProcessor {
     let filter = this.poleFilters.get(side); if (!filter) { filter = new OneEuroVectorFilter(this.config.filter.pole, this.config.filter.maxTimestampGapMs); this.poleFilters.set(side, filter); } return filter;
   }
   private resetFilters(): void { this.expressionFilters.clear(); this.directionFilters.clear(); this.poleFilters.clear(); }
+  private resetFaceTemporalAfterLongLoss(): void { this.mouthTiming.reset(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.expressionFilters.clear(); }
   private resetArmState(): void {
     for (const side of ["left", "right"] as const) {
       const fresh = createArmTemporalState();

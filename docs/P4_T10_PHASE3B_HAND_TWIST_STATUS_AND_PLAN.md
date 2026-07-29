@@ -155,6 +155,8 @@ Phase 3B chỉ hoàn thành khi tất cả điều kiện sau cùng đúng:
 
 ## 8. Quan hệ với phase kế tiếp
 
-Phase 3C chỉ bắt đầu sau Phase 3B hoặc bằng quyết định tách task rõ ràng. Phase 3C dự kiến mở rộng
-anatomical calibration/constraint theo rig và, nếu được duyệt, hand-bone orientation. Không dùng
-Phase 3C để che một lỗi dấu/convention còn tồn tại trong lowerArm twist của Phase 3B.
+Phase 3C cũ về anatomical calibration/constraint và hand-bone orientation đã bị hủy. Các hạng mục
+đó hiện là backlog tay chưa gán phase và không được dùng để che lỗi dấu/convention còn tồn tại
+trong lowerArm twist của Phase 3B. Phase 3C mới là Face Expression & Local Lip-sync, được đặc tả
+tại `docs/P4_T10_PHASE3C_FACE_EXPRESSION_AND_LOCAL_LIPSYNC_PLAN.md`, và không thay đổi acceptance
+gate của Phase 3B.

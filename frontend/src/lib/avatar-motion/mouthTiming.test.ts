@@ -1,0 +1,12 @@
+import { describe, expect, it } from "vitest";
+import { SimulatedAudioActivitySource } from "./audioActivity";
+import { DEFAULT_MOUTH_TIMING_CONFIG, MouthTimingProcessor } from "./mouthTiming";
+const input = (jawOpen: number, mouthClose = 0) => ({ jawOpen, mouthClose, mouthPressLeft: 0, mouthPressRight: 0, mouthRollUpper: 0, mouthRollLower: 0 });
+describe("mouth timing", () => {
+  it("opens and closes with asymmetric time-based response", () => { const value = new MouthTimingProcessor(); value.process(input(0), 0, 0); const open = value.process(input(1), 20, 20).jawOpen; const closed = value.process(input(0), 40, 40).jawOpen; expect(open).toBeGreaterThan(.4); expect(closed).toBeLessThan(open); });
+  it("uses continuous press suppression", () => { const value = new MouthTimingProcessor(); value.process(input(1), 0, 0); const weak = value.process(input(1, .3), 20, 20).jawOpen; value.reset(); value.process(input(1), 0, 0); const strong = value.process(input(1, .7), 20, 20).jawOpen; expect(strong).toBeLessThan(weak); });
+  it("does not latch a single close spike but latches sustained close with hysteresis", () => { const value = new MouthTimingProcessor(); value.process(input(1), 0, 0); value.process(input(1, .9), 20, 20); expect(value.snapshot()?.strongCloseLatched).toBe(false); value.process(input(1, .9), 70, 70); expect(value.snapshot()?.strongCloseLatched).toBe(true); value.process(input(1, .6), 90, 90); expect(value.snapshot()?.strongCloseLatched).toBe(true); });
+  it("does not advance close confirmation on duplicate samples", () => { const value = new MouthTimingProcessor(); value.process(input(1, .9), 10, 10); value.process(input(1, .9), 10, 100); expect(value.snapshot()?.strongCloseLatched).toBe(false); });
+  it("lets audio hold only a small jaw value and never beat strong close", () => { const audio = new SimulatedAudioActivitySource(); audio.setActivity(1); const value = new MouthTimingProcessor(DEFAULT_MOUTH_TIMING_CONFIG, audio); value.process(input(0), 0, 0); expect(value.process(input(0), 20, 20).jawOpen).toBeLessThanOrEqual(.08); value.process(input(0, 1), 40, 40); value.process(input(0, 1), 100, 100); expect(value.process(input(0, 1), 120, 120).jawOpen).toBeLessThan(.08); });
+  it("resets on timestamp regression and releases during loss", () => { const value = new MouthTimingProcessor(); value.process(input(1), 100, 100); const lost = value.process(input(1), null, 140, false); expect(lost.jawOpen).toBeLessThan(1); value.process(input(1), 90, 150); expect(value.snapshot()?.dtMs).toBe(0); });
+});

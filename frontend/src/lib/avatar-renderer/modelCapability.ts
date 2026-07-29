@@ -1,6 +1,8 @@
 import { Mesh, Vector3, type Material, type Object3D, type Texture } from "three";
 import type { AvatarModelRigProfile, ModelCapabilityReport } from "./modelTypes";
 import type { VRM } from "@pixiv/three-vrm";
+import { buildFaceExpressionCapabilityMatrix } from "./faceExpressionDiagnostics";
+import { selectGazeCapability } from "./gazeCapability";
 
 const REQUIRED = ["head", "neck", "leftUpperArm", "leftLowerArm", "leftHand", "rightUpperArm", "rightLowerArm", "rightHand"] as const;
 const OPTIONAL = ["chest", "leftShoulder", "rightShoulder"] as const;
@@ -36,6 +38,9 @@ export function inspectModel(root: Object3D, profile: AvatarModelRigProfile | un
   if (!Object.values(requiredBones).every(Boolean)) unsupported.push("Thiếu required humanoid bone mapping.");
   if (format === "vrm" && !vrm) unsupported.push("VRM metadata không parse được.");
   const vrmExpressions = Object.keys(vrm?.expressionManager?.expressionMap ?? {});
+  const expressionNames = [...new Set([...expressions, ...vrmExpressions])].sort();
+  const faceExpressions = buildFaceExpressionCapabilityMatrix(expressionNames, profile?.expressionMorphTargets);
+  const gaze = selectGazeCapability({ hasVrmLookAt: Boolean(vrm?.lookAt), expressions: expressionNames, hasLeftEyeBone: has("leftEye"), hasRightEyeBone: has("rightEye") });
   const direction = (parentName: "leftUpperArm" | "leftLowerArm" | "rightUpperArm" | "rightLowerArm", childName: "leftLowerArm" | "leftHand" | "rightLowerArm" | "rightHand") => {
     const parent = vrm?.humanoid.getNormalizedBoneNode(parentName); const child = vrm?.humanoid.getNormalizedBoneNode(childName);
     if (!parent || !child) return null; parent.updateWorldMatrix(true, false); child.updateWorldMatrix(true, false);
@@ -51,7 +56,7 @@ export function inspectModel(root: Object3D, profile: AvatarModelRigProfile | un
     loaded: true, format, vrmVersion: vrm?.meta.metaVersion ?? null, fileSizeBytes, loadTimeMs,
     humanoidRig: Object.values(requiredBones).every(Boolean), restPose: profile?.restPose ?? inferredRestPose,
     forwardAxis: profile?.forwardAxis ?? (vrm ? "-Z" : "unknown"), forwardAxisReason: profile ? "rig profile" : vrm ? "three-vrm normalized humanoid convention after VRM0 rotation" : "No VRM metadata or rig profile; cannot infer safely.", requiredBones, optionalBones,
-    expressions: [...new Set([...expressions, ...vrmExpressions])].sort(), mtoonMaterial: mtoon || Boolean(vrm?.materials?.some((material) => material.type.toLowerCase().includes("mtoon"))), materialCount: materials.size,
+    expressions: expressionNames, faceExpressions, gaze, mtoonMaterial: mtoon || Boolean(vrm?.materials?.some((material) => material.type.toLowerCase().includes("mtoon"))), materialCount: materials.size,
     textureCount: textures.size, triangleCount: Math.round(triangles), drawCallsEstimate: drawCalls,
     licenseStatus, unsupportedFeatures: unsupported, normalizedArmRestDirections,
     rootTransform: { position: { x: root.position.x, y: root.position.y, z: root.position.z }, quaternion: { x: root.quaternion.x, y: root.quaternion.y, z: root.quaternion.z, w: root.quaternion.w }, scale: { x: root.scale.x, y: root.scale.y, z: root.scale.z } },

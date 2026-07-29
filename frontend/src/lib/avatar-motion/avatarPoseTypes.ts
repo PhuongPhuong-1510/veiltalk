@@ -1,5 +1,6 @@
 import type { TrackingSampleState } from "../tracking/rawTrackingTypes";
 import type { HandMotionDiagnosticsSnapshot } from "./handMotionDiagnostics";
+import type { AvatarGazeV1 } from "./gaze";
 
 export type AvatarSourceTrackingState = TrackingSampleState;
 export type AvatarOutputMotionState = "active" | "held" | "returning" | "idle";
@@ -31,6 +32,8 @@ export interface AvatarPosePacketV1 {
     pose: AvatarPartTrackingInfo;
   };
   expressions: Record<string, number>;
+  /** Gaze normalized; chỉ chứa số suy ra, không chứa landmark hoặc ảnh. */
+  gaze?: AvatarGazeV1;
   /**
    * LEGACY / UNVERIFIED: quaternion lấy từ MediaPipe facial transform và renderer hiện
    * áp như rest-relative local delta. Phase 3A không thay đổi hành vi hoặc dùng field này

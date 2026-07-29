@@ -2,6 +2,7 @@ import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial,
 import { describe, expect, it, vi } from "vitest";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import type { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { VRMExpression, VRMExpressionManager, VRMExpressionMorphTargetBind, type VRM } from "@pixiv/three-vrm";
 import { AvatarModelLoader, createRigProfile, disposeObject, isCurrentModelLoadRequest } from "./modelLoader";
 
 const gltf = (root: Group): GLTF => ({ scene: root, scenes: [root], animations: [], cameras: [], asset: {}, parser: {} as GLTF["parser"], userData: {} });
@@ -29,6 +30,33 @@ describe("AvatarModelLoader", () => {
     const loader = new AvatarModelLoader({ loadAsync: vi.fn().mockResolvedValue(gltf(root)), register: vi.fn() } as unknown as GLTFLoader, () => 20);
     const model = await loader.load("avatar.glb", { profile: { id: "test", boneNodes: { head: "HeadVerified" }, expressionMorphTargets: {}, forwardAxis: "+Z", restPose: "T-pose" } });
     expect(model?.bones.head).toBe(head); expect(model?.capability.requiredBones.head).toBe(true); expect(model?.capability.humanoidRig).toBe(false);
+    expect(model?.capability.faceExpressions.find((row) => row.semantic === "jawOpen")?.support).toBe("unsupported");
+  });
+  it("builds deterministic direct and fallback face expression mappings from model morphs", async () => {
+    const root = new Group(); const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial());
+    mesh.morphTargetDictionary = { aa: 0, blinkLeft: 1, cheekPuff: 2 }; mesh.morphTargetInfluences = [0, 0, 0]; root.add(mesh);
+    const loader = new AvatarModelLoader({ loadAsync: vi.fn().mockResolvedValue(gltf(root)), register: vi.fn() } as unknown as GLTFLoader, () => 20);
+    const model = await loader.load("face.glb");
+    expect(model?.faceExpressionMap).toMatchObject({ jawOpen: "aa", aa: "aa", eyeBlinkLeft: "blinkLeft", blinkLeft: "blinkLeft", cheekPuff: "cheekPuff" });
+    expect(model?.faceExpressionBindings.find((row) => row.semantic === "jawOpen")?.target.type).toBe("raw-morph");
+    expect(model?.faceExpressionBindings.find((row) => row.semantic === "jawOpen")?.target.physicalTargetIds[0]).toMatch(/^morph:/);
+    expect(model?.capability.faceExpressions.find((row) => row.semantic === "jawOpen")?.support).toBe("fallback");
+    expect(model?.capability.faceExpressions.find((row) => row.semantic === "cheekPuff")?.support).toBe("mapped");
+  });
+  it("gives a VRM expression ownership of its physical morph binds", async () => {
+    const root = new Group(); const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial());
+    mesh.morphTargetDictionary = { happy: 0 }; mesh.morphTargetInfluences = [0]; root.add(mesh);
+    const expression = new VRMExpression("happy"); expression.addBind(new VRMExpressionMorphTargetBind({ primitives: [mesh], index: 0, weight: 1 }));
+    const expressionManager = new VRMExpressionManager(); expressionManager.registerExpression(expression);
+    const loaded = gltf(root); loaded.userData.vrm = {
+      meta: { metaVersion: "1" }, expressionManager,
+      humanoid: { getNormalizedBoneNode: () => null }, materials: [],
+    } as unknown as VRM;
+    const loader = new AvatarModelLoader({ loadAsync: vi.fn().mockResolvedValue(loaded), register: vi.fn() } as unknown as GLTFLoader, () => 20);
+    const model = await loader.load("face.vrm");
+    const binding = model?.faceExpressionBindings.find((row) => row.semantic === "happy");
+    expect(binding?.target.type).toBe("vrm-expression");
+    expect(binding?.target.physicalTargetIds).toEqual([`morph:${mesh.uuid}:0`]);
   });
   it("disposes geometry and material resources", () => {
     const geometry = new BufferGeometry(); geometry.setAttribute("position", new Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));

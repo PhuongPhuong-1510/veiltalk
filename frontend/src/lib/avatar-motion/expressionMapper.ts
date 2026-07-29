@@ -1,6 +1,6 @@
 import { clamp01 } from "./coordinateAdapter";
 
-const DIRECT_EXPRESSIONS = [
+export const MEDIA_PIPE_FACE_EXPRESSION_NAMES = [
   "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight",
   "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "eyeBlinkLeft", "eyeBlinkRight",
   "eyeLookDownLeft", "eyeLookDownRight", "eyeLookInLeft", "eyeLookInRight", "eyeLookOutLeft",
@@ -13,16 +13,18 @@ const DIRECT_EXPRESSIONS = [
   "mouthStretchRight", "mouthUpperUpLeft", "mouthUpperUpRight", "noseSneerLeft", "noseSneerRight",
 ] as const;
 
+export type MediaPipeFaceExpressionName = typeof MEDIA_PIPE_FACE_EXPRESSION_NAMES[number];
+export const DERIVED_FACE_EXPRESSION_NAMES = ["blinkLeft", "blinkRight", "happy", "aa"] as const;
+
 /** Giữ profile semantic tách khỏi tên expression cụ thể của model. */
 export const mapMediaPipeExpressions = (input: Record<string, number>): Record<string, number> => {
   const output: Record<string, number> = {};
-  for (const name of DIRECT_EXPRESSIONS) if (name in input) output[name] = clamp01(input[name]);
+  for (const name of MEDIA_PIPE_FACE_EXPRESSION_NAMES) if (name in input) output[name] = clamp01(input[name]);
   output.blinkLeft = output.eyeBlinkLeft ?? 0;
   output.blinkRight = output.eyeBlinkRight ?? 0;
-  output.happy = clamp01(((output.mouthSmileLeft ?? 0) + (output.mouthSmileRight ?? 0)) / 2);
   output.aa = output.jawOpen ?? 0;
   return output;
 };
 
-export const MEDIA_PIPE_SEMANTIC_COUNT = DIRECT_EXPRESSIONS.length;
+export const MEDIA_PIPE_SEMANTIC_COUNT = MEDIA_PIPE_FACE_EXPRESSION_NAMES.length;
 

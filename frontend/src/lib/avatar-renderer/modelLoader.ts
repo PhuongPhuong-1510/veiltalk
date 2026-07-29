@@ -1,9 +1,10 @@
 import { Matrix4, Mesh, Quaternion, SkinnedMesh, Vector3, type Material, type Object3D, type Texture } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
+import { VRMExpressionMorphTargetBind, VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import { inspectModel } from "./modelCapability";
 import type { LoadedAvatarModel, ModelLoadOptions } from "./modelTypes";
 import { freezeRigProfile, validateRigProfile, type ControlledArmJoint, type NormalizedAvatarRigProfile } from "../avatar-motion/normalizedRigProfile";
+import type { FaceExpressionBinding } from "./faceExpressionApplyPlan";
 
 const quaternionData = (value: Quaternion) => ({ x: value.x, y: value.y, z: value.z, w: value.w });
 const vectorData = (value: Vector3) => ({ x: value.x, y: value.y, z: value.z });
@@ -97,7 +98,7 @@ export class AvatarModelLoader {
         restRotations[key] = { x: node.quaternion.x, y: node.quaternion.y, z: node.quaternion.z, w: node.quaternion.w };
       }
     }
-    const semanticBones = ["head", "neck", "chest", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand"] as const;
+    const semanticBones = ["head", "neck", "chest", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand", "leftEye", "rightEye"] as const;
     if (vrm) for (const semantic of semanticBones) {
       const node = vrm.humanoid.getNormalizedBoneNode(semantic); if (!node) continue;
       bones[semantic] = node; restRotations[semantic] = { x: node.quaternion.x, y: node.quaternion.y, z: node.quaternion.z, w: node.quaternion.w };
@@ -108,12 +109,42 @@ export class AvatarModelLoader {
       if (!(node instanceof Mesh) || !node.morphTargetDictionary || !node.morphTargetInfluences) return;
       for (const [name, index] of Object.entries(node.morphTargetDictionary)) {
         const targets = morphTargets.get(name) ?? [];
-        targets.push({ influences: node.morphTargetInfluences, index }); morphTargets.set(name, targets);
+        targets.push({ influences: node.morphTargetInfluences, index, targetId: `morph:${node.uuid}:${index}` }); morphTargets.set(name, targets);
       }
     });
     const capability = inspectModel(gltf.scene, profile, url, this.now() - startedAt, options.fileSizeBytes ?? null, options.licenseStatus ?? "unknown", vrm);
     let disposed = false;
-    return { gltf, vrm, root: gltf.scene, bones, restRotations, morphTargets, expressionMap: profile?.expressionMorphTargets ?? {}, capability, rigProfile, dispose: () => { if (!disposed) { disposed = true; disposeObject(gltf.scene); } } };
+    const faceExpressionMap = Object.fromEntries(capability.faceExpressions
+      .filter((row) => row.modelExpression !== null)
+      .map((row) => [row.semantic, row.modelExpression!]));
+    const vrmExpressions = vrm?.expressionManager?.expressionMap ?? {};
+    const faceExpressionBindings: FaceExpressionBinding[] = [];
+    for (const row of capability.faceExpressions) {
+      if (!row.modelExpression || row.support === "unsupported") continue;
+      const vrmExpression = vrmExpressions[row.modelExpression];
+      if (vrmExpression) {
+        const physicalTargetIds = vrmExpression.binds.flatMap((bind) => bind instanceof VRMExpressionMorphTargetBind
+          ? bind.primitives.map((primitive) => `morph:${primitive.uuid}:${bind.index}`)
+          : []);
+        faceExpressionBindings.push({ semantic: row.semantic, support: row.support, target: {
+          key: `vrm-expression:${row.modelExpression}`, type: "vrm-expression" as const, name: row.modelExpression,
+          physicalTargetIds: physicalTargetIds.length > 0 ? physicalTargetIds : [`vrm-expression:${row.modelExpression}`],
+        } });
+        continue;
+      }
+      const rawTargets = morphTargets.get(row.modelExpression) ?? [];
+      if (rawTargets.length === 0) continue;
+      const browOverdrive = row.modelExpression.startsWith("Fcl_BRW_");
+      faceExpressionBindings.push({ semantic: row.semantic, support: row.support, target: {
+        key: `raw-morph:${row.modelExpression}`, type: "raw-morph" as const, name: row.modelExpression,
+        physicalTargetIds: rawTargets.map((target) => target.targetId),
+      }, ...(browOverdrive ? { modelGain: 1.6, outputMax: 1.6 } : {}) });
+    }
+    for (const binding of faceExpressionBindings) {
+      const row = capability.faceExpressions.find((candidate) => candidate.semantic === binding.semantic);
+      if (row) { row.targetType = binding.target.type; row.physicalTargetIds = [...binding.target.physicalTargetIds]; }
+    }
+    return { gltf, vrm, root: gltf.scene, bones, restRotations, morphTargets, expressionMap: profile?.expressionMorphTargets ?? {}, faceExpressionMap, faceExpressionBindings, capability, rigProfile, dispose: () => { if (!disposed) { disposed = true; disposeObject(gltf.scene); } } };
   }
   invalidate(): void { this.generation += 1; }
 }

@@ -18,7 +18,7 @@ packet. `headRotation` giữ hành vi legacy/unverified và không thuộc arm a
 - Direction validity, pole validity và twist observability được báo riêng; pole suy biến không còn loại direction hợp lệ.
 - Upper/lower có temporal channel riêng nhưng vẫn dùng shared arm continuity state.
 - Secondary axis được parallel-transport theo primary mới. Khi pole unavailable, history continuity vẫn được giữ; palm/forearm twist vẫn thuộc Phase 3B.
-- Fresh elbow/hand pole không còn điều khiển axial orientation của `upperArm`: Phase 3A dựng upper secondary từ minimal-twist rest frame đã parallel-transport theo torso + primary và gắn flag `upper-secondary-minimal-twist`. Vì vậy pole đối dấu 180° hoặc lệch 90° không còn làm vùng vai roll dù checkbox Constraints tắt. UpperArm vẫn swing đầy đủ theo hướng shoulder→elbow; upper-arm axial calibration/constraint được giữ cho Phase 3C.
+- Fresh elbow/hand pole không còn điều khiển axial orientation của `upperArm`: Phase 3A dựng upper secondary từ minimal-twist rest frame đã parallel-transport theo torso + primary và gắn flag `upper-secondary-minimal-twist`. Vì vậy pole đối dấu 180° hoặc lệch 90° không còn làm vùng vai roll dù checkbox Constraints tắt. UpperArm vẫn swing đầy đủ theo hướng shoulder→elbow; upper-arm axial calibration/constraint là backlog tay chưa gán phase.
 - Frozen `tracked` frame trùng pose timestamp được phát lại mà không làm arm loss state già đi; DEV replay-as-new tạo timestamp mới rõ ràng.
 - Geometry/rejection diagnostics gần nhất được giữ qua `not-sampled`/`lost`; `sampleDisposition` tách trạng thái sample khỏi kết quả geometry.
 - Torso semantic basis fallback theo `fresh → previous → rest` và diagnostics ghi rõ source khi camera bán thân không thấy hip.
@@ -33,7 +33,7 @@ packet. `headRotation` giữ hành vi legacy/unverified và không thuộc arm a
 - Invalid grace/recovery confirmation dùng thời gian, không phụ thuộc FPS.
 - Full target frame được chuyển về parent-local/rest-relative theo hierarchy Phase 2.
 - State trái/phải riêng phát hold, return về identity, idle identity và recovery blend thật.
-- Swing–twist utility có round-trip/sign/near-180 tests; production limits để Phase 3C.
+- Swing–twist utility có round-trip/sign/near-180 tests; production arm limits là backlog tay chưa gán phase.
 
 ## Automated evidence
 
@@ -95,5 +95,6 @@ Không tiếp tục sửa công thức chuyển động theo các giả thuyết
 ## Deferred by scope
 
 - Phase 3B: palm basis, Pose/Hand skew gate, wrist fusion và palm recovery.
-- Phase 3C: production anatomical constraints, twist calibration, full browser/performance.
+- Production anatomical constraints và arm twist calibration: backlog tay chưa gán phase. Phase 3C
+  mới chỉ dành cho Face Expression & Local Lip-sync.
 - Head retargeting semantic vẫn legacy/unverified.

@@ -516,28 +516,47 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/src/lib/avatar-motion/avatarPoseTypes.ts` | P4-T10: contract `AvatarPosePacketV1`; `jointRotations` là quaternion delta normalized-humanoid parent-local, rest-relative, không chứa raw landmark |
 | `frontend/src/lib/avatar-motion/normalizedRigProfile.ts` | P4-T10 Phase 3A: profile plain-data có torso rest reference và anatomical rest basis local/world (primary, secondary, binormal); validate và deep-freeze |
 | `frontend/src/lib/avatar-motion/jointSolver.ts` | P4-T10 Phase 2: solver parent-local/rest-relative theo thứ tự upper arm → lower arm mỗi bên; child dùng target world của parent trong cùng pose, không đọc animated renderer state |
-| `frontend/src/lib/avatar-motion/avatarMotionProcessor.ts` | P4-T10 orchestration: Pose filter/solve/constraint/temporal, Hand matching/palm/twist, tracking epoch theo side và packet output; Hand chỉ được sửa lowerArm khi feature flag bật và observation hợp lệ |
+| `frontend/src/lib/avatar-motion/avatarMotionProcessor.ts` | P4-T10 orchestration: Face calibration→mapping→mouth timing→mouth composition, Pose filter/solve/constraint/temporal, Hand matching/palm/twist và packet output |
+| `frontend/src/lib/avatar-motion/faceCalibration.ts` / `faceCalibration.test.ts` | Phase 3C-02 in-memory neutral calibration: gate, median/MAD profile, normalization, lifecycle snapshot và regression |
+| `frontend/src/lib/avatar-motion/mouthTiming.ts` / `mouthTiming.test.ts` | Phase 3C-03 jaw attack/release, close/press suppression, strong-close hysteresis, audio hold và temporal lifecycle |
+| `frontend/src/lib/avatar-motion/mouthShapeComposer.ts` / `mouthShapeComposer.test.ts` | Phase 3C-04 mouth-shape conflict composition, closed-smile `happy` gate, left/right preservation và diagnostics |
+| `frontend/src/lib/avatar-motion/eyeExpression.ts` / `eyeExpression.test.ts` | Phase 3C-05 per-side blink hysteresis/pulse, blink-vs-wide và squint composition |
+| `frontend/src/lib/avatar-motion/gaze.ts` / `gaze.test.ts` | Phase 3C-05 MediaPipe eye-pair → normalized yaw/pitch, dead zone, smoothing, loss/reset |
+| `frontend/src/lib/avatar-motion/browCheekExpression.ts` / `browCheekExpression.test.ts` | Phase 3C-06 giữ brow/frown bất đối xứng; cheek-puff dead-zone, hysteresis, speech suppression và diagnostics |
+| `frontend/src/lib/avatar-motion/faceExpressionLoss.ts` / `faceExpressionLoss.test.ts` | Phase 3C-07 exact hold → return neutral → idle; two-sample confirmation/recovery blend và one-shot reset diagnostics |
+| `frontend/src/lib/avatar-motion/audioActivity.ts` / `audioActivity.test.ts` | Caller-provided null/simulated/Web Audio activity; RMS/noise floor/envelope, không tự xin quyền microphone |
 | `frontend/src/lib/avatar-motion/torsoBasis.ts` / `armFrameSolver.ts` | Phase 3A: per-segment direction validity tách khỏi pole/twist confidence; parallel-transport secondary; two-bone inferred elbow từ Pose shoulder/wrist với calibrated human lengths, reachability/confidence/timeout gate |
 | `frontend/src/lib/avatar-motion/armTemporalState.ts` | Phase 3A: temporal state riêng upper/lower trong shared arm state, phát rotation parent-local cho hold → return-to-identity → recovery |
-| `frontend/src/lib/avatar-motion/swingTwist.ts` / `motionMath.ts` | Phase 3A foundation: basis/quaternion math và swing–twist round-trip; production clamp để Phase 3C |
+| `frontend/src/lib/avatar-motion/swingTwist.ts` / `motionMath.ts` | Phase 3A foundation: basis/quaternion math và swing–twist round-trip; production arm clamp là backlog chưa gán phase |
 | `frontend/src/lib/avatar-motion/avatarMotionDiagnostics.ts` | Diagnostic snapshot internal/DEV-only, tách khỏi `AvatarPosePacketV1`; chứa arm geometry/stability và toàn bộ chuỗi Hand twist theo side |
 | `frontend/src/lib/avatar-motion/coordinateAdapter.ts` | P4-T10: production conversion giữ nguyên `(x,y,z) → (x,-y,-z)`, normalize vector/quaternion và chống zero/NaN |
-| `frontend/src/lib/avatar-motion/oneEuroFilter.ts` / `jointConstraints.ts` / `trackingLoss.ts` | Lọc direction và safety radial clamp; semantic anatomical calibration để Phase 3C |
+| `frontend/src/lib/avatar-motion/oneEuroFilter.ts` / `jointConstraints.ts` / `trackingLoss.ts` | Lọc direction và safety radial clamp; semantic anatomical arm calibration là backlog chưa gán phase |
 | `frontend/src/lib/avatar-motion/handPoseMatching.ts` / `handPalmBasis.ts` / `handMotionDiagnostics.ts` | Phase 3B input: ghép Hand candidate với wrist Pose, dựng image/world palm basis và xuất diagnostic không tham gia motion |
 | `frontend/src/lib/avatar-motion/handForearmTwist.ts` / `handTwistConfidence.ts` | Phase 3B geometry/trust: đo signed axial twist quanh forearm và quyết định trusted/influence từ quality, projection, age và handedness |
 | `frontend/src/lib/avatar-motion/handTwistStabilization.ts` / `handTwistTemporal.ts` | Phase 3B state riêng từng side: unwrap, neutral, dead zone, filter, clamp, acquire/hold/fade/reset |
 | `frontend/src/lib/avatar-motion/handTwistRig.ts` | Phase 3B coordinate/rig boundary: đổi toàn bộ world palm basis sang motion frame trước solver và ghép `poseLowerDelta × handTwistDelta` quanh primaryLocal |
 | `frontend/src/lib/avatar-motion/handCalibrationAnalysis.ts` / `handTwistRootCauseValidation.test.ts` | Phase 3B calibration snapshot, synthetic geometry và rig-only regression cho dấu, ±π, primary direction, wrist inheritance |
 | `frontend/src/lib/avatar-renderer/modelLoader.ts` | P4-T10 Phase 2: load GLTF/VRM, `rotateVRM0`, lấy normalized humanoid nodes, capture rig profile theo từng model generation, chống stale load và dispose tài nguyên |
-| `frontend/src/lib/avatar-renderer/avatarRenderer.ts` | P4-T10 Phase 2: tái tạo absolute local target bằng `restLocal × deltaLocal`, slerp absolute local nếu bật smoothing, gán normalized bone quaternion; giữ nguyên position/scale |
+| `frontend/src/lib/avatar-renderer/faceExpressionDiagnostics.ts` | Phase 3C-01 pure-data resolver và capability/render rows: declared mapping/fallback, unsupported reason, raw/processed/rendered separation |
+| `frontend/src/lib/avatar-renderer/faceExpressionDiagnostics.test.ts` | Regression Phase 3C-01 cho same-name mapping, declared fallback, missing explicit target và tách ba tầng giá trị |
+| `frontend/src/lib/avatar-renderer/faceExpressionApplyPlan.ts` / `faceExpressionApplyPlan.test.ts` | Face physical-target ownership: mapped-over-fallback, direct smile-over-happy, strongest shared synonym, VRM/raw deduplication, stale reset và bounded per-binding model gain |
+| `frontend/src/lib/avatar-renderer/gazeCapability.ts` / `gazeCapability.test.ts` | Chọn duy nhất VRM LookAt, eye morph, eye bones hoặc unsupported theo capability |
+| `frontend/src/lib/avatar-renderer/avatarRenderer.ts` | P4-T10 Phase 2 + 3C-01: tái tạo bone target; resolve face target/fallback, rendered snapshot và local-only diagnostic override; giữ nguyên packet privacy |
 | `frontend/src/lib/avatar-renderer/animationFrameLoop.ts` / `rendererMetrics.ts` / `renderSmoothing.ts` | P4-T10: một rAF loop có duplicate guard, metrics FPS/p95/resource và smoothing frame-rate-independent |
 | `frontend/src/lib/avatar-renderer/avatarDiagnostics.ts` | P4-T10 Phase 1/2 DEV-only: rest-basis, angular error, helpers, nine frozen presets và phép đo world direction từ rig profile |
 | `frontend/src/components/avatar/AvatarCanvas.tsx` | React adapter sở hữu canvas, `ResizeObserver` và renderer lifecycle; không chứa IK math |
-| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | Harness local-only tại `/dev/avatar-renderer`; freeze/replay, pose preset, normalized rest-basis/angular-error table, coordinate variants, axes/vector helpers và toggle filter/constraint/smoothing; route bị loại khỏi production build |
+| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | Harness local-only tại `/dev/avatar-renderer`; arm diagnostics, face capability table/probes và panel nhóm mouth timing/composition; route bị loại khỏi production build |
 | `docs/P4_T10_PHASE1_DIAGNOSTICS_REPORT.md` | Báo cáo nghiệm thu forensic Phase 1: model/rest basis, bằng chứng H1–H3, calibration webcam H6, deterministic replay, privacy và đề xuất Phase 2 chưa triển khai |
 | `docs/P4_T10_PHASE2_ACCEPTANCE_REPORT.md` | Báo cáo review/nghiệm thu Phase 2: H1 fixed, H2 còn mở, deterministic real-model evidence, automated/browser/privacy/lifecycle evidence và điều kiện chuyển phase |
 | `docs/P4_T10_PHASE3A_ACCEPTANCE_REPORT.md` | Phase 3A arm-frame evidence; automated gate và trạng thái manual browser pending |
 | `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md` | Nguồn trạng thái/kế hoạch Phase 3B: phạm vi Hand forearm twist, file map, lỗi chiều xoay webcam còn mở và acceptance gate đa avatar |
+| `docs/P4_T10_PHASE3C_FACE_EXPRESSION_AND_LOCAL_LIPSYNC_PLAN.md` | Nguồn chân lý Phase 3C: 3C-01→07 COMPLETE; 3C-08/09 đã bỏ khỏi phạm vi; face diagnostics, calibration, mouth/eyes/brows/cheeks và loss recovery |
+| `docs/P4_T10_PHASE3C_02_NEUTRAL_CALIBRATION_PLAN.md` | Contract/trạng thái 3C-02: deliberate calibration, neutral gate, statistics, lifecycle, diagnostics và manual webcam gate |
+| `docs/P4_T10_PHASE3C_03_MOUTH_TIMING_PLAN.md` | Contract/trạng thái 3C-03: mouth timing, soft suppression, audio boundary, targeted tests và manual gate |
+| `docs/P4_T10_PHASE3C_04_MOUTH_SHAPE_COMPOSITION_PLAN.md` | Contract/trạng thái 3C-04: mouth conflicts, conservative `happy`, targeted evidence và manual matrix |
+| `docs/P4_T10_PHASE3C_05_EYES_AND_GAZE_PLAN.md` | Contract/trạng thái 3C-05: blink/squint/wide, gaze ownership, automated evidence và manual matrix |
+| `docs/P4_T10_PHASE3C_06_BROWS_SMILE_FROWN_CHEEKS_PLAN.md` | Contract/trạng thái 3C-06: brow/frown ownership, cheek-puff temporal/suppression, automated evidence và manual matrix |
+| `docs/P4_T10_PHASE3C_07_FACE_LOSS_RECOVERY_PLAN.md` | Contract/trạng thái 3C-07: Face loss/recovery timing, lifecycle, automated evidence và manual matrix |
 | `frontend/src/index.css` | Kokoro design system: Tailwind v4 theme, semantic CSS variables light/dark, typography, radius, shadow và reduced-motion baseline |
 | `frontend/tsconfig.app.json` | Cấu hình TypeScript và alias `@/*` → `src/*` |
 | `frontend/vite.config.ts` | Vite React plugin và alias `@` → `src` |
@@ -559,7 +578,7 @@ rendering, state, routing và design system thuộc các task Phase 4.
 | P4-T07 | Hoàn thành | `frontend/src/App.tsx`, auth helpers — Onboarding/Register |
 | P4-T08 | Hoàn thành | `frontend/src/lib/avatar/avatarSetup.ts`, Avatar Setup UI |
 | P4-T09 | Hoàn thành | `frontend/src/lib/tracking/`, `TrackingDevHarness.tsx` |
-| P4-T10 | IN PROGRESS | Phase 3A anatomical arm-frame đã implement. Phase 3B Hand forearm twist đã có production pipeline và automated regression nhưng webcam gate vẫn FAIL vì chiều pronation/supination tay phải còn sai; Phase 3C chưa bắt đầu |
+| P4-T10 | IN PROGRESS | Phase 3A đã implement; Phase 3B còn manual acceptance. Phase 3C COMPLETE tại 3C-07; 3C-08/09 bỏ khỏi phạm vi theo quyết định 2026-07-30. |
 
 ### Design system (P4-T04)
 
@@ -826,10 +845,14 @@ P4-T10 được chia thành các phase con để không trộn forensic diagnosi
    xác nhận convention. Chi tiết, phạm vi còn lại và acceptance gate nằm tại
    `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`.
 
-5. **Phase 3C — Rig calibration/constraint extension: NOT STARTED.** Không dùng Phase 3C để che
-   lỗi dấu/convention còn mở của Phase 3B; hand-bone orientation và finger bones vẫn ngoài phạm vi.
+5. **Phase 3C — Face Expression & Local Lip-sync: COMPLETE tại 3C-07.** Phase 3C cũ về rig
+   calibration/constraint đã hủy. Phase mới đã triển khai diagnostics/capability, neutral calibration,
+   mouth timing/shapes, eyes/brows/cheeks/asymmetry và face loss/recovery. 3C-08 model adapter profile
+   và 3C-09 acceptance tổng hợp đã bỏ khỏi phạm vi theo quyết định 2026-07-30. Hand-bone/finger
+   orientation và arm calibration/constraint là backlog chưa gán phase.
+   Kế hoạch nguồn: `docs/P4_T10_PHASE3C_FACE_EXPRESSION_AND_LOCAL_LIPSYNC_PLAN.md`.
 
-   **Sửa lỗi ổn định pole (trong phạm vi 3A, không lấn 3B/3C).** Ba lỗi gây xoắn/rung tay đã
+   **Sửa lỗi ổn định pole (trong phạm vi 3A, không lấn Phase 3B hoặc face Phase 3C).** Ba lỗi gây xoắn/rung tay đã
    được sửa trong `armFrameSolver.ts`, mỗi lỗi có regression test được kiểm chứng bằng cách
    hoàn nguyên bản sửa để xác nhận test thật sự bắt được lỗi:
    - Outlier pole chỉ bị loại khi `flags.length > 0`, nên pole nhiễu lọt qua đúng lúc tracking
@@ -843,7 +866,7 @@ P4-T10 được chia thành các phase con để không trộn forensic diagnosi
 
    Hysteresis `elbowOffsetEnterMagnitude`/`ExitMagnitude` có tên đọc ngược với vai trò thực tế
    (Enter dùng cho trạng thái "đang trong", Exit cho "đang ngoài"); chiều hoạt động hiện đúng,
-   đã ghi comment cảnh báo, đổi tên để dành cho Phase 3C.
+   đã ghi comment cảnh báo; việc đổi tên thuộc backlog refactor tay chưa gán phase.
 
 4. **Các phase tiếp theo: CHƯA TRIỂN KHAI.** Palm orientation/recovery, twist distribution,
    semantic anatomical constraints, calibration và full lifecycle/performance acceptance
@@ -1071,7 +1094,7 @@ cùng một frame, cùng gốc) vẫn hợp lệ. Thứ tự làm Mức 2:
    buông tự nhiên; Giai đoạn 3 mới thêm arm-arm collision. Chi phí ước tính nhỏ so với ngân
    sách 41.7ms/frame ở 24fps. **Đây là gợi ý cần đánh giá kỹ trước khi triển khai, không phải
    kế hoạch đã chốt** — quy mô kiến trúc (hệ trục torso-local mới, SDF, PBD, state machine
-   contact) lớn hơn một bản vá, cần coi là task con riêng khi bắt đầu Phase 3B/3C.
+   contact) lớn hơn một bản vá, cần coi là task con tay riêng và không thuộc face Phase 3C.
 ### Lớp WebRTC
 
 ### Mức 2B-5 — áp Hand twist lên rig

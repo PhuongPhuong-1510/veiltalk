@@ -1,4 +1,9 @@
 export interface OneEuroParameters { minCutoff: number; beta: number; derivativeCutoff: number }
+import { DEFAULT_MOUTH_TIMING_CONFIG, type MouthTimingConfig } from "./mouthTiming";
+import { DEFAULT_MOUTH_SHAPE_CONFIG, type MouthShapeConfig } from "./mouthShapeComposer";
+import { DEFAULT_EYE_EXPRESSION_CONFIG, type EyeExpressionConfig } from "./eyeExpression";
+import { DEFAULT_GAZE_CONFIG, type GazeConfig } from "./gaze";
+import { DEFAULT_BROW_CHEEK_EXPRESSION_CONFIG, type BrowCheekExpressionConfig } from "./browCheekExpression";
 
 export interface AvatarMotionConfig {
   freshnessMs: { face: number; hand: number; pose: number };
@@ -70,6 +75,11 @@ export interface AvatarMotionConfig {
     targetFilterTimeConstantSeconds: number;
     correctionLimits: Record<"left" | "right", { minRadians: number; maxRadians: number }>;
   };
+  mouthTiming: MouthTimingConfig;
+  mouthShape: MouthShapeConfig;
+  eyeExpression: EyeExpressionConfig;
+  gaze: GazeConfig;
+  browCheekExpression: BrowCheekExpressionConfig;
 }
 
 /** Các duration là giá trị hiệu chỉnh ban đầu, chưa phải ngưỡng chính thức của SRS. */
@@ -127,4 +137,9 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
       right: { minRadians: -90 * Math.PI / 180, maxRadians: 90 * Math.PI / 180 },
     },
   },
+  mouthTiming: DEFAULT_MOUTH_TIMING_CONFIG,
+  mouthShape: DEFAULT_MOUTH_SHAPE_CONFIG,
+  eyeExpression: DEFAULT_EYE_EXPRESSION_CONFIG,
+  gaze: DEFAULT_GAZE_CONFIG,
+  browCheekExpression: DEFAULT_BROW_CHEEK_EXPRESSION_CONFIG,
 };

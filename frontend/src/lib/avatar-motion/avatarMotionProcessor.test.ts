@@ -85,6 +85,65 @@ function edgeOnLeftHand(timestamp: number): RawHandCandidateV1 {
 }
 
 describe("AvatarMotionProcessor", () => {
+  it("publishes one processor-timed jaw value to both jawOpen and aa", () => {
+    const processor = new AvatarMotionProcessor({ filtered: true, now: () => 120 });
+    const packet = processor.process(frame());
+    expect(packet.expressions.jawOpen).toBeCloseTo(.4);
+    expect(packet.expressions.aa).toBe(packet.expressions.jawOpen);
+  });
+
+  it("does not publish open-mouth happy for a closed-lip smile", () => {
+    const processor = new AvatarMotionProcessor({ filtered: true, now: () => 120 });
+    const input = frame();
+    input.face.blendshapes = { ...input.face.blendshapes, jawOpen: .02, mouthClose: .2, mouthSmileLeft: .9, mouthSmileRight: .9 };
+    const packet = processor.process(input);
+    expect(packet.expressions.happy).toBe(0);
+    expect(packet.expressions.mouthSmileLeft).toBe(.9);
+    expect(packet.expressions.mouthSmileRight).toBe(.9);
+  });
+
+  it("publishes independent blink and privacy-safe normalized gaze", () => {
+    const processor = new AvatarMotionProcessor({ filtered: true, now: () => 120 }); const input = frame();
+    input.face.blendshapes = { ...input.face.blendshapes, eyeBlinkLeft: 1, eyeBlinkRight: 0, eyeLookInLeft: 1, eyeLookOutRight: 1 };
+    const packet = processor.process(input);
+    expect(packet.expressions.blinkLeft).toBeGreaterThan(.8); expect(packet.expressions.blinkRight).toBe(0); expect(packet.gaze).toEqual({ yaw: 1, pitch: 0 });
+    expect(JSON.stringify(packet.gaze)).not.toMatch(/landmark|image|transform/i);
+  });
+
+  it("preserves asymmetric brows and frown while processor-owning cheek puff", () => {
+    const processor = new AvatarMotionProcessor({ filtered: true, now: () => 120 }); const input = frame();
+    input.face.blendshapes = { ...input.face.blendshapes, browDownLeft: .8, browDownRight: .1, browOuterUpLeft: .7, browOuterUpRight: .2, mouthFrownLeft: .9, mouthFrownRight: 0, cheekPuff: .9, jawOpen: .02 };
+    const packet = processor.process(input);
+    expect(packet.expressions).toMatchObject({ browDownLeft: .8, browDownRight: .1, browOuterUpLeft: .7, browOuterUpRight: .2, mouthFrownLeft: .9, mouthFrownRight: 0 });
+    expect(packet.expressions.cheekPuff).toBeGreaterThan(.5);
+    expect(packet.expressions.happy).toBe(0);
+    expect(processor.getBrowCheekExpressionDiagnostics()).toMatchObject({ puffLatched: true });
+  });
+
+  it("holds face output, returns mouth/gaze to neutral, then recovers without snapping", () => {
+    let now = 120; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now });
+    const activeInput = frame(); activeInput.face.blendshapes = { ...activeInput.face.blendshapes, eyeLookInLeft: 1, eyeLookOutRight: 1 };
+    const active = processor.process(activeInput);
+    now = 250; const held = processor.process(frame("lost"));
+    expect(held.expressions).toEqual(active.expressions); expect(held.gaze).toEqual(active.gaze);
+    now = 500; const returning = processor.process(frame("lost"));
+    expect(returning.expressions.jawOpen).toBeGreaterThan(0); expect(returning.expressions.jawOpen).toBeLessThan(active.expressions.jawOpen);
+    now = 900; const idle = processor.process(frame("lost"));
+    expect(idle.expressions.jawOpen).toBe(0); expect(idle.expressions.aa).toBe(0); expect(idle.gaze).toEqual({ yaw: 0, pitch: 0 });
+    const reacquire = frame(); reacquire.face.sampledAtMs = 920; now = 920;
+    expect(processor.process(reacquire).expressions.jawOpen).toBe(0);
+    reacquire.face.sampledAtMs = 940; now = 940; expect(processor.process(reacquire).expressions.jawOpen).toBe(0);
+    reacquire.face.sampledAtMs = 960; now = 1_030; const recovering = processor.process(reacquire);
+    expect(recovering.expressions.jawOpen).toBeGreaterThan(0); expect(recovering.expressions.jawOpen).toBeLessThan(active.expressions.jawOpen);
+    expect(processor.getFaceExpressionLossDiagnostics().state).toBe("recovering");
+  });
+
+  it("does not pump face processors on a not-sampled frame", () => {
+    let now = 120; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); const active = processor.process(frame());
+    now = 150; const cached = processor.process(frame("not-sampled"));
+    expect(cached.expressions).toEqual(active.expressions); expect(processor.getFaceExpressionLossDiagnostics().state).toBe("active");
+  });
+
   describe("Mức 2B-5 Hand twist wiring", () => {
     it("feature flag defaults off and remains bit-for-bit Pose-only", () => {
       const input = frame(); input.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left"), handCandidate(1, RIGHT_WRIST_IMAGE, "right")];

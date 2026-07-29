@@ -3,6 +3,11 @@ import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import type { AvatarJointName } from "../avatar-motion/avatarPoseTypes";
 import type { VRM } from "@pixiv/three-vrm";
 import type { NormalizedAvatarRigProfile } from "../avatar-motion/normalizedRigProfile";
+import type { FaceExpressionCapabilityRow } from "./faceExpressionDiagnostics";
+import type { FaceExpressionBinding } from "./faceExpressionApplyPlan";
+import type { GazeCapability } from "./gazeCapability";
+
+export type AvatarModelBoneName = AvatarJointName | "head" | "leftEye" | "rightEye";
 
 export interface AvatarModelRigProfile {
   id: string;
@@ -24,6 +29,8 @@ export interface ModelCapabilityReport {
   requiredBones: Record<string, boolean>;
   optionalBones: Record<string, boolean>;
   expressions: string[];
+  faceExpressions: FaceExpressionCapabilityRow[];
+  gaze: GazeCapability;
   mtoonMaterial: boolean;
   materialCount: number;
   textureCount: number;
@@ -40,10 +47,12 @@ export interface LoadedAvatarModel {
   gltf: GLTF;
   vrm: VRM | null;
   root: Object3D;
-  bones: Partial<Record<AvatarJointName | "head", Object3D>>;
-  restRotations: Partial<Record<AvatarJointName | "head", { x: number; y: number; z: number; w: number }>>;
-  morphTargets: Map<string, Array<{ influences: number[]; index: number }>>;
+  bones: Partial<Record<AvatarModelBoneName, Object3D>>;
+  restRotations: Partial<Record<AvatarModelBoneName, { x: number; y: number; z: number; w: number }>>;
+  morphTargets: Map<string, Array<{ influences: number[]; index: number; targetId: string }>>;
   expressionMap: Record<string, string>;
+  faceExpressionMap: Record<string, string>;
+  faceExpressionBindings: FaceExpressionBinding[];
   capability: ModelCapabilityReport;
   rigProfile: NormalizedAvatarRigProfile | null;
   dispose(): void;

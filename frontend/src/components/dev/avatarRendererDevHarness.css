@@ -22,3 +22,7 @@
 .dev-hand-calibration-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
 .dev-hand-calibration-table th, .dev-hand-calibration-table td { padding: 6px; border: 1px solid #342a69; text-align: left; vertical-align: top; }
 .verdict-PASS { color: #4ade80; } .verdict-WARN { color: #facc15; } .verdict-FAIL { color: #f87171; }
+.dev-face-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dev-face-heading h2, .dev-face-heading p { margin: 0 0 6px; }
+.dev-face-diagnostics input[type="range"] { min-width: 150px; }
+.face-support-mapped { color: #4ade80; } .face-support-fallback { color: #facc15; } .face-support-unsupported { color: #f87171; }

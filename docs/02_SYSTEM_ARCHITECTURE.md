@@ -137,6 +137,52 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 - Pipeline render: nhận `AvatarPosePacketV1` → ánh xạ blendshape → tái tạo target local tuyệt đối bằng `qRestLocal × qDeltaLocal` → optional frame-rate-independent quaternion smoothing → gán normalized humanoid bone quaternion → `vrm.update(dt)` → render WebGL canvas. Renderer không ghi bone position/scale khi apply pose.
 
+- Phase 3C face contract: semantic face expression và semantic eye gaze tách nhánh sau calibration/
+  temporal/composition. Expression adapter tạo apply plan có physical-target identity; mỗi target có
+  một owner/frame, mapped ưu tiên fallback, VRM expression và raw morph trùng bind được deduplicate,
+  target cũ vắng ở frame mới được reset. Raw morph trực tiếp chỉ áp sau `vrm.update()` để không bị
+  expression manager clear/ghi đè. Gaze adapter về sau chọn đúng một trong VRM LookAt, eye bones hoặc
+  eye morph; không cho nhiều gaze controller cùng sở hữu mắt.
+
+- Phase 3C-02 neutral calibration là state machine local-only có chủ đích, không tự học lại âm thầm.
+  Neutral gate loại sample biểu cảm/head motion/duplicate/invalid; profile dùng median + MAD và chỉ
+  tồn tại trong memory. Trước khi ready hoặc khi failed, pipeline passthrough raw; processor reset,
+  timestamp regression và Face loss dài reset profile. Đổi avatar model không reset calibration.
+
+- Phase 3C-03 đặt mouth timing trong `AvatarMotionProcessor`, sau calibration/mapping và trước packet.
+  Processor sở hữu attack/release, close/press suppression, strong-close hysteresis và audio jaw hold
+  cho `jawOpen`, `aa`, `mouthClose`; expression filter và renderer không được smooth lại ba channel này.
+  Audio activity là dependency local-only do caller cung cấp từ `MediaStream` đã được cấp quyền; module
+  không gọi `getUserMedia`, không lưu/gửi sample và không đưa diagnostics vào `AvatarPosePacketV1`.
+  Duplicate không tiến close hysteresis; timestamp regression/reset/dispose xóa temporal state.
+
+- Phase 3C-04 đặt `MouthShapeComposer` sau mouth timing. Composer giữ left/right, giải quyết loại trừ
+  mềm theo dominance giữa pucker/funnel với smile/stretch/dimple và sở hữu derived `happy`. `happy`
+  chỉ được phát khi smile đi cùng bằng chứng mở từ jaw hoặc upper/lower lip và không có close/press
+  mạnh; vì vậy cười mím không fallback sang preset há miệng nhưng cười lộ răng không cần há hàm lớn.
+  Apply plan ưu tiên direct detailed smile hơn aggregate `happy`; các synonym cùng
+  support và physical target chọn value mạnh hơn. Processor và renderer không smooth lại output composer.
+
+- Phase 3C-05 đặt eye-expression processor sau mouth composition. Blink/squint/wide giữ từng bên;
+  blink có hysteresis/minimum hold và thắng wide. Gaze được rút gọn thành `AvatarPosePacketV1.gaze`
+  normalized `{yaw,pitch}`, không chứa landmark. Renderer chọn đúng một owner theo capability:
+  VRM LookAt → direct eye morph → eye bones → unsupported; VRM automatic LookAt bị tắt khi custom
+  gaze sở hữu, và `eyeLook*` không được đồng thời áp như morph ở mode LookAt/bones.
+
+- Phase 3C-06 đặt brow/cheek processor sau eye-expression. Brow và mouth-frown giữ semantic
+  trái/phải độc lập, không kích hoạt chéo; `happy` vẫn chỉ thuộc mouth composition. `cheekPuff`
+  có dead-zone, hysteresis, attack/release và suppression theo bằng chứng nói, nhưng tín hiệu puff
+  mạnh được bypass. Adapter ưu tiên semantic chi tiết, rồi alias morph chi tiết `Fcl_BRW_*` /
+  `Fcl_MTH_*`, sau đó mới tới VRM preset toàn mặt `angry/surprised/sad`; tất cả vẫn qua
+  physical-target ownership. Model thiếu cheek target báo unsupported, renderer không scale đầu/mặt.
+  Binding raw brow `Fcl_BRW_*` được phép overdrive có giới hạn `gain/outputMax = 1.6` vì morph
+  gốc quá nhẹ; các target khác tiếp tục clamp `[0,1]`.
+
+- Phase 3C-07 đặt face-loss state machine sau toàn bộ face composition và trước packet/filter.
+  Sample mới cập nhật target; duplicate/not-sampled không bơm processor. Loss đi qua exact hold →
+  easing về neutral/đóng miệng → idle. Reacquire cần hai sample mới liên tiếp rồi recovery blend.
+  Long-loss reset mouth/eye/gaze/brow-cheek/filter và calibration phát đúng một lần mỗi loss epoch.
+
 - Hai chế độ nguồn dữ liệu: theo dõi cục bộ (cho chính nhân vật của người dùng) và dữ liệu nhận qua RTCDataChannel (cho nhân vật của người đối thoại) — cùng một Renderer, khác nguồn input. Về model 3D phía nhận: khi thiết lập cuộc gọi, phía nhận tải model GLB của người gọi từ Backend API (không truyền trực tiếp qua WebRTC DataChannel vì file model có thể lớn). Backend lưu sẵn URL/reference tới model đã chọn của từng user trong hồ sơ tài khoản (FR-04); phía nhận dùng URL này để tải model đúng trước khi bắt đầu nhận skeleton data. Nhờ đó, người dùng B thấy đúng nhân vật ảo (màu tóc, trang phục) mà người dùng A đã tùy chỉnh.
 
 - Bảng giới hạn góc khớp giải phẫu (khuỷu tay, cổ tay, vai) được định nghĩa tĩnh trong cấu hình, dùng chung cho cả theo dõi cục bộ và dữ liệu nhận từ xa, đảm bảo FR-08 áp dụng nhất quán cho cả hai chế độ.
@@ -175,9 +221,10 @@ Thiết kế này giữ đầy đủ upper swing và khóa bằng automated regr
 90°/180° từng gây xoắn vùng vai dù optional Constraints tắt. Tuy nhiên manual webcam gate vẫn
 đôi lúc thấy xoắn không tái hiện ổn định, nên hai regression này không được xem là bằng chứng lỗi
 runtime đã được xử lý dứt điểm. Root cause còn mở; bước chẩn đoán kế tiếp là anomaly capture
-local-only quanh sự kiện trước khi đổi thêm motion math. Upper-arm axial calibration/constraint thuộc
-Phase 3C. Swing–twist utility mới phục vụ test/diagnostics; palm twist và anatomical calibration thuộc
-Phase 3B/3C.
+local-only quanh sự kiện trước khi đổi thêm motion math. Upper-arm axial calibration/constraint và
+các mở rộng anatomical calibration còn lại là backlog tay chưa gán phase. Phase 3C cũ cho các việc
+này đã hủy; Phase 3C mới chỉ dành cho Face Expression & Local Lip-sync theo
+`docs/P4_T10_PHASE3C_FACE_EXPRESSION_AND_LOCAL_LIPSYNC_PLAN.md`.
 
 Partial occlusion có thêm invariant theo toàn chain: một Pose sample chỉ được phép cập nhật arm output
 khi cả upper và lower segment cùng hợp lệ. Trước sửa, wrist mất có thể tạo trạng thái
