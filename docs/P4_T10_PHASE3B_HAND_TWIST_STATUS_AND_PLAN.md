@@ -1,7 +1,7 @@
 # P4-T10 — Phase 3B: Hand Forearm Twist
 
-> Trạng thái ngày 2026-07-29: **IMPLEMENTED, MANUAL ACCEPTANCE FAILED — IN PROGRESS**.
-> Automated gate gần nhất: **380/380 test PASS**, TypeScript, lint và Vite build sạch.
+> Trạng thái ngày 2026-07-29: **IN PROGRESS — WEBCAM VẪN CÓ LỖI XOẮN NGẪU NHIÊN, ROOT CAUSE CÒN MỞ**.
+> Automated gate gần nhất: **384/384 test PASS**, TypeScript, lint và Vite build sạch.
 > Không được đánh dấu Phase 3B hoàn thành trước khi webcam gate trái/phải và nhiều avatar cùng PASS.
 
 ## 1. Phase 3B làm gì?
@@ -42,7 +42,7 @@ Pose arm swing + Pose temporal output
 → neutral-relative correction
 → dead zone
 → target filter
-→ clamp
+→ clamp ±90° quanh neutral
 → twist temporal hold/fade/reacquire
 → poseLowerDelta * handTwistDelta
 → jointRotations[lowerArm]
@@ -51,12 +51,14 @@ Pose arm swing + Pose temporal output
 Các contract đã có trong code và automated test:
 
 - Runtime flag `handTwistEnabled`, mặc định `false`, có setter và checkbox DEV.
+- DEV harness có lệnh neo neutral riêng tay trái/tay phải/hai tay; frame Hand trusted kế tiếp trở thành zero mà không mở tracking epoch mới.
 - State Hand twist độc lập left/right, không trộn với Pose `ArmTemporalState`.
 - Chỉ lowerArm tương ứng được sửa; upperArm, elbow, pole và Pose swing giữ nguyên.
 - Invalid Hand, influence bằng 0, flag off hoặc profile/geometry không hợp lệ trả đúng Pose quaternion.
 - Duplicate Hand timestamp không trở thành observation mới; temporal vẫn tiến theo `dt`.
 - Reset/dispose/rig generation/tracking discontinuity/long loss không được rò twist cũ.
 - Renderer tiếp tục nhận rest-relative parent-local delta và áp `restLocal × deltaLocal`.
+- Confidence chỉ gate observation; observation trusted có target amplitude `1`. Temporal influence chỉ ramp khi acquire và hold/fade khi mất tracking, không co biên độ steady-state theo quality.
 
 ## 3. Những gì chưa thuộc Phase 3B
 
@@ -98,31 +100,38 @@ Mỗi module trên có file `*.test.ts` tương ứng khi tồn tại logic thu�
 - Synthetic neutral, ±45°, ±179°/−179°, projection-degenerate và không double-negate.
 - Duplicate/unsampled/missing, hold/fade/reacquire, reset/dispose/rig change và finite quaternion.
 
-### Chưa đạt bằng webcam
+### Bằng chứng webcam và trạng thái lỗi còn mở
 
-- Webcam mới nhất cho thấy chiều xoay cẳng tay phải vẫn ngược với động tác thật.
-- Thử tách `rigApplicationSign` và đặt right `-1` vẫn không làm manual gate PASS.
-- Vì vậy không được ghi rằng convention/dấu tay phải đã được xác nhận; đây vẫn là lỗi mở.
-- Chưa có bộ snapshot đồng nhất `neutral → palm-up → neutral → palm-down` cho cả hai tay trên cả ba
-  model local.
+- Ba snapshot tay phải cùng tracking epoch (`palm-facing → edge → back-facing`) cho thấy raw/corrected tăng liên tục nhưng output bị đảo bởi `rigApplicationSign.right=-1`.
+- Hai tư thế cuối cùng cùng chạm clamp `+75°`; confidence `0.689→0.813` tiếp tục co output thành `−52°→−61°`, nên tay thật đổi khoảng 75° nhưng avatar chỉ đổi khoảng 9°.
+- Neutral của lần đo được neo trước chuỗi tại raw `2.009 rad`, khiến edge bị tính thành khoảng `+95°`; đây là bằng chứng first-trusted auto-neutral không đủ cho manual acceptance.
+- Production candidate fix: `rigApplicationSign={left:+1,right:+1}`, clamp đối xứng `±90°`, trusted target amplitude bằng `1`, và API/nút DEV neo neutral chủ động theo từng side.
+- Automated regression đã khóa sign semantic hai bên, neutral re-anchor độc lập và full steady-state amplitude. Tuy nhiên đây chưa thay thế webcam acceptance.
+- Một lỗi độc lập ở Phase 3A đã được tái tạo qua hai regression: initial pole đối dấu tạo roll 180°, còn pole lệch 90° vẫn lọt qua hemisphere-only fix. Bản sửa hiện tại không cho fresh pole điều khiển axial upperArm; upperArm dùng minimal-twist swing, pole vẫn phục vụ bend/lower frame. Hai regression đã PASS nhưng sau khi re-test, webcam vẫn đôi lúc xuất hiện xoắn tay/vùng vai không tái hiện ổn định. Vì vậy hai lỗi đã khóa chỉ là nguyên nhân đóng góp đã biết; root cause runtime cuối cùng chưa được xác định.
+- Chưa có số liệu tay trái hợp lệ (các snapshot vừa thu đều `left: missing`); vì vậy không được kết luận cả hai tay đã PASS.
+- Chưa có bộ snapshot đồng nhất `neutral → palm-up → neutral → palm-down` cho cả hai tay trên cả ba model local.
+
+Trước khi sửa thêm motion math, cần triển khai một anomaly capture local-only: ring buffer 2–3 giây, trigger theo upper-arm axial twist/quaternion delta và xuất JSON chứa nguồn upper frame/pole/torso, trạng thái temporal/reacquire, angular delta, `sampleDisposition` và `dt`. Capture này chưa được triển khai, không chứa raw frame/ảnh khuôn mặt và không upload dữ liệu.
 
 ## 6. Công việc tiếp theo của Phase 3B
 
-1. **Đóng băng baseline trước khi sửa tiếp**
+1. **Thu sự kiện xoắn ngẫu nhiên bằng anomaly capture local-only**
+   - Triển khai ring buffer và trigger chẩn đoán nêu trên, sau đó tái hiện lỗi trước khi thay đổi solver thêm lần nữa.
+   - Phân biệt quaternion upperArm thật sự xoắn với artifact do lowerArm/skinning của từng VRM.
+2. **Đóng băng baseline trước khi webcam re-test**
    - Giữ một model, một side, Filter/Constraints/Smoothing cố định.
-   - Reload model, đưa tay khỏi camera để epoch/state cũ không ảnh hưởng lần đo.
-2. **Thu bằng chứng ba tư thế**
+   - Reload model, bật Hand twist, giữ cạnh bàn tay rồi bấm `Neo neutral tay trái/phải`; xác nhận `neutralReanchorReason=manual-neutral-calibration` và corrected gần 0.
+3. **Thu bằng chứng ba tư thế**
    - Chụp diagnostic neutral, palm-up và palm-down cho right; lặp lại cho left.
    - Đối chiếu từ raw palm basis đến `appliedTwistRadians` và world orientation thật sau renderer.
-3. **Xác định tầng đảo dấu duy nhất**
-   - Palm basis/chirality, signed-angle, local anatomical axis, quaternion composition hoặc
-     normalized humanoid inheritance.
-   - Không đảo dấu ở nhiều tầng và không tune smoothing/clamp để che lỗi convention.
-4. **Kiểm chứng theo model**
+4. **Kiểm chứng candidate sign boundary**
+   - Xác nhận tay phải đi cùng chiều sau khi bỏ lần đảo thứ hai (`rigApplicationSign.right: -1→+1`).
+   - Thu tay trái tương đương trước khi khóa convention; không đổi chirality/signed-angle thêm nếu chưa có bằng chứng.
+5. **Kiểm chứng theo model**
    - Chạy cùng procedure trên `reference-avatar.vrm`, `reference-avatar-1.vrm` và
      `reference-avatar-2.vrm`.
    - Nếu dấu phụ thuộc rig, phải biểu diễn bằng dữ liệu/profile đã đo; không hard-code theo tên model.
-5. **Viết RED regression từ nguyên nhân gốc**, sửa production tối thiểu, rồi chạy lại toàn bộ gate.
+6. **Regression và production candidate fix đã có**; còn anomaly capture, webcam re-test, world-orientation evidence sau renderer và acceptance đa model.
 
 ## 7. Acceptance gate Phase 3B
 

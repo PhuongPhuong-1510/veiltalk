@@ -250,10 +250,19 @@ function solveSide(
   if (poleSource === "fresh" || poleSource === "hand") candidatePole = pole;
   const projectToPrimary = (value: Vector3Data, primary: Vector3) => { const projected = vector(value).addScaledVector(primary, -vector(value).dot(primary)); return projected.lengthSq() > 1e-8 ? vectorData(projected.normalize()) : null; };
   const transportedUpper = transportedSecondary(upper, history.previousPrimary?.upper, history.previousSecondary?.upper);
-  // Pole tươi là nguồn duy nhất mang thông tin twist quan sát được; khi không có, parallel
-  // transport giữ tính liên tục theo thời gian tốt hơn rest pole nên phải được ưu tiên.
-  let upperSecondary = candidatePole ? projectToPrimary(candidatePole, upper) : transportedUpper;
-  if (upperSecondary && transportedUpper && vector(upperSecondary).dot(vector(transportedUpper)) < 0) upperSecondary = vectorData(vector(upperSecondary).negate());
+  // Phase 3A chỉ có quyền solve upperArm swing. Pole từ elbow/hand vẫn dùng cho bend plane,
+  // inference và lower-arm frame, nhưng không đủ tin cậy để điều khiển axial roll của bắp tay:
+  // ngay cả pole vuông góc rest (không phải chỉ đối dấu 180°) cũng làm mesh vai xoắn rõ.
+  // Parallel-transport rest frame theo torso + primary hiện tại tạo minimal-twist swing.
+  const upperRestPrimary = rotateVector(torsoDelta, profile.joints[i.upper].anatomicalRestBasis.primaryWorld);
+  const upperRestSecondary = rotateVector(torsoDelta, profile.joints[i.upper].anatomicalRestBasis.secondaryWorld);
+  const transportedRestUpper = transportedSecondary(upper, upperRestPrimary, upperRestSecondary);
+  // Khi không có pole quan sát mới, giữ continuity đã parallel-transport; khi có pole mới,
+  // dùng minimal-twist rest thay vì cho pole tiêm axial roll vào upperArm.
+  let upperSecondary = candidatePole
+    ? transportedRestUpper ?? transportedUpper
+    : transportedUpper ?? transportedRestUpper;
+  if (candidatePole) flags.push("upper-secondary-minimal-twist");
   if (!upperSecondary) upperSecondary = restCandidates.map((value) => projectToPrimary(value, upper)).find(Boolean) ?? null;
   if (!upperSecondary) return reject("invalid-upper-secondary", flags);
   let lowerSecondary: Vector3Data | null = null;

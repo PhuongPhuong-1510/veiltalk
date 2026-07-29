@@ -8,15 +8,18 @@ export interface HandTwistRigConvention {
   selectedPalmAxis: "normal";
   chiralityNormalMultiplier: { left: -1; right: 1 };
   configuredPositiveSign: { left: 1; right: 1 };
-  /** Webcam/rig v1: đổi dấu chỉ tại boundary áp quaternion, không thay palm/chirality measurement. */
-  rigApplicationSign: { left: 1; right: -1 };
+  /**
+   * Solver đã trả semantic giải phẫu thống nhất giữa hai bên. Trục `primaryLocal` của rig mang
+   * sẵn hướng trái/phải, vì vậy không đảo tay phải lần hai tại boundary áp quaternion.
+   */
+  rigApplicationSign: { left: 1; right: 1 };
 }
 
 export const HAND_TWIST_RIG_CONVENTION_V1: HandTwistRigConvention = Object.freeze({
   selectedPalmAxis: "normal",
   chiralityNormalMultiplier: Object.freeze({ left: -1, right: 1 }),
   configuredPositiveSign: Object.freeze({ left: 1, right: 1 }),
-  rigApplicationSign: Object.freeze({ left: 1, right: -1 }),
+  rigApplicationSign: Object.freeze({ left: 1, right: 1 }),
 });
 
 function handWorldVectorToMotionFrame(value: Vector3Data): Vector3Data {

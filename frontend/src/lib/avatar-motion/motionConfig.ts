@@ -118,8 +118,9 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     deadZoneRadians: 3 * Math.PI / 180,
     targetFilterTimeConstantSeconds: 0.08,
     correctionLimits: {
-      left: { minRadians: -75 * Math.PI / 180, maxRadians: 75 * Math.PI / 180 },
-      right: { minRadians: -75 * Math.PI / 180, maxRadians: 75 * Math.PI / 180 },
+      // ±90° quanh neutral tương ứng tổng phạm vi 180°, không phải ±180° (tổng 360°).
+      left: { minRadians: -90 * Math.PI / 180, maxRadians: 90 * Math.PI / 180 },
+      right: { minRadians: -90 * Math.PI / 180, maxRadians: 90 * Math.PI / 180 },
     },
   },
 };

@@ -123,7 +123,7 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 - Thư viện: MediaPipe Tasks API (thay thế cho MediaPipe Holistic đã bị deprecated). Lý do chọn so với phương án khác: TensorFlow.js cho độ chính xác tương đương nhưng đòi hỏi tự huấn luyện/tinh chỉnh model theo dõi tay — tốn thời gian ngoài phạm vi đồ án; face-api.js chỉ mạnh ở khuôn mặt, không có model theo dõi tay/thân tích hợp sẵn. MediaPipe Tasks API cung cấp các task chuyên biệt (FaceLandmarker, HandLandmarker, PoseLandmarker) thay thế Holistic đơn khối, hiệu năng tốt hơn và được Google tiếp tục duy trì.
 
-- Pipeline xử lý hiện tại: raw frame → landmark extraction (MediaPipe) → phân loại Hand sample tại processor boundary (`unsampled`/`duplicate`/`new-sample`) → per-side image bounds/visibility gate → torso semantic basis → three-point anatomical arm-frame (primary direction + elbow-offset secondary reference) → direction/pole filters → parent-local/rest-relative delta → safety constraint → hold/return/recovery → optional Hand forearm axial-twist correction → hệ số blendshape + `AvatarPosePacketV1`. Duplicate bị chặn trước Hand matching/palm construction nhưng temporal vẫn tick theo `dt`. Hand world palm basis được đổi đồng bộ sang motion frame `(x,-y,-z)` trước chirality và trước phép đo twist. Convention đo giải phẫu hiện dùng `positiveSign=+1` cho cả hai side; code có application-sign boundary riêng để điều tra chiều rig, nhưng webcam gate tay phải vẫn FAIL nên dấu cuối chưa được coi là convention đã nghiệm thu. Neutral/matching/temporal dùng tracking epoch độc lập từng side; short reacquire và lower-arm geometry dropout chưa được xác nhận giữ epoch. Reset/dispose/rig change/discontinuity/long loss, hoặc recovery sau geometry loss đã vượt `invalidGraceMs`, mới tạo epoch mới. Depth-degenerate dùng previous/rest pole fallback. Trạng thái và acceptance gate Phase 3B nằm tại `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`.
+- Pipeline xử lý hiện tại: raw frame → landmark extraction (MediaPipe) → phân loại Hand sample tại processor boundary (`unsampled`/`duplicate`/`new-sample`) → per-side image bounds/visibility gate → torso semantic basis → three-point anatomical arm-frame (primary direction + elbow-offset secondary reference) → direction/pole filters → parent-local/rest-relative delta → safety constraint → hold/return/recovery → optional Hand forearm axial-twist correction → hệ số blendshape + `AvatarPosePacketV1`. Duplicate bị chặn trước Hand matching/palm construction nhưng temporal vẫn tick theo `dt`. Hand world palm basis được đổi đồng bộ sang motion frame `(x,-y,-z)` trước chirality và trước phép đo twist. Convention candidate hiện dùng `positiveSign=+1` và `rigApplicationSign=+1` cho cả hai side; tay phải bỏ lần đảo dấu thứ hai sau bằng chứng webcam định lượng, nhưng vẫn chờ re-test nên chưa được coi là convention đã nghiệm thu. Clamp là `±90°` quanh neutral. Observation trusted giữ full target amplitude; temporal influence chỉ ramp acquire và hold/fade khi mất tracking. Neutral có thể neo chủ động theo từng side trong DEV harness mà không mở epoch mới; fallback vẫn neo first-trusted sau reset. Neutral/matching/temporal dùng tracking epoch độc lập từng side. Reset/dispose/rig change/discontinuity/long loss, hoặc recovery sau geometry loss đã vượt `invalidGraceMs`, mới tạo epoch mới. Depth-degenerate dùng previous/rest pole fallback. Trạng thái và acceptance gate Phase 3B nằm tại `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`.
 
 - Output: `AvatarPosePacketV1` plain-data nhỏ gọn. `jointRotations` chứa quaternion delta trong normalized-humanoid parent-local, rest-relative space; packet không chứa raw face/hand/pose landmarks hoặc facial transform matrix. RTCDataChannel transport thuộc P4-T15, chưa nằm trong P4-T10.
 
@@ -164,8 +164,16 @@ qAppliedLocal = qRestLocal × qDeltaLocal
 Production coordinate conversion vẫn là `(x,y,z) → (x,-y,-z)`. Constraint hiện clamp
 rest-relative delta; khi delta bị clamp, target world của parent được tính lại trước khi solve
 child. Phase 3A thay production one-vector path bằng full arm frame dựng từ direction và
-elbow-offset pole, có hysteresis cùng previous/rest fallback. Swing–twist utility mới phục vụ
-test/diagnostics; palm twist và anatomical calibration thuộc Phase 3B/3C.
+elbow-offset pole, có hysteresis cùng previous/rest fallback. Trong Phase 3A, fresh pole không
+điều khiển axial orientation của upperArm: upper secondary dùng minimal-twist rest frame đã
+parallel-transport theo torso + primary; history continuity chỉ được giữ khi pole unavailable.
+Thiết kế này giữ đầy đủ upper swing và khóa bằng automated regression hai trường hợp pole lệch
+90°/180° từng gây xoắn vùng vai dù optional Constraints tắt. Tuy nhiên manual webcam gate vẫn
+đôi lúc thấy xoắn không tái hiện ổn định, nên hai regression này không được xem là bằng chứng lỗi
+runtime đã được xử lý dứt điểm. Root cause còn mở; bước chẩn đoán kế tiếp là anomaly capture
+local-only quanh sự kiện trước khi đổi thêm motion math. Upper-arm axial calibration/constraint thuộc
+Phase 3C. Swing–twist utility mới phục vụ test/diagnostics; palm twist và anatomical calibration thuộc
+Phase 3B/3C.
 
 #### 4.1.3. Communication Module
 

@@ -22,6 +22,56 @@ const frame = (straight = false) => { const p = Array.from({ length: 33 }, () =>
 const imageFrame = (world: RawNormalizedLandmarkV1[]) => world.map((point) => ({ ...point, x: .5 + point.x * .2, y: .5 + point.y * .2 }));
 const emptyHistory = (): ArmGeometryHistory => ({ previousPole: null, previousPoleWasFresh: false, previousDepthDegenerate: false, lastValidPoleAtMs: null });
 describe("three-point anatomical arm-frame solver", () => {
+  it("initial opposite elbow pole cannot roll either upperArm 180° away from its minimal-twist rest branch", () => {
+    // `frame()` giữ upper direction đúng rest (±X) nhưng elbow-offset pole chiếu thành -Y,
+    // đối dấu với rest secondary +Y. Không có history ở frame đầu: nếu nhận nhánh -Y trực tiếp,
+    // full frame sẽ tạo axial roll 180° dù bắp tay không đổi hướng.
+    const world = frame();
+    const solved = solveAnatomicalArmFrames(
+      world,
+      imageFrame(world),
+      profile,
+      { left: emptyHistory(), right: emptyHistory() },
+      0,
+      DEFAULT_AVATAR_MOTION_CONFIG.armFrame,
+      false,
+    );
+    for (const side of ["left", "right"] as const) {
+      const result = solved.sides[side]!;
+      expect(result.poleSource).toBe("fresh");
+      expect(vector(result.secondary.upper).dot(new Vector3(0, 1, 0))).toBeGreaterThan(0.99);
+      expect(result.diagnostic.confidenceFlags).toContain("upper-secondary-minimal-twist");
+      const upperName = side === "left" ? "leftUpperArm" : "rightUpperArm";
+      expect(q3(result.deltas[upperName]!).angleTo(new Quaternion())).toBeLessThan(1e-6);
+    }
+  });
+
+  it("fresh pole 90° from rest cannot inject axial roll into an otherwise unchanged upperArm direction", () => {
+    // Upper direction vẫn đúng rest (±X), nhưng wrist đi theo Z làm elbow-offset pole chiếu
+    // thành ±Z. Hemisphere correction không xử lý trường hợp dot=0 này; nếu pole còn điều khiển
+    // upper secondary, vai sẽ roll 90° dù hướng bắp tay không đổi.
+    const world = frame();
+    world[15] = lm(1, 0, 1);
+    world[16] = lm(-1, 0, 1);
+    const solved = solveAnatomicalArmFrames(
+      world,
+      imageFrame(world),
+      profile,
+      { left: emptyHistory(), right: emptyHistory() },
+      0,
+      DEFAULT_AVATAR_MOTION_CONFIG.armFrame,
+      false,
+    );
+    for (const side of ["left", "right"] as const) {
+      const result = solved.sides[side]!;
+      expect(result.poleSource).toBe("fresh");
+      expect(vector(result.secondary.upper).dot(new Vector3(0, 1, 0))).toBeGreaterThan(0.99);
+      expect(result.diagnostic.confidenceFlags).toContain("upper-secondary-minimal-twist");
+      const upperName = side === "left" ? "leftUpperArm" : "rightUpperArm";
+      expect(q3(result.deltas[upperName]!).angleTo(new Quaternion())).toBeLessThan(1e-6);
+    }
+  });
+
   it("matches upper/lower directions and uses a fresh elbow-offset pole", () => {
     const world = frame(); const result = solveAnatomicalArmFrames(world, imageFrame(world), profile, { left: emptyHistory(), right: emptyHistory() }, 0, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false);
     for (const side of ["left", "right"] as const) {

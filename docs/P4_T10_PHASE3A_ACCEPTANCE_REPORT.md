@@ -1,7 +1,7 @@
 # P4-T10 — Phase 3A Acceptance Report
 
 > Phạm vi: anatomical arm-frame foundation  
-> Trạng thái: **IMPLEMENTED — MANUAL BROWSER GATE PENDING**
+> Trạng thái: **IMPLEMENTED — MANUAL BROWSER GATE CHƯA ĐẠT ỔN ĐỊNH, ROOT CAUSE CÒN MỞ**
 
 ## Contract
 
@@ -17,7 +17,8 @@ packet. `headRotation` giữ hành vi legacy/unverified và không thuộc arm a
 - Partial-segment observation: wrist mất chỉ làm lower arm hold/return parent-local; upper swing vẫn cập nhật từ shoulder–elbow.
 - Direction validity, pole validity và twist observability được báo riêng; pole suy biến không còn loại direction hợp lệ.
 - Upper/lower có temporal channel riêng nhưng vẫn dùng shared arm continuity state.
-- Secondary axis được parallel-transport theo primary mới; candidate mới được chọn dấu gần history để ngăn frame flip. Phase 3A bảo toàn axial twist, palm twist vẫn thuộc Phase 3B.
+- Secondary axis được parallel-transport theo primary mới. Khi pole unavailable, history continuity vẫn được giữ; palm/forearm twist vẫn thuộc Phase 3B.
+- Fresh elbow/hand pole không còn điều khiển axial orientation của `upperArm`: Phase 3A dựng upper secondary từ minimal-twist rest frame đã parallel-transport theo torso + primary và gắn flag `upper-secondary-minimal-twist`. Vì vậy pole đối dấu 180° hoặc lệch 90° không còn làm vùng vai roll dù checkbox Constraints tắt. UpperArm vẫn swing đầy đủ theo hướng shoulder→elbow; upper-arm axial calibration/constraint được giữ cho Phase 3C.
 - Frozen `tracked` frame trùng pose timestamp được phát lại mà không làm arm loss state già đi; DEV replay-as-new tạo timestamp mới rõ ràng.
 - Geometry/rejection diagnostics gần nhất được giữ qua `not-sampled`/`lost`; `sampleDisposition` tách trạng thái sample khỏi kết quả geometry.
 - Torso semantic basis fallback theo `fresh → previous → rest` và diagnostics ghi rõ source khi camera bán thân không thấy hip.
@@ -38,6 +39,7 @@ packet. `headRotation` giữ hành vi legacy/unverified và không thuộc arm a
 
 - Torso basis finite, orthonormal và right-handed.
 - Fresh/previous/rest pole, zero segment và non-identity ancestor tests.
+- Regression hai bên khóa hai trường hợp upper direction đúng rest nhưng fresh pole đối dấu 180° hoặc lệch 90°: upperArm delta phải gần identity, không được axial roll.
 - Sáu preset Phase 2 đạt direction gate `≤3°` với constraints off.
 - Hold → returning → idle → recovering timeline thay đổi quaternion thật.
 - Packet vẫn plain-data; renderer absolute apply tests không đổi.
@@ -52,11 +54,41 @@ npm.cmd run build                         → PASS, 1,820 modules
 git diff --check                          → PASS
 ```
 
+Gate gần nhất sau bản sửa upperArm secondary branch ngày 2026-07-29:
+
+```text
+npm.cmd test                              → 36 files, 384/384 PASS
+npm.cmd run lint                          → PASS
+npm.cmd run build                         → PASS, 1,820 modules
+```
+
 ## Manual/browser evidence
 
-DEV route `/dev/avatar-renderer` trả HTTP 200; model tham chiếu trả HTTP 200, 18,900,420
-bytes. Browser-control runtime không có browser khả dụng, vì vậy canvas/preset/webcam manual
-gate chưa được chạy lại. Không tuyên bố Phase 3A PASS và không tạo commit acceptance.
+Ảnh webcam trước đó cho thấy vùng vai vẫn axial roll sau hemisphere-only fix: fresh pole lệch khoảng 90° vẫn điều khiển full upper frame. Regression thứ hai đã tái tạo đúng lỗ hổng `dot=0`; bản sửa sau đó chuyển upperArm sang minimal-twist swing-only trong Phase 3A và đã qua automated gate.
+
+Sau khi re-test bản minimal-twist swing-only, người dùng vẫn quan sát thấy tay/vùng vai đôi lúc xoắn bất thường nhưng chưa tái hiện được theo một chuỗi động tác ổn định. Vì vậy:
+
+- Hai regression 180° và 90° chứng minh và khóa hai lỗi toán học cụ thể đã tìm thấy; chúng chỉ là các nguyên nhân đóng góp đã biết, không phải bằng chứng rằng root cause cuối cùng của lỗi webcam đã được xử lý hết.
+- Automated gate 384/384 chỉ chứng minh các invariant và tình huống synthetic hiện có; không thay thế manual browser gate.
+- Phase 3A chưa PASS, chưa được tạo commit acceptance và không được mô tả bản sửa hiện tại là xử lý dứt điểm lỗi xoắn runtime.
+
+## Điều tra còn mở
+
+Các mục dưới đây là **giả thuyết cần dữ liệu**, chưa phải kết luận nguyên nhân:
+
+- Parallel transport từ history có thể tích lũy axial roll theo đường chuyển động (holonomy), nhất là khi fresh pole không dùng được trong nhiều frame.
+- Việc chuyển nguồn giữa minimal-twist rest frame và history continuity có thể tạo nhánh orientation không liên tục.
+- `Quaternion.setFromUnitVectors()` có thể mơ hồ khi primary direction tiến gần hướng đối nhau.
+- Chuyển nguồn torso semantic basis giữa `fresh → previous → rest` có thể thay đổi reference frame đột ngột.
+- Rest basis, skin weight của VRM hoặc ảnh hưởng hình học từ lowerArm có thể làm vùng vai trông xoắn dù quaternion upperArm không vượt invariant hiện có.
+
+Bước chẩn đoán tiếp theo được đề xuất, **chưa triển khai**, là bộ ghi bất thường local-only:
+
+- Giữ ring buffer khoảng 2–3 giây và tự kích hoạt khi upper-arm axial twist hoặc quaternion delta vượt ngưỡng.
+- Ghi primary/secondary upper frame, axial twist, nguồn branch/pole/torso, trạng thái reacquire, angular delta, `sampleDisposition` và `dt` quanh sự kiện.
+- Chỉ xuất JSON diagnostics theo yêu cầu; không upload, không lưu raw frame/ảnh khuôn mặt và không thay đổi privacy contract.
+
+Không tiếp tục sửa công thức chuyển động theo các giả thuyết trên trước khi có capture tái hiện sự kiện.
 
 ## Deferred by scope
 
