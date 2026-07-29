@@ -2,11 +2,20 @@ import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial,
 import { describe, expect, it, vi } from "vitest";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import type { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { AvatarModelLoader, createRigProfile, disposeObject } from "./modelLoader";
+import { AvatarModelLoader, createRigProfile, disposeObject, isCurrentModelLoadRequest } from "./modelLoader";
 
 const gltf = (root: Group): GLTF => ({ scene: root, scenes: [root], animations: [], cameras: [], asset: {}, parser: {} as GLTF["parser"], userData: {} });
 
 describe("AvatarModelLoader", () => {
+  it("lets only the latest renderer request commit model and rig state", () => {
+    const oldRenderer = {};
+    const currentRenderer = {};
+    expect(isCurrentModelLoadRequest(currentRenderer, currentRenderer, 2, 2)).toBe(true);
+    expect(isCurrentModelLoadRequest(currentRenderer, oldRenderer, 2, 1)).toBe(false);
+    expect(isCurrentModelLoadRequest(currentRenderer, currentRenderer, 3, 2)).toBe(false);
+    expect(isCurrentModelLoadRequest(null, currentRenderer, 2, 2)).toBe(false);
+  });
+
   it("ignores and disposes a stale model load", async () => {
     const roots = [new Group(), new Group()];
     let resolveFirst!: (value: GLTF) => void;

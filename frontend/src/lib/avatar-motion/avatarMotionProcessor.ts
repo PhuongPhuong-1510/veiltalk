@@ -357,16 +357,37 @@ export class AvatarMotionProcessor {
         const state = this.armState[side]; const geometry = solved?.sides[side] ?? null;
         const stabilityState = this.armStabilityState[side];
         const names = side === "left" ? { upper: "leftUpperArm" as const, lower: "leftLowerArm" as const } : { upper: "rightUpperArm" as const, lower: "rightLowerArm" as const };
-        const currentUpperTarget = isNewSample ? geometry?.deltas[names.upper] ?? null : null;
-        const currentLowerTarget = isNewSample ? geometry?.deltas[names.lower] ?? null : null;
+        // Một cánh tay chỉ là một nghiệm hình học dùng được khi cả upper và lower cùng hợp lệ.
+        // Nếu wrist bị che mà vẫn nhận upper mới trong khi lower giữ quaternion cũ, hai đoạn xương
+        // thuộc hai thời điểm khác nhau và forearm có thể bị kéo quét ngang mặt.
+        const chainGeometryValid = Boolean(geometry?.segmentValidity.upper && geometry.segmentValidity.lower);
+        const currentUpperTarget = isNewSample && chainGeometryValid ? geometry?.deltas[names.upper] ?? null : null;
+        const currentLowerTarget = isNewSample && chainGeometryValid ? geometry?.deltas[names.lower] ?? null : null;
         const poseUpperTargetAngularDeltaRadians = quaternionAngularDeltaRadians(stabilityState.previousPoseUpperTarget, currentUpperTarget);
         const poseLowerTargetAngularDeltaRadians = quaternionAngularDeltaRadians(stabilityState.previousPoseLowerTarget, currentLowerTarget);
         if (isNewSample) state.lastConsumedPoseSampledAtMs = sampledAtMs;
         if (solved) { state.elbowWasVisible = solved.visibilityStates[side].elbow; state.wristWasVisible = solved.visibilityStates[side].wrist; }
-        if (isNewSample && !geometry) { state.invalidCandidateStartedAtMs ??= processedTimestampMs; state.validCandidateStartedAtMs = null; }
-        if (geometry) { state.invalidCandidateStartedAtMs = null; state.validCandidateStartedAtMs ??= processedTimestampMs; state.depthDegenerate = geometry.depthDegenerate; }
+        if (isNewSample && !chainGeometryValid) {
+          state.invalidCandidateStartedAtMs ??= processedTimestampMs;
+          state.validCandidateStartedAtMs = null;
+        } else if (isNewSample && state.invalidCandidateStartedAtMs !== null) {
+          state.validCandidateStartedAtMs ??= processedTimestampMs;
+        }
         const confirmationElapsed = state.validCandidateStartedAtMs === null ? 0 : processedTimestampMs - state.validCandidateStartedAtMs;
-        const geometryConfirmed = Boolean(geometry && (state.lossState === "active" || state.lastValidOutput === null || confirmationElapsed >= this.config.armFrame.validRecoveryConfirmMs));
+        const recoveringFromChainLoss = state.invalidCandidateStartedAtMs !== null;
+        const geometryConfirmed = Boolean(
+          geometry && chainGeometryValid && (
+            !recoveringFromChainLoss || confirmationElapsed >= this.config.armFrame.validRecoveryConfirmMs
+          ),
+        );
+        const chainTrackingReacquired = geometryConfirmed && recoveringFromChainLoss;
+        if (geometryConfirmed) {
+          state.depthDegenerate = geometry!.depthDegenerate;
+          if (chainTrackingReacquired) {
+            state.invalidCandidateStartedAtMs = null;
+            state.validCandidateStartedAtMs = null;
+          }
+        }
         // Mức 1B-2 (theo tư vấn chuyên gia): "reacquire" phải trigger khi NGUỒN dữ liệu hình
         // học đổi loại, không chỉ khi lossState mất/còn — vì geometry vẫn solved liên tục mỗi
         // frame cả khi poleSource đổi (rest→fresh), nên lossState không hề rời "active". Đo
@@ -379,21 +400,22 @@ export class AvatarMotionProcessor {
         const previousUpperOutput = state.segments.upper.currentOutputDelta;
         const previousLowerOutput = state.segments.lower.currentOutputDelta;
         const previousPoleSourceStrength = poleSourceStrength(state.poleSource);
-        const poleSourceUpgraded = Boolean(geometry) && poleSourceStrength(geometry!.poleSource) > previousPoleSourceStrength && state.poleSource !== "unavailable";
-        let trackingReacquired = false;
-        if (geometry?.acceptedFreshPole) { state.previousPole = geometry.acceptedPole; state.lastValidPoleAtMs = processedTimestampMs; }
-        if (geometry) state.poleSource = geometry.poleSource;
-        if (geometry) {
-          const elbowSourceChanged = state.elbowSource !== "unavailable" && state.elbowSource !== geometry.elbowSource;
-          if (elbowSourceChanged || poleSourceUpgraded) { trackingReacquired = true; for (const segment of ["upper", "lower"] as const) { state.segments[segment].lossState = "recovering"; state.segments[segment].recoveryStartedAtMs = null; } }
-          state.elbowSource = geometry.elbowSource;
-          state.previousPrimary = geometry.primary; state.previousSecondary = geometry.secondary;
-          if (geometry.elbowSource === "observed") { state.previousObservedElbow = geometry.elbowPosition; state.inferenceStartedAtMs = null; if (geometry.observedLengths) this.updateLengthCalibration(state, geometry.observedLengths); }
+        const acceptedGeometry = geometryConfirmed ? geometry : null;
+        const poleSourceUpgraded = Boolean(acceptedGeometry) && poleSourceStrength(acceptedGeometry!.poleSource) > previousPoleSourceStrength && state.poleSource !== "unavailable";
+        let trackingReacquired = chainTrackingReacquired;
+        if (acceptedGeometry?.acceptedFreshPole) { state.previousPole = acceptedGeometry.acceptedPole; state.lastValidPoleAtMs = processedTimestampMs; }
+        if (acceptedGeometry) state.poleSource = acceptedGeometry.poleSource;
+        if (acceptedGeometry) {
+          const elbowSourceChanged = state.elbowSource !== "unavailable" && state.elbowSource !== acceptedGeometry.elbowSource;
+          if (elbowSourceChanged || poleSourceUpgraded || chainTrackingReacquired) { trackingReacquired = true; for (const segment of ["upper", "lower"] as const) { state.segments[segment].lossState = "recovering"; state.segments[segment].recoveryStartedAtMs = null; } }
+          state.elbowSource = acceptedGeometry.elbowSource;
+          state.previousPrimary = acceptedGeometry.primary; state.previousSecondary = acceptedGeometry.secondary;
+          if (acceptedGeometry.elbowSource === "observed") { state.previousObservedElbow = acceptedGeometry.elbowPosition; state.inferenceStartedAtMs = null; if (acceptedGeometry.observedLengths) this.updateLengthCalibration(state, acceptedGeometry.observedLengths); }
           else state.inferenceStartedAtMs ??= processedTimestampMs;
         } else if (solved?.diagnostics[side].hardRejectionReason?.startsWith("elbow-inference")) state.inferenceStartedAtMs ??= processedTimestampMs;
         const segmentTemporal = {} as Record<"upper" | "lower", { output: QuaternionData; state: ArmLossState; progress: number }>;
         for (const segment of ["upper", "lower"] as const) {
-          const name = names[segment]; const solvedDelta = geometryConfirmed && geometry?.segmentValidity[segment] ? geometry.deltas[name] ?? null : null;
+          const name = names[segment]; const solvedDelta = acceptedGeometry?.deltas[name] ?? null;
           segmentTemporal[segment] = isTrackedDuplicate
             ? { output: state.segments[segment].currentOutputDelta, state: state.segments[segment].lossState, progress: this.diagnostics?.arms[side].transitionProgress ?? 1 }
             : updateSegmentTemporalOutput(state.segments[segment], solvedDelta, Boolean(solvedDelta && isNewSample), processedTimestampMs, this.config.loss.holdMs, this.config.loss.returnMs, this.config.loss.recoveryMs, this.config.armFrame.invalidGraceMs, this.idlePose?.[side][segment]);
@@ -402,9 +424,10 @@ export class AvatarMotionProcessor {
         const lowerName = names.lower;
         const poseLowerDelta = segmentTemporal.lower.output;
         const freshLowerGeometryValid = isNewSample
-          ? Boolean(geometry && geometry.segmentValidity.lower)
+          ? chainGeometryValid
           : null;
-        const twistResult = this.applyHandTwist(side, poseLowerDelta, handContext, frame, processedTimestampMs, freshLowerGeometryValid);
+        const armChainOutputValid = state.invalidCandidateStartedAtMs === null;
+        const twistResult = this.applyHandTwist(side, poseLowerDelta, handContext, frame, processedTimestampMs, freshLowerGeometryValid, armChainOutputValid);
         handTwistDiagnostics[side] = twistResult.diagnostic;
         if (twistResult.output !== poseLowerDelta) jointRotations[lowerName] = twistResult.output;
         const temporalState = segmentTemporal.lower.state === "active" ? segmentTemporal.upper.state : segmentTemporal.lower.state;
@@ -422,8 +445,8 @@ export class AvatarMotionProcessor {
           // không phải deltas thô — phản ánh đúng những gì renderer thực sự nhận mỗi frame.
           upperArmAngularDeltaDeg: angularDeltaDegrees(previousUpperOutput, segmentTemporal.upper.output),
           lowerArmAngularDeltaDeg: angularDeltaDegrees(previousLowerOutput, segmentTemporal.lower.output),
-          poleAngularDeltaDeg: previousPoleValueForDiagnostic && geometry?.acceptedPole ? vectorAngularDeltaDegrees(previousPoleValueForDiagnostic, geometry.acceptedPole) : null,
-          poleSourceChanged: Boolean(geometry) && geometry!.poleSource !== previousPoleSourceForDiagnostic,
+          poleAngularDeltaDeg: previousPoleValueForDiagnostic && acceptedGeometry?.acceptedPole ? vectorAngularDeltaDegrees(previousPoleValueForDiagnostic, acceptedGeometry.acceptedPole) : null,
+          poleSourceChanged: Boolean(acceptedGeometry) && acceptedGeometry!.poleSource !== previousPoleSourceForDiagnostic,
           trackingReacquired,
           elbowInference: { ...base.elbowInference,
             source: geometry?.elbowSource ?? (temporalState === "held" ? "held" : temporalState === "returning" ? "returning" : "unavailable"),
@@ -569,6 +592,7 @@ export class AvatarMotionProcessor {
     frame: RawTrackingFrameV1,
     nowMs: number,
     freshLowerGeometryValid: boolean | null,
+    armChainOutputValid: boolean,
   ): { output: QuaternionData; diagnostic: HandTwistRigDiagnostic } {
     const state = this.handTwistState[side];
     state.trackingEpochStartedAtMs ??= nowMs;
@@ -706,7 +730,11 @@ export class AvatarMotionProcessor {
       targetInfluenceWeight: observationMode === "valid" ? targetInfluenceWeight : null,
       missingDurationSeconds: missingDurationMs / 1000,
       dtSeconds,
-    }, { ...DEFAULT_HAND_TWIST_TEMPORAL_CONFIG, missingHoldSeconds: this.config.handTwist.missingHoldMs / 1000 });
+    }, {
+      ...DEFAULT_HAND_TWIST_TEMPORAL_CONFIG,
+      missingHoldSeconds: this.config.handTwist.missingHoldMs / 1000,
+      fallRatePerSecond: 1_000 / Math.max(1, this.config.handTwist.missingFadeMs),
+    });
     state.temporal = temporal.state;
     if (temporal.resetOccurred) {
       this.resetHandTrackingSide(side, "long-loss-temporal-reset", nowMs);
@@ -717,7 +745,7 @@ export class AvatarMotionProcessor {
       : temporal;
     const anatomicalAppliedTwistRadians = effectiveTemporal.stabilizedTwistRadians * effectiveTemporal.influenceWeight;
     const appliedTwistRadians = anatomicalAppliedTwistRadians * HAND_TWIST_RIG_CONVENTION_V1.rigApplicationSign[side];
-    const canApply = temporal.influenceWeight > 0 && Math.abs(appliedTwistRadians) > 1e-12 && Number.isFinite(appliedTwistRadians);
+    const canApply = armChainOutputValid && temporal.influenceWeight > 0 && Math.abs(appliedTwistRadians) > 1e-12 && Number.isFinite(appliedTwistRadians);
     const composed = canApply ? composePoseLowerArmWithHandTwist(poseLowerDelta, profileJoint.anatomicalRestBasis.primaryLocal, appliedTwistRadians) : null;
     const handTwistApplied = composed !== null;
     const finalApplied = handTwistApplied ? appliedTwistRadians : 0;
@@ -763,7 +791,7 @@ export class AvatarMotionProcessor {
       appliedTwistRadians: finalApplied,
       lastAppliedTwistRadians: finalApplied,
       handTwistApplied,
-      rejectionReason: rejectionReason ?? (temporal.rejectionReason === "none" ? null : temporal.rejectionReason),
+      rejectionReason: rejectionReason ?? (!armChainOutputValid ? "arm-chain-recovery-pending" : temporal.rejectionReason === "none" ? null : temporal.rejectionReason),
       unwrapOwner: "handTwistStabilization",
     };
     this.consumeMatchingResetMarker(state);

@@ -8,6 +8,7 @@ import type { AvatarRenderer } from "../../lib/avatar-renderer/avatarRenderer";
 import { clearDiagnosticHelpers, createDebugPreset, createDiagnosticHelpers, diagnoseJoints, elbowPlaneNormal, inspectRestBasis, updateDiagnosticHelpers, type CoordinateConversion, type DebugPresetName, type JointDiagnosticRow, type RestBasisRow } from "../../lib/avatar-renderer/avatarDiagnostics";
 import type { ModelCapabilityReport } from "../../lib/avatar-renderer/modelTypes";
 import type { RendererMetricsSnapshot } from "../../lib/avatar-renderer/rendererMetrics";
+import { isCurrentModelLoadRequest } from "../../lib/avatar-renderer/modelLoader";
 import type { RawTrackingFrameV1 } from "../../lib/tracking/rawTrackingTypes";
 import type { TrackingMetricsSnapshot } from "../../lib/tracking/trackingMetrics";
 import { useTracking } from "../../lib/tracking/useTracking";
@@ -35,6 +36,7 @@ function emptyCalibrationSamples(): Record<HandCalibrationStepId, HandCalibratio
 
 export default function AvatarRendererDevHarness() {
   const videoRef = useRef<HTMLVideoElement>(null); const rendererRef = useRef<AvatarRenderer | null>(null); const helpersRef = useRef<Group | null>(null);
+  const modelLoadRequestRef = useRef(0);
   const freezeTimerRef = useRef<number | null>(null);
   const processorRef = useRef(new AvatarMotionProcessor()); const latestPacket = useRef<AvatarPosePacketV1 | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
   const [filtered, setFiltered] = useState(false); const [constraints, setConstraints] = useState(false); const [smoothing, setSmoothing] = useState(false);
@@ -48,7 +50,8 @@ export default function AvatarRendererDevHarness() {
   const [error, setError] = useState<string | null>(null); const [capability, setCapability] = useState<ModelCapabilityReport | null>(null); const [packet, setPacket] = useState<AvatarPosePacketV1 | null>(null);
   const [restRows, setRestRows] = useState<RestBasisRow[]>([]); const [jointRows, setJointRows] = useState<JointDiagnosticRow[]>([]); const [planeNormals, setPlaneNormals] = useState<Record<string, unknown>>({});
   const [motionDiagnostics, setMotionDiagnostics] = useState<AvatarMotionDiagnosticSnapshot | null>(null);
-  const [rendererMetrics, setRendererMetrics] = useState<RendererMetricsSnapshot | null>(null); const [trackingMetrics, setTrackingMetrics] = useState<TrackingMetricsSnapshot | null>(null); const [reload, setReload] = useState(0);
+  const [rendererMetrics, setRendererMetrics] = useState<RendererMetricsSnapshot | null>(null); const [trackingMetrics, setTrackingMetrics] = useState<TrackingMetricsSnapshot | null>(null);
+  const [modelLoading, setModelLoading] = useState(false);
 
   // Mức 2B-1 — Hand Calibration Test: chỉ thu thập diagnostic đã có sẵn (packet.handMotion,
   // trackingMetrics), KHÔNG tính pole/quaternion/jointRotations mới, KHÔNG điều khiển VRM.
@@ -162,10 +165,43 @@ export default function AvatarRendererDevHarness() {
   useEffect(() => () => { if (freezeTimerRef.current !== null) window.clearInterval(freezeTimerRef.current); if (helpersRef.current) clearDiagnosticHelpers(helpersRef.current); processorRef.current.dispose(); }, []);
   useEffect(() => { const renderer = rendererRef.current; const model = renderer?.getDiagnosticModel(); if (!model) return; if (helpers && !helpersRef.current) helpersRef.current = createDiagnosticHelpers(model.root, model.bones); if (!helpers && helpersRef.current) { clearDiagnosticHelpers(helpersRef.current); helpersRef.current = null; } }, [helpers, capability]);
 
+  const loadRendererModel = useCallback(async (renderer: AvatarRenderer) => {
+    const requestId = ++modelLoadRequestRef.current;
+    setModelLoading(true);
+    setError(null);
+    if (helpersRef.current) { clearDiagnosticHelpers(helpersRef.current); helpersRef.current = null; }
+    try {
+      const report = await renderer.loadModel(MODEL_URL, { licenseStatus: "unknown" });
+      if (!report || !isCurrentModelLoadRequest(rendererRef.current, renderer, modelLoadRequestRef.current, requestId)) return;
+      const rigProfile = renderer.getRigProfile();
+      setCapability(report);
+      if (!rigProfile) {
+        processorRef.current.setRigProfile(null);
+        setError("Model đã tải nhưng không tạo được normalized arm rig profile; face vẫn có thể chạy nhưng tay bị vô hiệu hóa.");
+        return;
+      }
+      processorRef.current.setRigProfile(rigProfile);
+      const model = renderer.getDiagnosticModel();
+      if (model) setRestRows(inspectRestBasis(model.bones));
+    } catch (reason) {
+      if (isCurrentModelLoadRequest(rendererRef.current, renderer, modelLoadRequestRef.current, requestId)) {
+        setError(`Model blocker: ${reason instanceof Error ? reason.message : String(reason)}`);
+      }
+    } finally {
+      if (isCurrentModelLoadRequest(rendererRef.current, renderer, modelLoadRequestRef.current, requestId)) setModelLoading(false);
+    }
+  }, []);
   const attachRenderer = useCallback((renderer: AvatarRenderer) => {
-    rendererRef.current = renderer; renderer.setSmoothing(smoothing); renderer.setZoom(zoom); renderer.setVerticalOffset(verticalOffset); processorRef.current.setRigProfile(null);
-    void renderer.loadModel(MODEL_URL, { licenseStatus: "unknown" }).then((report) => { setCapability(report); processorRef.current.setRigProfile(renderer.getRigProfile()); const model = renderer.getDiagnosticModel(); if (model) setRestRows(inspectRestBasis(model.bones)); }).catch((reason) => setError(`Model blocker: ${reason instanceof Error ? reason.message : String(reason)}`));
-  }, [smoothing, zoom, verticalOffset]);
+    rendererRef.current = renderer; renderer.setSmoothing(smoothing); renderer.setZoom(zoom); renderer.setVerticalOffset(verticalOffset);
+    processorRef.current.setRigProfile(null); setCapability(null); void loadRendererModel(renderer);
+  }, [loadRendererModel, smoothing, zoom, verticalOffset]);
+  const detachRenderer = useCallback((renderer: AvatarRenderer) => {
+    if (rendererRef.current !== renderer) return;
+    ++modelLoadRequestRef.current;
+    if (helpersRef.current) clearDiagnosticHelpers(helpersRef.current);
+    helpersRef.current = null; rendererRef.current = null; processorRef.current.setRigProfile(null);
+  }, []);
+  function reloadModel() { const renderer = rendererRef.current; if (!renderer || modelLoading) return; void loadRendererModel(renderer); }
   async function toggleTracking() { if (!tracking || !videoRef.current) return; if (trackingRunning) { tracking.stop(); setTrackingRunning(false); } else { setError(null); await tracking.start(videoRef.current); setTrackingRunning(true); } }
   function toggleRenderer() { const renderer = rendererRef.current; if (!renderer) return; if (rendererRunning) renderer.stop(); else renderer.start(); setRendererRunning(!rendererRunning); }
   function toggleFreeze() { if (frozenRaw.current) { frozenRaw.current = null; setFrozen(false); setSampleName("live"); return; } if (!latestRaw.current) return; frozenRaw.current = structuredClone(latestRaw.current); setFrozen(true); setFrozenSequence((value) => value + 1); setSampleName(sampleDraft.trim() || "webcam"); processInput(frozenRaw.current); }
@@ -208,7 +244,7 @@ export default function AvatarRendererDevHarness() {
     <header><div><strong>DEV ONLY · LOCAL ONLY</strong><h1>P4-T10 Retargeting Diagnostics</h1></div><p>Không upload, capture hoặc lưu raw frame.</p></header>
     {error && <pre className="dev-error" role="alert">{error}</pre>}
     <section className="dev-controls">
-      <button onClick={() => void toggleTracking()}>{trackingRunning ? "Stop tracking" : "Start tracking"}</button><button onClick={toggleRenderer}>{rendererRunning ? "Stop renderer" : "Start renderer"}</button><button onClick={() => setReload((v) => v + 1)}>Reload model</button>
+      <button onClick={() => void toggleTracking()}>{trackingRunning ? "Stop tracking" : "Start tracking"}</button><button onClick={toggleRenderer}>{rendererRunning ? "Stop renderer" : "Start renderer"}</button><button onClick={reloadModel} disabled={modelLoading}>{modelLoading ? "Loading model…" : "Reload model"}</button>
       <label>Sample <input value={sampleDraft} onChange={(event) => setSampleDraft(event.target.value)} /></label><button onClick={toggleFreeze} disabled={!frozen && !latestRaw.current}>{frozen ? "Unfreeze" : "Freeze current"}</button><button onClick={freezeAfterCountdown} disabled={frozen || freezeCountdown !== null || !latestRaw.current}>{freezeCountdown === null ? "Freeze in 5s" : `Freeze in ${freezeCountdown}s`}</button><button onClick={replay} disabled={!frozen}>Replay as new sample</button>
       <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={handTwistEnabled} onChange={(e) => setHandTwistEnabled(e.target.checked)} /> Hand twist (2B-5)</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Smoothing</label><label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
       <button onClick={() => processorRef.current.calibrateHandTwistNeutral("left")} disabled={!trackingRunning || !handTwistEnabled}>Neo neutral tay trái</button>
@@ -252,13 +288,13 @@ export default function AvatarRendererDevHarness() {
         {calibrationCopyStatus && <span> {calibrationCopyStatus}</span>}
       </>}
     </section>
-    <section className="dev-stage"><AvatarCanvas key={reload} onReady={attachRenderer} onDispose={() => { if (helpersRef.current) clearDiagnosticHelpers(helpersRef.current); helpersRef.current = null; rendererRef.current = null; processorRef.current.setRigProfile(null); }} onError={(reason) => setError(`WebGL: ${reason.message}`)} options={{ smoothing, onContextLost: (reason) => setError(reason.message) }} /><div className="dev-camera-preview"><video ref={videoRef} muted playsInline />{!trackingRunning && <p>Camera chưa bật<br /><small>Dùng webcam hoặc preset cố định</small></p>}</div></section>
+    <section className="dev-stage"><AvatarCanvas onReady={attachRenderer} onDispose={detachRenderer} onError={(reason) => setError(`WebGL: ${reason.message}`)} options={{ smoothing, onContextLost: (reason) => setError(reason.message) }} /><div className="dev-camera-preview"><video ref={videoRef} muted playsInline />{!trackingRunning && <p>Camera chưa bật<br /><small>Dùng webcam hoặc preset cố định</small></p>}</div></section>
     <section className="dev-panels">
       <article><h2>Frozen evidence</h2><p>Mode: {frozen ? "FROZEN" : "LIVE"} · sample: <strong>{sampleName}</strong> · frozen #{frozenSequence}</p><p>Conversion: <strong>{conversion}</strong> · raw timestamp {number(evidenceFrame?.frameTimestampMs, 0)} · packet seq {packet?.sequence ?? "—"}</p><p>Solver {filtered ? "+filter" : "raw"} · constraints {constraints ? "on" : "off"} · Hand twist {handTwistEnabled ? "on" : "Pose-only"} · smoothing {smoothing ? "on" : "off"}</p><pre>required world landmarks {JSON.stringify(evidenceLandmarks, null, 2)}</pre><pre>plane normal {JSON.stringify(planeNormals, null, 2)}</pre></article>
       <article><h2>Realtime</h2><p>Tracking/Pipeline: {number(trackingMetrics?.cameraFps)} / {number(trackingMetrics?.pipelineFps)} FPS</p><p>Renderer: {number(rendererMetrics?.fps)} FPS · p95 {number(rendererMetrics?.frameTimeP95Ms)}ms</p><p>Processor→draw: {number(rendererMetrics?.processorInputToDrawMs)}ms</p>
         <p>Pose model: <strong>{trackingMetrics?.poseModel ?? `${poseModel} (chưa chạy)`}</strong> · delegate {trackingMetrics?.selectedDelegate ?? "—"}</p>
         <p>Pose inference: {number(trackingMetrics?.inferenceTimeMs.pose.average)}ms trung bình · p95 {number(trackingMetrics?.inferenceTimeMs.pose.p95)}ms · max {number(trackingMetrics?.inferenceTimeMs.pose.max)}ms</p></article>
-      <article><h2>Capability</h2>{capability ? <pre>{JSON.stringify(capability, null, 2)}</pre> : <p>Đang chờ model.</p>}</article>
+      <article><h2>Capability</h2>{modelLoading && <p>Đang tải model mới; model hiện tại vẫn được giữ cho tới khi swap thành công.</p>}{capability ? <pre>{JSON.stringify(capability, null, 2)}</pre> : !modelLoading && <p>Chưa có model sẵn sàng.</p>}</article>
       <article><h2>Tracking state</h2>{packet && Object.entries(packet.tracking).map(([name, state]) => <p key={name}>{name}: {state.sourceState} → {state.outputState}</p>)}</article>
       <article><h2>Phase 3A arm-frame</h2><p>Head: legacy/unverified, excluded from arm acceptance.</p><pre>{JSON.stringify(motionDiagnostics, null, 2)}</pre></article>
     </section>

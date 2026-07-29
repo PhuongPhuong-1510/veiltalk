@@ -628,10 +628,10 @@ describe("AvatarMotionProcessor", () => {
 
       const missingAt = movedAt + 66; now = missingAt + 20; const missing = frame(); missing.pose.sampledAtMs = missingAt; missing.handSampledAtMs = missingAt; missing.rawHands = []; processor.process(missing);
       expect(processor.getLastDiagnostics()!.handTwist.left).toMatchObject({ observationMode: "missing", observationWasNew: true, missingSinceMs: now });
-      const missingSince = now; now = missingSince + 150; processor.process(frame("not-sampled"));
-      expect(processor.getLastDiagnostics()!.handTwist.left).toMatchObject({ observationMode: "unsampled", temporalTrackingState: "holding", missingDurationMs: 150 });
+      const missingSince = now; now = missingSince + 50; processor.process(frame("not-sampled"));
+      expect(processor.getLastDiagnostics()!.handTwist.left).toMatchObject({ observationMode: "unsampled", temporalTrackingState: "holding", missingDurationMs: 50 });
       now = missingSince + 250; processor.process(frame("not-sampled"));
-      expect(processor.getLastDiagnostics()!.handTwist.left.temporalTrackingState).toBe("fading");
+      expect(processor.getLastDiagnostics()!.handTwist.left).toMatchObject({ temporalTrackingState: "inactive", temporalInfluenceWeight: 0, handTwistApplied: false });
 
       const reacquiredAt = missingAt + 300; now = reacquiredAt + 20;
       const reacquired = frame(); reacquired.frameTimestampMs = reacquiredAt; reacquired.pose.sampledAtMs = reacquiredAt; reacquired.handSampledAtMs = reacquiredAt; reacquired.rawHands = [handCandidateWithMiddleDepth(0, { x: LEFT_WRIST_IMAGE.x + 0.26, y: LEFT_WRIST_IMAGE.y }, "left", reacquiredAt, 0.08)]; processor.process(reacquired);
@@ -898,18 +898,71 @@ describe("AvatarMotionProcessor", () => {
     processor.process(sample(100, false)); now = 150; processor.process(sample(150, true));
     expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" }); expect(processor.getLastDiagnostics()?.arms.left.observation.lowerRejectionReason).toBe("wrist-outside-frame");
     now = 260; processor.process(sample(260, true)); expect(processor.getLastDiagnostics()?.arms.left.lossState).toBe("held"); expect(processor.getLastDiagnostics()?.arms.right.lossState).toBe("active");
-    now = 300; processor.process(sample(300, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState.lower).toBe("recovering");
-    now = 500; processor.process(sample(500, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" });
+    now = 300; processor.process(sample(300, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "held", lower: "held" });
+    now = 400; processor.process(sample(400, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "recovering", lower: "recovering" });
+    now = 600; processor.process(sample(600, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" });
   });
-  it("updates upper direction while a missing wrist makes only lower hold then return locally", () => {
-    let now = 100; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(rigProfile);
-    const initial = frame(); const initialPacket = processor.process(initial); const lowerInitial = initialPacket.jointRotations.leftLowerArm;
-    const partial = (timestamp: number, elbowY: number) => { const value = frame(); value.frameTimestampMs = timestamp; value.pose.sampledAtMs = timestamp; value.pose.worldLandmarks![13].y = elbowY; value.pose.landmarks![13].y = .5 + elbowY * .4; value.pose.landmarks![15].x = 1.2; return value; };
-    now = 150; const movingUpper = processor.process(partial(150, -.5));
-    expect(movingUpper.jointRotations.leftUpperArm).not.toEqual(initialPacket.jointRotations.leftUpperArm); expect(movingUpper.jointRotations.leftLowerArm).toEqual(lowerInitial);
+  it("keeps the complete arm chain coherent when a wrist is partially occluded", () => {
+    const cases = [
+      { side: "left", elbowIndex: 13, wristIndex: 15, upperName: "leftUpperArm", lowerName: "leftLowerArm" },
+      { side: "right", elbowIndex: 14, wristIndex: 16, upperName: "rightUpperArm", lowerName: "rightLowerArm" },
+    ] as const;
+    for (const current of cases) {
+      let now = 100;
+      const processor = new AvatarMotionProcessor({ filtered: false, now: () => now });
+      processor.setRigProfile(rigProfile);
+      const initialPacket = processor.process(sampledFrame(100));
+      const partial = (timestamp: number, elbowY: number) => {
+        const value = sampledFrame(timestamp);
+        value.pose.worldLandmarks![current.elbowIndex].y = elbowY;
+        value.pose.landmarks![current.elbowIndex].y = .5 + elbowY * .4;
+        value.pose.landmarks![current.wristIndex].x = 1.2;
+        return value;
+      };
+
+      now = 150;
+      const held = processor.process(partial(150, -.5));
+      expect(held.jointRotations[current.upperName]).toEqual(initialPacket.jointRotations[current.upperName]);
+      expect(held.jointRotations[current.lowerName]).toEqual(initialPacket.jointRotations[current.lowerName]);
+      expect(processor.getLastDiagnostics()?.arms[current.side].segmentLossState).toEqual({ upper: "active", lower: "active" });
+
+      now = 450;
+      processor.process(partial(450, -.8));
+      expect(processor.getLastDiagnostics()?.arms[current.side].segmentLossState).toEqual({ upper: "returning", lower: "returning" });
+    }
+  });
+
+  it("requires a stable wrist reacquire before blending the complete arm chain", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    processor.process(sampledFrame(100));
+    const occluded = (timestamp: number) => {
+      const value = sampledFrame(timestamp);
+      value.pose.landmarks![15].x = 1.2;
+      return value;
+    };
+
+    now = 150; processor.process(occluded(150));
+    now = 250; const held = processor.process(occluded(250));
+    expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "held", lower: "held" });
+
+    now = 280; const firstValid = processor.process(sampledFrame(280));
+    expect(firstValid.jointRotations.leftUpperArm).toEqual(held.jointRotations.leftUpperArm);
+    expect(firstValid.jointRotations.leftLowerArm).toEqual(held.jointRotations.leftLowerArm);
+    now = 320; processor.process(sampledFrame(320));
+    expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "held", lower: "held" });
+
+    now = 370; const recoveryStart = processor.process(sampledFrame(370));
+    for (const name of ["leftUpperArm", "leftLowerArm"] as const) {
+      for (const key of ["x", "y", "z", "w"] as const) {
+        expect(recoveryStart.jointRotations[name]![key]).toBeCloseTo(held.jointRotations[name]![key], 12);
+      }
+    }
+    expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "recovering", lower: "recovering" });
+
+    now = 570; processor.process(sampledFrame(570));
     expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" });
-    now = 450; const returning = processor.process(partial(450, -.8)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState.upper).toBe("active"); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState.lower).toBe("returning");
-    expect(returning.jointRotations.leftLowerArm).not.toEqual(lowerInitial);
   });
   it("calibrates only observed segments then uses inferred elbow as a temporary fallback", () => {
     let now = 100; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(rigProfile);

@@ -107,9 +107,16 @@ Phương pháp: dùng Postman Runner với 50 lần gọi liên tiếp cho mỗi
 | P4-T10 deterministic render | Frozen presets trên model VRM thật: renderer khoảng 73–77 FPS, frame p95 khoảng 2.5–2.8 ms | Render-cost evidence; không phải LIVE latency |
 | P4-T10 live tracking | Các log quan sát khoảng 22–27 FPS tùy điều kiện camera/ánh sáng | INCONCLUSIVE cho NFR-02 vì chưa đủ 10 lần × 60 giây trong điều kiện chuẩn |
 | P4-T10 tracking-to-render | Chưa có chuỗi LIVE 60 giây với avg/p95 hợp lệ | UNVERIFIED |
+| P4-T10 model startup/reload | Model DEV `reference-avatar-2.vrm` hiện 22,529,772 bytes. Reload trong phiên tái dùng canvas/WebGL và giữ model cũ đến khi swap; latest-request guard ngăn stale callback xóa rig profile. Chưa có 10 lần đo network/parse/first-visible/rig-ready; DEV React Strict Mode có thể tăng chi phí lần tải trang đầu | Correctness fix PASS bằng automated test; startup performance UNVERIFIED |
 
 Các số phát triển trên phục vụ chẩn đoán và không được điền thay vào bảng NFR chính thức ở
 mục 4.1 cho tới khi hoàn thành đúng protocol mục 2–3.
+
+Thời gian cần đo riêng cho model lifecycle: `load-start → GLTF parsed`, `load-start → model visible`,
+và `load-start → rig profile committed`. Không gộp thời gian tải model 22.5 MB vào
+tracking-to-render latency từng frame. Bản latest-request guard không chạy trong render loop nên không
+tạo chi phí FPS steady-state; việc giữ model cũ trong lúc parse model mới chỉ làm tăng RAM/VRAM tạm
+thời trong cửa sổ reload và model cũ phải được dispose ngay sau swap.
 
 ### 4.2. NFR-03 & NFR-04 — WebRTC Performance
 

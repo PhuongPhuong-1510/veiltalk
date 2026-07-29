@@ -65,6 +65,7 @@ export interface AvatarMotionConfig {
   /** Mức 2B-5 POC webcam; mọi giá trị theo thời gian thực, không theo frame count. */
   handTwist: {
     missingHoldMs: number;
+    missingFadeMs: number;
     deadZoneRadians: number;
     targetFilterTimeConstantSeconds: number;
     correctionLimits: Record<"left" | "right", { minRadians: number; maxRadians: number }>;
@@ -114,7 +115,10 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     elbowInferenceReachSlackRatio: 0.12,
   },
   handTwist: {
-    missingHoldMs: 200,
+    // Occlusion ngắn được debounce 80 ms; sau đó twist cũ phải rời hết trong khoảng 180 ms
+    // để không kéo một orientation bàn tay đã lỗi theo Pose arm mới.
+    missingHoldMs: 80,
+    missingFadeMs: 180,
     deadZoneRadians: 3 * Math.PI / 180,
     targetFilterTimeConstantSeconds: 0.08,
     correctionLimits: {
