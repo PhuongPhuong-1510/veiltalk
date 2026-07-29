@@ -347,8 +347,8 @@ describe("AvatarMotionProcessor", () => {
       expect(outputRight.jointRotations.leftLowerArm).toEqual(poseRight.jointRotations.leftLowerArm);
       expect(outputRight.jointRotations.rightUpperArm).toEqual(poseRight.jointRotations.rightUpperArm);
       const rightDiagnostic = rightOnly.getLastDiagnostics()!.handTwist.right;
-      expect(rightDiagnostic.rigApplicationSign).toBe(-1);
-      expect(Math.sign(rightDiagnostic.appliedTwistRadians)).toBe(-Math.sign(rightDiagnostic.filteredTargetTwistRadians!));
+      expect(rightDiagnostic.rigApplicationSign).toBe(1);
+      expect(Math.sign(rightDiagnostic.appliedTwistRadians)).toBe(Math.sign(rightDiagnostic.filteredTargetTwistRadians!));
 
       const movedBoth = sampledFrame(133); movedBoth.rawHands = [
         handCandidateWithMiddleDepth(10, LEFT_WRIST_IMAGE, "left", 133, .09),
@@ -516,6 +516,81 @@ describe("AvatarMotionProcessor", () => {
       expect(diagnostic.neutralReanchored).toBe(false);
       expect(diagnostic.neutralTwistRadians).toBe(neutralAngle);
       expect(diagnostic.correctedTwistRadians).not.toBe(0);
+    });
+
+    it("manual neutral calibration reanchors only the requested side and clears its old output", () => {
+      let now = 120;
+      const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now });
+      processor.setRigProfile(rigProfile);
+      const neutral = frame(); neutral.rawHands = [
+        handCandidateWithMiddleDepth(0, LEFT_WRIST_IMAGE, "left", 100, .01),
+        handCandidateWithMiddleDepth(1, RIGHT_WRIST_IMAGE, "right", 100, .01),
+      ];
+      processor.process(neutral);
+
+      now = 153;
+      const moved = sampledFrame(133); moved.rawHands = [
+        handCandidateWithMiddleDepth(0, LEFT_WRIST_IMAGE, "left", 133, .08),
+        handCandidateWithMiddleDepth(1, RIGHT_WRIST_IMAGE, "right", 133, .08),
+      ];
+      processor.process(moved);
+      const before = processor.getLastDiagnostics()!.handTwist;
+      expect(Math.abs(before.right.appliedTwistRadians)).toBeGreaterThan(0);
+
+      processor.calibrateHandTwistNeutral("right");
+      now = 186;
+      const calibration = sampledFrame(166); calibration.rawHands = [
+        handCandidateWithMiddleDepth(0, LEFT_WRIST_IMAGE, "left", 166, .08),
+        handCandidateWithMiddleDepth(1, RIGHT_WRIST_IMAGE, "right", 166, .08),
+      ];
+      processor.process(calibration);
+      const after = processor.getLastDiagnostics()!.handTwist;
+      expect(after.right).toMatchObject({
+        neutralReanchored: true,
+        neutralReanchorReason: "manual-neutral-calibration",
+        correctedTwistRadians: 0,
+        appliedTwistRadians: 0,
+      });
+      expect(after.right.trackingEpochId).toBe(before.right.trackingEpochId);
+      expect(after.left.neutralTwistRadians).toBe(before.left.neutralTwistRadians);
+      expect(after.left.neutralReanchored).toBe(false);
+    });
+
+    it("trusted observations acquire full steady-state amplitude for both sides", () => {
+      const halfTurn = Math.PI / 2;
+      expect(DEFAULT_AVATAR_MOTION_CONFIG.handTwist.correctionLimits).toEqual({
+        left: { minRadians: -halfTurn, maxRadians: halfTurn },
+        right: { minRadians: -halfTurn, maxRadians: halfTurn },
+      });
+      for (const side of ["left", "right"] as const) {
+        let now = 120;
+        const processor = new AvatarMotionProcessor({
+          filtered: false,
+          handTwistEnabled: true,
+          now: () => now,
+          config: {
+            ...DEFAULT_AVATAR_MOTION_CONFIG,
+            handTwist: { ...DEFAULT_AVATAR_MOTION_CONFIG.handTwist, deadZoneRadians: 0, targetFilterTimeConstantSeconds: 0 },
+          },
+        });
+        processor.setRigProfile(rigProfile);
+        const wrist = side === "left" ? LEFT_WRIST_IMAGE : RIGHT_WRIST_IMAGE;
+        const neutral = frame(); neutral.rawHands = [handCandidateWithMiddleDepth(0, wrist, side, 100, .01)];
+        processor.process(neutral);
+
+        for (let index = 1; index <= 12; index += 1) {
+          now += 33;
+          const sampledAtMs = 100 + index * 33;
+          const turned = sampledFrame(sampledAtMs);
+          turned.rawHands = [handCandidateWithMiddleDepth(0, wrist, side, sampledAtMs, .08)];
+          processor.process(turned);
+        }
+        const diagnostic = processor.getLastDiagnostics()!.handTwist[side];
+        expect(diagnostic.trusted).toBe(true);
+        expect(diagnostic.targetInfluenceWeight).toBe(1);
+        expect(diagnostic.temporalInfluenceWeight).toBe(1);
+        expect(Math.abs(diagnostic.appliedTwistRadians)).toBeCloseTo(Math.abs(diagnostic.clampedTwistRadians!), 6);
+      }
     });
 
     it("keeps invalid Hand fallback identical to Pose-only", () => {

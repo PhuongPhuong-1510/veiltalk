@@ -249,6 +249,28 @@ export class AvatarMotionProcessor {
       this.armStabilityState[side].previousHandAppliedTwistRadians = null;
     }
   }
+  /**
+   * Người dùng giữ cạnh bàn tay ở neutral rồi yêu cầu neo lại. Frame Hand đáng tin kế tiếp trở
+   * thành zero; matching và tracking epoch vẫn được giữ vì đây không phải mất tracking/đổi rig.
+   */
+  calibrateHandTwistNeutral(side: ArmSide | "both" = "both"): void {
+    const sides: readonly ArmSide[] = side === "both" ? ["left", "right"] : [side];
+    for (const currentSide of sides) {
+      const state = this.handTwistState[currentSide];
+      state.stabilization = { ...INITIAL_HAND_TWIST_STABILIZATION_STATE };
+      state.temporal = { ...INITIAL_HAND_TWIST_TEMPORAL_STATE };
+      state.previousTrusted = false;
+      state.lastUpdatedAtMs = null;
+      state.lastAcceptedObservationAtMs = null;
+      state.lastAcceptedHandSampledAtMs = null;
+      state.missingSinceMs = null;
+      state.lastStabilizationResult = null;
+      state.pendingNeutralReanchorReason = "manual-neutral-calibration";
+      state.neutralAnchoredForEpochId = null;
+      this.armStabilityState[currentSide].previousHandRawTwistRadians = null;
+      this.armStabilityState[currentSide].previousHandAppliedTwistRadians = null;
+    }
+  }
   setRigProfile(profile: NormalizedAvatarRigProfile | null): void {
     if (profile && !validateRigProfile(profile)) throw new Error("Normalized avatar rig profile không hợp lệ.");
     if (this.rigProfile === profile) return;
@@ -631,7 +653,9 @@ export class AvatarMotionProcessor {
           handednessScore: match.handednessScore, previousTrusted: state.previousTrusted,
         });
         trusted = confidence.trusted;
-        targetInfluenceWeight = confidence.targetInfluenceWeight;
+        // Confidence là cổng tin cậy. Khi observation đã trusted, giữ đủ biên độ; temporal
+        // influence chỉ phục vụ acquire/hold/fade, không co góc liên tục theo chất lượng landmark.
+        targetInfluenceWeight = confidence.trusted ? 1 : 0;
         rejectionReason = twist.rejectionReason ?? confidence.rejectionReason;
         if (trusted && rawWrappedTwistRadians !== null) {
           const observationDtSeconds = state.lastAcceptedObservationAtMs === null ? 1 / 60 : Math.max(1 / 240, (nowMs - state.lastAcceptedObservationAtMs) / 1000);

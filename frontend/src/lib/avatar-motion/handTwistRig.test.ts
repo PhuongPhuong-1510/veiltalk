@@ -29,7 +29,7 @@ describe("Hand twist rig convention v1", () => {
     expect(left.basis.normal).toEqual({ x: -0, y: 0, z: 1 });
     expect(left.chiralityCorrectionApplied).toBe(true);
     expect(HAND_TWIST_RIG_CONVENTION_V1.configuredPositiveSign).toEqual({ left: 1, right: 1 });
-    expect(HAND_TWIST_RIG_CONVENTION_V1.rigApplicationSign).toEqual({ left: 1, right: -1 });
+    expect(HAND_TWIST_RIG_CONVENTION_V1.rigApplicationSign).toEqual({ left: 1, right: 1 });
 
     const across = new Vector3(converted.across.x, converted.across.y, converted.across.z);
     const forward = new Vector3(converted.forward.x, converted.forward.y, converted.forward.z);
@@ -60,6 +60,8 @@ describe("Hand twist rig convention v1", () => {
       const left = solve("left", angle);
       expect(right.twistRadians).toBeCloseTo(angle, 7);
       expect(left.twistRadians).toBeCloseTo(angle, 7);
+      expect(right.twistRadians! * HAND_TWIST_RIG_CONVENTION_V1.rigApplicationSign.right).toBeCloseTo(angle, 7);
+      expect(left.twistRadians! * HAND_TWIST_RIG_CONVENTION_V1.rigApplicationSign.left).toBeCloseTo(angle, 7);
     }
   });
 

@@ -120,6 +120,7 @@ describe("2B-5C synthetic palm-normal geometry", () => {
         const physical = reference.clone().applyAxisAngle(axis, angle);
         const result = solveV1(side, axis, reference, rawNormalForPhysical(side, physical));
         expect(result.twistRadians).toBeCloseTo(angle, 7);
+        expect(result.twistRadians! * HAND_TWIST_RIG_CONVENTION_V1.rigApplicationSign[side]).toBeCloseTo(angle, 7);
       }
     }
   });
