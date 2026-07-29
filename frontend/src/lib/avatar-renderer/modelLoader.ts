@@ -7,6 +7,17 @@ import { freezeRigProfile, validateRigProfile, type ControlledArmJoint, type Nor
 
 const quaternionData = (value: Quaternion) => ({ x: value.x, y: value.y, z: value.z, w: value.w });
 const vectorData = (value: Vector3) => ({ x: value.x, y: value.y, z: value.z });
+
+/** Chỉ request mới nhất của đúng renderer đang active mới được commit state ra UI/processor. */
+export function isCurrentModelLoadRequest<T extends object>(
+  currentRenderer: T | null,
+  requestRenderer: T,
+  currentRequestId: number,
+  requestId: number,
+): boolean {
+  return currentRenderer === requestRenderer && currentRequestId === requestId;
+}
+
 export function createRigProfile(modelGeneration: number, fingerprint: string, bones: LoadedAvatarModel["bones"]): NormalizedAvatarRigProfile | null {
   const pairs: Record<ControlledArmJoint, { parent: "leftShoulder" | "leftUpperArm" | "rightShoulder" | "rightUpperArm"; child: ControlledArmJoint | "leftHand" | "rightHand"; parentMode: "fixed-rest" | "controlled"; controlledParentJoint: ControlledArmJoint | null }> = {
     leftUpperArm: { parent: "leftShoulder", child: "leftLowerArm", parentMode: "fixed-rest", controlledParentJoint: null }, leftLowerArm: { parent: "leftUpperArm", child: "leftHand", parentMode: "controlled", controlledParentJoint: "leftUpperArm" },

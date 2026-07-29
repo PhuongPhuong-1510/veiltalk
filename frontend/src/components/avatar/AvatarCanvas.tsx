@@ -5,7 +5,7 @@ export interface AvatarCanvasProps {
   className?: string;
   options?: AvatarRendererOptions;
   onReady?: (renderer: AvatarRenderer) => void;
-  onDispose?: () => void;
+  onDispose?: (renderer: AvatarRenderer) => void;
   onError?: (error: Error) => void;
 }
 
@@ -27,7 +27,7 @@ export function AvatarCanvas({ className, options, onReady, onDispose, onError }
     }
     const observer = new ResizeObserver(([entry]) => renderer.resize(entry.contentRect.width, entry.contentRect.height));
     observer.observe(canvas); renderer.start(); readyRef.current?.(renderer);
-    return () => { observer.disconnect(); renderer.dispose(); disposeRef.current?.(); };
+    return () => { observer.disconnect(); renderer.dispose(); disposeRef.current?.(renderer); };
   }, []);
 
   return <canvas ref={canvasRef} className={className} aria-label="Avatar 3D canvas" />;

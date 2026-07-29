@@ -1,7 +1,7 @@
 # P4-T10 — Phase 3B: Hand Forearm Twist
 
-> Trạng thái ngày 2026-07-29: **IN PROGRESS — WEBCAM VẪN CÓ LỖI XOẮN NGẪU NHIÊN, ROOT CAUSE CÒN MỞ**.
-> Automated gate gần nhất: **384/384 test PASS**, TypeScript, lint và Vite build sạch.
+> Trạng thái ngày 2026-07-29: **IN PROGRESS — PARTIAL-OCCLUSION FIX ĐÃ CÓ, CHỜ WEBCAM RE-TEST**.
+> Automated gate gần nhất: **386/386 test PASS**, TypeScript, lint và Vite build sạch.
 > Không được đánh dấu Phase 3B hoàn thành trước khi webcam gate trái/phải và nhiều avatar cùng PASS.
 
 ## 1. Phase 3B làm gì?
@@ -108,30 +108,37 @@ Mỗi module trên có file `*.test.ts` tương ứng khi tồn tại logic thu�
 - Production candidate fix: `rigApplicationSign={left:+1,right:+1}`, clamp đối xứng `±90°`, trusted target amplitude bằng `1`, và API/nút DEV neo neutral chủ động theo từng side.
 - Automated regression đã khóa sign semantic hai bên, neutral re-anchor độc lập và full steady-state amplitude. Tuy nhiên đây chưa thay thế webcam acceptance.
 - Một lỗi độc lập ở Phase 3A đã được tái tạo qua hai regression: initial pole đối dấu tạo roll 180°, còn pole lệch 90° vẫn lọt qua hemisphere-only fix. Bản sửa hiện tại không cho fresh pole điều khiển axial upperArm; upperArm dùng minimal-twist swing, pole vẫn phục vụ bend/lower frame. Hai regression đã PASS nhưng sau khi re-test, webcam vẫn đôi lúc xuất hiện xoắn tay/vùng vai không tái hiện ổn định. Vì vậy hai lỗi đã khóa chỉ là nguyên nhân đóng góp đã biết; root cause runtime cuối cùng chưa được xác định.
+- Chuỗi ảnh mới đã xác định thêm một root cause có thể tái hiện: khi Pose wrist bị che, code cũ cho upperArm nhận nghiệm mới nhưng lowerArm giữ quaternion cũ (`{upper: active, lower: held}`), làm forearm bị kéo quét ngang mặt. Regression hai bên đã khóa invariant mới: upper/lower là một chain, cùng hold/return và chỉ cùng recovery sau 80 ms geometry hợp lệ liên tục.
+- Nếu chỉ Hand landmarks mất nhưng Pose chain còn hợp lệ, Pose arm vẫn chạy; twist cũ debounce 80 ms rồi fade hết trong 180 ms thay vì giữ lâu trên orientation không còn quan sát được.
+- Bug reload “face chạy nhưng tay không chạy” được xác định là stale model callback có thể ghi `rigProfile=null` sau khi renderer mới đã sẵn sàng. Reload DEV hiện tái dùng canvas/WebGL, giữ model cũ tới khi swap và chỉ request ID mới nhất của đúng renderer mới được commit rig profile; cleanup renderer cũ không còn quyền xóa profile hiện tại. Lần tải trang đầu của model 22.5 MB vẫn cần đo riêng và chưa được tuyên bố tối ưu xong.
 - Chưa có số liệu tay trái hợp lệ (các snapshot vừa thu đều `left: missing`); vì vậy không được kết luận cả hai tay đã PASS.
 - Chưa có bộ snapshot đồng nhất `neutral → palm-up → neutral → palm-down` cho cả hai tay trên cả ba model local.
 
-Trước khi sửa thêm motion math, cần triển khai một anomaly capture local-only: ring buffer 2–3 giây, trigger theo upper-arm axial twist/quaternion delta và xuất JSON chứa nguồn upper frame/pole/torso, trạng thái temporal/reacquire, angular delta, `sampleDisposition` và `dt`. Capture này chưa được triển khai, không chứa raw frame/ảnh khuôn mặt và không upload dữ liệu.
+Nếu lỗi ngẫu nhiên vẫn còn sau webcam re-test partial occlusion, cần triển khai anomaly capture local-only: ring buffer 2–3 giây, trigger theo upper-arm axial twist/quaternion delta và xuất JSON chứa nguồn upper frame/pole/torso, trạng thái temporal/reacquire, angular delta, `sampleDisposition` và `dt`. Capture này chưa được triển khai, không chứa raw frame/ảnh khuôn mặt và không upload dữ liệu.
 
 ## 6. Công việc tiếp theo của Phase 3B
 
-1. **Thu sự kiện xoắn ngẫu nhiên bằng anomaly capture local-only**
-   - Triển khai ring buffer và trigger chẩn đoán nêu trên, sau đó tái hiện lỗi trước khi thay đổi solver thêm lần nữa.
-   - Phân biệt quaternion upperArm thật sự xoắn với artifact do lowerArm/skinning của từng VRM.
-2. **Đóng băng baseline trước khi webcam re-test**
+1. **Webcam re-test reload lifecycle và chuỗi partial occlusion vừa tái hiện**
+   - Khi tracking đang chạy, bấm Reload nhiều lần: model cũ phải còn hiển thị trong lúc tải; sau swap phải có rig profile và mặt/tay đều tiếp tục điều khiển được.
+   - Refresh trang nhiều lần, ghi thời gian model visible/rig ready và đối chiếu `pose: tracked → active`; không được còn trường hợp pose active nhưng packet thiếu arm rotations vì profile bị stale callback xóa.
+   - Giữ tay rõ → che/mất wrist một phần → di chuyển khuỷu → đưa wrist trở lại; xác nhận upper/lower cùng hold/return/recover và không quét ngang mặt.
+   - Lặp lại cho hai bên với Hand twist OFF rồi ON để tách Pose chain khỏi twist fade.
+2. **Nếu còn lỗi, thu anomaly capture local-only**
+   - Triển khai ring buffer và trigger chẩn đoán, phân biệt quaternion upperArm thật sự xoắn với artifact do lowerArm/skinning của từng VRM.
+3. **Đóng băng baseline trước khi webcam re-test twist**
    - Giữ một model, một side, Filter/Constraints/Smoothing cố định.
    - Reload model, bật Hand twist, giữ cạnh bàn tay rồi bấm `Neo neutral tay trái/phải`; xác nhận `neutralReanchorReason=manual-neutral-calibration` và corrected gần 0.
-3. **Thu bằng chứng ba tư thế**
+4. **Thu bằng chứng ba tư thế**
    - Chụp diagnostic neutral, palm-up và palm-down cho right; lặp lại cho left.
    - Đối chiếu từ raw palm basis đến `appliedTwistRadians` và world orientation thật sau renderer.
-4. **Kiểm chứng candidate sign boundary**
+5. **Kiểm chứng candidate sign boundary**
    - Xác nhận tay phải đi cùng chiều sau khi bỏ lần đảo thứ hai (`rigApplicationSign.right: -1→+1`).
    - Thu tay trái tương đương trước khi khóa convention; không đổi chirality/signed-angle thêm nếu chưa có bằng chứng.
-5. **Kiểm chứng theo model**
+6. **Kiểm chứng theo model**
    - Chạy cùng procedure trên `reference-avatar.vrm`, `reference-avatar-1.vrm` và
      `reference-avatar-2.vrm`.
    - Nếu dấu phụ thuộc rig, phải biểu diễn bằng dữ liệu/profile đã đo; không hard-code theo tên model.
-6. **Regression và production candidate fix đã có**; còn anomaly capture, webcam re-test, world-orientation evidence sau renderer và acceptance đa model.
+7. **Regression và production candidate fix đã có**; còn webcam re-test, anomaly capture nếu còn lỗi, world-orientation evidence sau renderer và acceptance đa model.
 
 ## 7. Acceptance gate Phase 3B
 

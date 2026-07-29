@@ -123,7 +123,7 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 - Thư viện: MediaPipe Tasks API (thay thế cho MediaPipe Holistic đã bị deprecated). Lý do chọn so với phương án khác: TensorFlow.js cho độ chính xác tương đương nhưng đòi hỏi tự huấn luyện/tinh chỉnh model theo dõi tay — tốn thời gian ngoài phạm vi đồ án; face-api.js chỉ mạnh ở khuôn mặt, không có model theo dõi tay/thân tích hợp sẵn. MediaPipe Tasks API cung cấp các task chuyên biệt (FaceLandmarker, HandLandmarker, PoseLandmarker) thay thế Holistic đơn khối, hiệu năng tốt hơn và được Google tiếp tục duy trì.
 
-- Pipeline xử lý hiện tại: raw frame → landmark extraction (MediaPipe) → phân loại Hand sample tại processor boundary (`unsampled`/`duplicate`/`new-sample`) → per-side image bounds/visibility gate → torso semantic basis → three-point anatomical arm-frame (primary direction + elbow-offset secondary reference) → direction/pole filters → parent-local/rest-relative delta → safety constraint → hold/return/recovery → optional Hand forearm axial-twist correction → hệ số blendshape + `AvatarPosePacketV1`. Duplicate bị chặn trước Hand matching/palm construction nhưng temporal vẫn tick theo `dt`. Hand world palm basis được đổi đồng bộ sang motion frame `(x,-y,-z)` trước chirality và trước phép đo twist. Convention candidate hiện dùng `positiveSign=+1` và `rigApplicationSign=+1` cho cả hai side; tay phải bỏ lần đảo dấu thứ hai sau bằng chứng webcam định lượng, nhưng vẫn chờ re-test nên chưa được coi là convention đã nghiệm thu. Clamp là `±90°` quanh neutral. Observation trusted giữ full target amplitude; temporal influence chỉ ramp acquire và hold/fade khi mất tracking. Neutral có thể neo chủ động theo từng side trong DEV harness mà không mở epoch mới; fallback vẫn neo first-trusted sau reset. Neutral/matching/temporal dùng tracking epoch độc lập từng side. Reset/dispose/rig change/discontinuity/long loss, hoặc recovery sau geometry loss đã vượt `invalidGraceMs`, mới tạo epoch mới. Depth-degenerate dùng previous/rest pole fallback. Trạng thái và acceptance gate Phase 3B nằm tại `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`.
+- Pipeline xử lý hiện tại: raw frame → landmark extraction (MediaPipe) → phân loại Hand sample tại processor boundary (`unsampled`/`duplicate`/`new-sample`) → per-side image bounds/visibility gate → torso semantic basis → three-point anatomical arm-frame (primary direction + elbow-offset secondary reference) → direction/pole filters → parent-local/rest-relative delta → safety constraint → hold/return/recovery → optional Hand forearm axial-twist correction → hệ số blendshape + `AvatarPosePacketV1`. Duplicate bị chặn trước Hand matching/palm construction nhưng temporal vẫn tick theo `dt`. Hand world palm basis được đổi đồng bộ sang motion frame `(x,-y,-z)` trước chirality và trước phép đo twist. Convention candidate hiện dùng `positiveSign=+1` và `rigApplicationSign=+1` cho cả hai side; tay phải bỏ lần đảo dấu thứ hai sau bằng chứng webcam định lượng, nhưng vẫn chờ re-test nên chưa được coi là convention đã nghiệm thu. Clamp là `±90°` quanh neutral. Observation trusted giữ full target amplitude; temporal influence chỉ ramp acquire và hold/fade khi mất tracking. Khi chỉ mất Hand landmarks, Pose arm vẫn chạy nhưng twist cũ chỉ debounce 80 ms rồi fade hết trong 180 ms. Khi Pose wrist/lower segment không hợp lệ, upper/lower được coi là một chain: cả hai cùng hold/return, không nhận upper mới ghép với lower cũ; geometry phải hợp lệ liên tục 80 ms trước khi cả chain cùng recovery blend. Neutral có thể neo chủ động theo từng side trong DEV harness mà không mở epoch mới; fallback vẫn neo first-trusted sau reset. Neutral/matching/temporal dùng tracking epoch độc lập từng side. Reset/dispose/rig change/discontinuity/long loss, hoặc recovery sau geometry loss đã vượt `invalidGraceMs`, mới tạo epoch mới. Depth-degenerate dùng previous/rest pole fallback. Trạng thái và acceptance gate Phase 3B nằm tại `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`.
 
 - Output: `AvatarPosePacketV1` plain-data nhỏ gọn. `jointRotations` chứa quaternion delta trong normalized-humanoid parent-local, rest-relative space; packet không chứa raw face/hand/pose landmarks hoặc facial transform matrix. RTCDataChannel transport thuộc P4-T15, chưa nằm trong P4-T10.
 
@@ -145,8 +145,12 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 Model loader chuẩn hóa VRM0 trước, lấy normalized humanoid nodes và capture một immutable
 rig profile theo model generation. Mỗi controlled joint lưu rest local rotation, rest world
-rotation, parent rest world rotation và rest world direction từ model thật. Profile cũ bị
-loại khi reload model; motion processor không solve nếu chưa có profile hợp lệ.
+rotation, parent rest world rotation và rest world direction từ model thật. Reload trong cùng
+renderer giữ model/profile hiện tại hoạt động trong lúc model mới tải; chỉ swap và dispose model
+cũ sau khi model mới hoàn tất. Loader generation loại kết quả stale, còn DEV harness dùng thêm
+request ID + renderer identity để callback/cleanup cũ không thể ghi `rigProfile=null` đè lên request
+mới. Kết quả load `null` bị bỏ qua; model đã tải nhưng không dựng được rig profile phải báo blocker
+rõ ràng thay vì âm thầm chỉ chạy face. Motion processor không solve arm khi chưa có profile hợp lệ.
 
 Solver chạy `leftUpperArm → leftLowerArm → rightUpperArm → rightLowerArm`. Upper arm dùng
 parent rest world cố định; lower arm dùng target world của upper arm vừa giải trong cùng
@@ -174,6 +178,13 @@ runtime đã được xử lý dứt điểm. Root cause còn mở; bước ch�
 local-only quanh sự kiện trước khi đổi thêm motion math. Upper-arm axial calibration/constraint thuộc
 Phase 3C. Swing–twist utility mới phục vụ test/diagnostics; palm twist và anatomical calibration thuộc
 Phase 3B/3C.
+
+Partial occlusion có thêm invariant theo toàn chain: một Pose sample chỉ được phép cập nhật arm output
+khi cả upper và lower segment cùng hợp lệ. Trước sửa, wrist mất có thể tạo trạng thái
+`{upper: active, lower: held}`, tức upper mới kéo lower quaternion cũ và làm tay quắn/quét ngang mặt.
+Sau sửa, hai segment luôn cùng `active/held/returning/recovering`; history chỉ cập nhật từ nghiệm chain
+đầy đủ và reacquire cần 80 ms geometry liên tục. Đây là root cause đã tái hiện bằng regression riêng,
+nhưng vẫn cần webcam re-test để xác nhận không còn nguyên nhân runtime khác.
 
 #### 4.1.3. Communication Module
 

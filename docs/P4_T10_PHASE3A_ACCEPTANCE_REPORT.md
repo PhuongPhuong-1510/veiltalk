@@ -57,7 +57,7 @@ git diff --check                          → PASS
 Gate gần nhất sau bản sửa upperArm secondary branch ngày 2026-07-29:
 
 ```text
-npm.cmd test                              → 36 files, 384/384 PASS
+npm.cmd test                              → 36 files, 386/386 PASS
 npm.cmd run lint                          → PASS
 npm.cmd run build                         → PASS, 1,820 modules
 ```
@@ -68,8 +68,10 @@ npm.cmd run build                         → PASS, 1,820 modules
 
 Sau khi re-test bản minimal-twist swing-only, người dùng vẫn quan sát thấy tay/vùng vai đôi lúc xoắn bất thường nhưng chưa tái hiện được theo một chuỗi động tác ổn định. Vì vậy:
 
+Lần quan sát tiếp theo đã khóa được một trigger cụ thể: khi Pose wrist bị che/mất một phần, implementation cũ vẫn nhận upperArm mới nhưng giữ lowerArm cũ. RED regression tái hiện đúng `{upper: active, lower: held}` ở cả hai bên. Bản sửa hiện tại chỉ nhận nghiệm khi cả chain upper/lower hợp lệ, cho hai segment cùng hold/return, yêu cầu 80 ms hợp lệ liên tục rồi recovery blend đồng thời. Automated gate mới đạt 386/386; webcam re-test cho chính chuỗi che/mở tay này vẫn chưa thực hiện.
+
 - Hai regression 180° và 90° chứng minh và khóa hai lỗi toán học cụ thể đã tìm thấy; chúng chỉ là các nguyên nhân đóng góp đã biết, không phải bằng chứng rằng root cause cuối cùng của lỗi webcam đã được xử lý hết.
-- Automated gate 384/384 chỉ chứng minh các invariant và tình huống synthetic hiện có; không thay thế manual browser gate.
+- Automated gate 386/386 chỉ chứng minh các invariant và tình huống synthetic hiện có; không thay thế manual browser gate.
 - Phase 3A chưa PASS, chưa được tạo commit acceptance và không được mô tả bản sửa hiện tại là xử lý dứt điểm lỗi xoắn runtime.
 
 ## Điều tra còn mở
