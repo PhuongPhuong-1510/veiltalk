@@ -12,6 +12,7 @@ import { EYE_EXPRESSION_NAMES } from "../avatar-motion/eyeExpression";
 export interface AvatarRendererOptions { smoothing?: boolean; pixelRatioLimit?: number; onContextLost?: (error: Error) => void; now?: () => number }
 const PROCESSOR_TIMED_EXPRESSIONS = new Set(["jawOpen", "aa", "mouthClose", ...MOUTH_SHAPE_EXPRESSION_NAMES, ...EYE_EXPRESSION_NAMES]);
 export function isProcessorTimedExpression(semantic: string): boolean { return PROCESSOR_TIMED_EXPRESSIONS.has(semantic); }
+export function isProcessorTimedRotation(name: AvatarJointName | "head"): boolean { return name === "head" || name === "neck"; }
 export interface RendererFaceExpressionSnapshot {
   targetValues: Record<string, number>;
   renderedValues: Record<string, number>;
@@ -147,7 +148,7 @@ export class AvatarRenderer {
       const bone = this.model!.bones[name]; const rest = this.model!.restRotations[name];
       if (!bone || !rest) continue;
       const targetLocal = absoluteLocalFromRestDelta(rest, target);
-      const current = this.currentRotations[name] ?? rest; const value = rotationAlpha < 1 ? slerpQuaternion(current, targetLocal, rotationAlpha) : targetLocal; this.currentRotations[name] = value;
+      const current = this.currentRotations[name] ?? rest; const alpha = isProcessorTimedRotation(name) ? 1 : rotationAlpha; const value = alpha < 1 ? slerpQuaternion(current, targetLocal, alpha) : targetLocal; this.currentRotations[name] = value;
       bone.quaternion.set(value.x, value.y, value.z, value.w).normalize();
     }
   }

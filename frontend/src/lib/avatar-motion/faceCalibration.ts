@@ -1,11 +1,12 @@
 import type { RawMatrixV1 } from "../tracking/rawTrackingTypes";
 import { MEDIA_PIPE_FACE_EXPRESSION_NAMES } from "./expressionMapper";
 import { quaternionFromRotationMatrix } from "./coordinateAdapter";
+import type { QuaternionData } from "./avatarPoseTypes";
 
 export type FaceCalibrationFailureReason = "timeout" | "tracking-lost" | "insufficient-neutral-samples" | "unstable-head" | "invalid-input";
 export type FaceNeutralRejectionReason = "duplicate-timestamp" | "invalid-input" | "head-motion-warmup" | "head-motion" | "mouth" | "eyes" | "brows";
 export interface FaceCalibrationExpressionProfile { baseline: number; noiseFloor: number; activationThreshold: number; quality: "stable" | "unstable" }
-export interface FaceCalibrationProfile { version: 1; calibratedAtMs: number; sampleCount: number; durationMs: number; expressions: Record<string, FaceCalibrationExpressionProfile> }
+export interface FaceCalibrationProfile { version: 1; calibratedAtMs: number; sampleCount: number; durationMs: number; expressions: Record<string, FaceCalibrationExpressionProfile>; headNeutralRotation: QuaternionData }
 export type FaceCalibrationStatus = "idle" | "collecting" | "ready" | "failed";
 export interface FaceCalibrationSnapshot {
   status: FaceCalibrationStatus; startedAtMs: number | null; acceptedSamples: number; rejectedSamples: number;
@@ -24,10 +25,12 @@ export const DEFAULT_FACE_CALIBRATION_CONFIG: FaceCalibrationConfig = {
 };
 
 const THRESHOLDS: Record<string, [number, FaceNeutralRejectionReason]> = {
-  jawOpen: [.12, "mouth"], mouthSmileLeft: [.18, "mouth"], mouthSmileRight: [.18, "mouth"], mouthFrownLeft: [.18, "mouth"], mouthFrownRight: [.18, "mouth"],
-  mouthPucker: [.18, "mouth"], mouthFunnel: [.18, "mouth"], mouthPressLeft: [.25, "mouth"], mouthPressRight: [.25, "mouth"], cheekPuff: [.15, "mouth"],
-  eyeBlinkLeft: [.25, "eyes"], eyeBlinkRight: [.25, "eyes"], eyeSquintLeft: [.2, "eyes"], eyeSquintRight: [.2, "eyes"], eyeWideLeft: [.2, "eyes"], eyeWideRight: [.2, "eyes"],
-  browDownLeft: [.2, "brows"], browDownRight: [.2, "brows"], browInnerUp: [.2, "brows"], browOuterUpLeft: [.2, "brows"], browOuterUpRight: [.2, "brows"],
+  // Calibration phải học được baseline phụ thuộc khuôn mặt/camera. Các ngưỡng này chỉ loại biểu cảm
+  // chủ ý rất mạnh; MAD/noise gate bên dưới mới quyết định baseline có đủ ổn định hay không.
+  jawOpen: [.4, "mouth"], mouthSmileLeft: [.85, "mouth"], mouthSmileRight: [.85, "mouth"], mouthFrownLeft: [.85, "mouth"], mouthFrownRight: [.85, "mouth"],
+  mouthPucker: [.85, "mouth"], mouthFunnel: [.85, "mouth"], mouthPressLeft: [.85, "mouth"], mouthPressRight: [.85, "mouth"], cheekPuff: [.85, "mouth"],
+  eyeBlinkLeft: [.85, "eyes"], eyeBlinkRight: [.85, "eyes"], eyeSquintLeft: [.85, "eyes"], eyeSquintRight: [.85, "eyes"], eyeWideLeft: [.85, "eyes"], eyeWideRight: [.85, "eyes"],
+  browDownLeft: [.85, "brows"], browDownRight: [.85, "brows"], browInnerUp: [.85, "brows"], browOuterUpLeft: [.85, "brows"], browOuterUpRight: [.85, "brows"],
 };
 const CORE = new Set(["jawOpen", "eyeBlinkLeft", "eyeBlinkRight", "mouthSmileLeft", "mouthSmileRight"]);
 const UNCALIBRATED_DIRECTIONAL = /^(jawLeft|jawRight|mouthLeft|mouthRight)/;
@@ -40,13 +43,14 @@ export class FaceCalibrationProcessor {
   private status: FaceCalibrationStatus = "idle"; private startedAtMs: number | null = null; private accepted = 0; private rejected = 0; private streak = 0;
   private rejectionReasons: Partial<Record<FaceNeutralRejectionReason, number>> = {}; private failureReason: FaceCalibrationFailureReason | null = null;
   private profile: FaceCalibrationProfile | null = null; private samples = new Map<string, number[]>(); private lastSampledAtMs: number | null = null;
+  private headSamples: QuaternionData[] = [];
   private lastHead: ReturnType<typeof quaternionFromRotationMatrix> = null; private lastHeadAtMs: number | null = null; private lostSinceMs: number | null = null;
   private calibratedValues: Record<string, number> = {};
   private readonly config: FaceCalibrationConfig;
   constructor(config: FaceCalibrationConfig = DEFAULT_FACE_CALIBRATION_CONFIG) { this.config = config; }
   start(nowMs: number): void { this.reset(); this.status = "collecting"; this.startedAtMs = nowMs; }
   cancel(): void { this.reset(); }
-  reset(): void { this.status = "idle"; this.startedAtMs = null; this.accepted = 0; this.rejected = 0; this.streak = 0; this.rejectionReasons = {}; this.failureReason = null; this.profile = null; this.samples.clear(); this.lastSampledAtMs = null; this.lastHead = null; this.lastHeadAtMs = null; this.lostSinceMs = null; this.calibratedValues = {}; }
+  reset(): void { this.status = "idle"; this.startedAtMs = null; this.accepted = 0; this.rejected = 0; this.streak = 0; this.rejectionReasons = {}; this.failureReason = null; this.profile = null; this.samples.clear(); this.headSamples = []; this.lastSampledAtMs = null; this.lastHead = null; this.lastHeadAtMs = null; this.lostSinceMs = null; this.calibratedValues = {}; }
   process(state: "tracked" | "lost" | "not-sampled", sampledAtMs: number | null, values: Record<string, number> | null, transform: RawMatrixV1 | null, nowMs: number): Record<string, number> {
     if (state !== "tracked" || sampledAtMs === null || !values) { this.observeLoss(nowMs); return values ? { ...values } : {}; }
     this.lostSinceMs = null;
@@ -60,7 +64,7 @@ export class FaceCalibrationProcessor {
   private collect(sampledAtMs: number, values: Record<string, number>, transform: RawMatrixV1 | null, nowMs: number): void {
     const reason = this.rejectReason(sampledAtMs, values, transform);
     if (reason) { this.rejected += 1; this.streak = 0; this.rejectionReasons[reason] = (this.rejectionReasons[reason] ?? 0) + 1; }
-    else { this.accepted += 1; this.streak += 1; for (const name of MEDIA_PIPE_FACE_EXPRESSION_NAMES) { const value = values[name]; if (Number.isFinite(value)) { const list = this.samples.get(name) ?? []; list.push(value); this.samples.set(name, list); } } }
+    else { this.accepted += 1; this.streak += 1; const head = transform ? quaternionFromRotationMatrix(transform.data) : null; if (head) this.headSamples.push(head); for (const name of MEDIA_PIPE_FACE_EXPRESSION_NAMES) { const value = values[name]; if (Number.isFinite(value)) { const list = this.samples.get(name) ?? []; list.push(value); this.samples.set(name, list); } } }
     const elapsed = nowMs - this.startedAtMs!; const total = this.accepted + this.rejected; const ratio = total ? this.accepted / total : 0;
     if ((this.accepted >= this.config.targetSamples && elapsed >= this.config.minimumCollectingMs) || elapsed >= this.config.targetCollectingMs) {
       if (this.accepted >= this.config.minimumSamples && ratio >= this.config.minimumAcceptedRatio && this.streak >= this.config.minimumNeutralStreak) this.finish(nowMs, elapsed);
@@ -80,7 +84,9 @@ export class FaceCalibrationProcessor {
     const expressions: Record<string, FaceCalibrationExpressionProfile> = {};
     for (const [name, values] of this.samples) { const baseline = median(values); const mad = median(values.map((value) => Math.abs(value - baseline))); const noiseFloor = Math.min(this.config.maximumNoiseFloor, Math.max(this.config.minimumNoiseFloor, mad * 3)); expressions[name] = { baseline, noiseFloor, activationThreshold: Math.min(1, baseline + noiseFloor), quality: mad * 3 > this.config.maximumNoiseFloor ? "unstable" : "stable" }; }
     if ([...CORE].some((name) => expressions[name]?.quality === "unstable")) { this.fail("invalid-input"); return; }
-    this.profile = { version: 1, calibratedAtMs: nowMs, sampleCount: this.accepted, durationMs, expressions }; this.status = "ready";
+    const headNeutralRotation = averageQuaternions(this.headSamples);
+    if (!headNeutralRotation) { this.fail("invalid-input"); return; }
+    this.profile = { version: 1, calibratedAtMs: nowMs, sampleCount: this.accepted, durationMs, expressions, headNeutralRotation }; this.status = "ready";
   }
   private calibrate(values: Record<string, number>, profile: FaceCalibrationProfile): Record<string, number> { return Object.fromEntries(Object.entries(values).map(([name, raw]) => { const item = profile.expressions[name]; if (!item || UNCALIBRATED_DIRECTIONAL.test(name)) return [name, raw]; if (raw <= item.activationThreshold) return [name, 0]; return [name, Math.min(1, Math.max(0, (raw - item.activationThreshold) / Math.max(1e-6, 1 - item.activationThreshold)))]; })); }
   private fail(reason: FaceCalibrationFailureReason): void { this.status = "failed"; this.failureReason = reason; this.profile = null; }
@@ -88,4 +94,16 @@ export class FaceCalibrationProcessor {
     this.lostSinceMs ??= nowMs;
     if (Number.isFinite(this.lostSinceMs) && nowMs - this.lostSinceMs > this.config.longLossResetMs) { this.reset(); this.lostSinceMs = Number.POSITIVE_INFINITY; }
   }
+}
+
+function averageQuaternions(values: readonly QuaternionData[]): QuaternionData | null {
+  if (values.length === 0) return null;
+  const reference = values[0];
+  const sum = values.reduce((result, value) => {
+    const dot = reference.x * value.x + reference.y * value.y + reference.z * value.z + reference.w * value.w;
+    const sign = dot < 0 ? -1 : 1;
+    return { x: result.x + value.x * sign, y: result.y + value.y * sign, z: result.z + value.z * sign, w: result.w + value.w * sign };
+  }, { x: 0, y: 0, z: 0, w: 0 });
+  const length = Math.hypot(sum.x, sum.y, sum.z, sum.w);
+  return length > 1e-8 && Number.isFinite(length) ? { x: sum.x / length, y: sum.y / length, z: sum.z / length, w: sum.w / length } : null;
 }

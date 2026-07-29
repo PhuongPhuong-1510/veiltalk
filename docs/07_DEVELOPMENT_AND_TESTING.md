@@ -469,6 +469,14 @@ explicit failure/recalibration, short/long loss, timestamp regression và cancel
 39 test files, 401/401 PASS; lint/build PASS. Manual webcam matrix được người dùng xác nhận đạt
 ngày 2026-07-30.
 
+3D-06 loss/recovery: bốn file targeted, 71/71 PASS; TypeScript/lint PASS; manual Face-only loss matrix
+được người dùng xác nhận PASS ngày 2026-07-30. 3D-07/08 sẽ triển khai/gate gộp, chỉ targeted tests.
+
+3D-07/08 automated final gate: 10 targeted files, 105/105 PASS sau regression idle-reacquire;
+TypeScript/lint/diff-check PASS.
+Hierarchy rest-local khác identity đã có regression. Người dùng xác nhận manual acceptance ngày
+2026-07-30; Phase 3D COMPLETE.
+
 Cập nhật 3C-03: targeted regression phải bao phủ asymmetric jaw attack/release; weighted
 close/press/roll suppression; strong-close confirmation/hysteresis; duplicate, loss, timestamp
 regression và reset; null/simulated/audio RMS source; processor packet giữ `jawOpen === aa`; renderer
@@ -501,5 +509,25 @@ mouth close, gaze neutral, two-sample confirmation, recovery blend, one-shot lon
 calibration lifecycle, packet integration và stale renderer target. Targeted gate 9 files,
 105/105 PASS; lint/build PASS. Manual webcam matrix tại
 `docs/P4_T10_PHASE3C_07_FACE_LOSS_RECOVERY_PLAN.md` được người dùng xác nhận PASS ngày 2026-07-30.
+
+### 6.10. Phase 3D — Head & Neck Retargeting
+
+Trạng thái **IN PROGRESS**. 3D-01/02 đã implement, automated 77/77 PASS trên bốn file targeted
+`coordinateAdapter`, `headOrientation`, `faceCalibration`, `avatarMotionProcessor`; TypeScript check
+PASS, manual webcam acceptance đang chờ. Contract, thứ tự task và gate nằm tại
+`docs/P4_T10_PHASE3D_HEAD_NECK_RETARGETING_PLAN.md`. Mỗi task con chỉ chạy targeted tests liên quan;
+automated PASS không thay thế manual webcam acceptance cho sign, amplitude, smoothness, distribution
+neck/head và loss/recovery. Torso animation không thuộc matrix 3D.
+
+3D-03 response curve: hai file targeted, 68/68 PASS; TypeScript/lint PASS. Manual webcam ba trục,
+neutral, amplitude và pitch inversion được người dùng xác nhận PASS ngày 2026-07-30.
+
+3D-04 distribution: năm file targeted (`headNeckDistribution`, `headOrientation`, processor,
+modelLoader, renderer math), 82/82 PASS; tuning share 65/65 PASS; TypeScript/lint PASS. Manual
+head/neck được người dùng xác nhận PASS ngày 2026-07-30.
+
+3D-05 constraints/filter: bốn file targeted (`headTemporal`, distribution, processor, renderer
+smoothing), 71/71 PASS; TypeScript/lint PASS. Manual webcam smoothness/latency/held-amplitude PASS
+ngày 2026-07-30.
 
 *— Hết tài liệu —*

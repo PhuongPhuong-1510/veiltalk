@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FaceCalibrationProcessor, type FaceCalibrationConfig } from "./faceCalibration";
+import { createHeadFrozenPreset, headEulerDegrees } from "./headOrientation";
 
 const matrix = { rows: 4, columns: 4, data: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] };
 const neutral = { jawOpen: .04, eyeBlinkLeft: .02, eyeBlinkRight: .02, eyeLookInLeft: .04, eyeLookOutLeft: .03, eyeLookInRight: .03, eyeLookOutRight: .04, mouthSmileLeft: .03, mouthSmileRight: .03, cheekPuff: .01 };
@@ -9,7 +10,22 @@ describe("face neutral calibration", () => {
     const value = new FaceCalibrationProcessor(config); value.start(0);
     for (let i = 0; i < 4; i++) value.process("tracked", i * 10 + 10, { ...neutral, jawOpen: .04 + i * .001 }, matrix, i * 10 + 10);
     expect(value.snapshot().status).toBe("ready"); expect(value.snapshot().profile?.expressions.jawOpen.baseline).toBeCloseTo(.0415);
+    expect(value.snapshot().profile?.headNeutralRotation).toEqual({ x: 0, y: 0, z: 0, w: 1 });
     expect(value.process("tracked", 60, { ...neutral, jawOpen: .6 }, matrix, 60).jawOpen).toBeGreaterThan(0); expect(neutral.jawOpen).toBe(.04);
+  });
+  it("stores the deliberate head orientation instead of silently learning the first live frame", () => {
+    const value = new FaceCalibrationProcessor(config); value.start(0);
+    const turnedNeutral = createHeadFrozenPreset("yaw-left-15");
+    for (let i = 0; i < 4; i++) value.process("tracked", i * 10 + 10, neutral, turnedNeutral, i * 10 + 10);
+    expect(value.snapshot().status).toBe("ready");
+    expect(headEulerDegrees(value.snapshot().profile!.headNeutralRotation).yaw).toBeCloseTo(15, 5);
+  });
+  it("accepts a stable person-specific neutral baseline instead of rejecting it by low absolute mouth thresholds", () => {
+    const value = new FaceCalibrationProcessor(config); value.start(0);
+    const personNeutral = { ...neutral, jawOpen: .22, mouthSmileLeft: .48, mouthSmileRight: .52, mouthPucker: .3, browInnerUp: .73 };
+    for (let i = 0; i < 4; i++) value.process("tracked", i * 10 + 10, personNeutral, matrix, i * 10 + 10);
+    expect(value.snapshot()).toMatchObject({ status: "ready", acceptedSamples: 3, rejectedSamples: 0 });
+    expect(value.snapshot().profile?.expressions.mouthSmileRight.baseline).toBeCloseTo(.52);
   });
   it("centers directional eye values on the calibrated neutral baseline", () => {
     const value = new FaceCalibrationProcessor(config); value.start(0);

@@ -38,6 +38,7 @@ export interface NormalizedAvatarRigProfile {
   modelGeneration: number;
   modelFingerprint: string;
   torsoReference: RigTorsoReference;
+  headNeckCapability?: { head: boolean; neck: boolean; headRestLocalRotation?: QuaternionData; neckRestLocalRotation?: QuaternionData };
   joints: Record<ControlledArmJoint, ControlledJointProfile>;
 }
 
@@ -73,6 +74,7 @@ export function validateRigProfile(profile: NormalizedAvatarRigProfile): boolean
 
 export function freezeRigProfile(profile: NormalizedAvatarRigProfile): NormalizedAvatarRigProfile {
   Object.values(profile.torsoReference).forEach(Object.freeze); Object.freeze(profile.torsoReference);
+  if (profile.headNeckCapability) Object.freeze(profile.headNeckCapability);
   for (const joint of Object.values(profile.joints)) {
     Object.values(joint.anatomicalRestBasis).forEach(Object.freeze); Object.freeze(joint.anatomicalRestBasis);
     Object.freeze(joint.restLocalPosition); Object.freeze(joint.restLocalRotation); Object.freeze(joint.restWorldPosition); Object.freeze(joint.restWorldRotation); Object.freeze(joint.parentRestWorldRotation); Object.freeze(joint.restWorldDirection); Object.freeze(joint);

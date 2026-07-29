@@ -183,6 +183,12 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
   easing về neutral/đóng miệng → idle. Reacquire cần hai sample mới liên tiếp rồi recovery blend.
   Long-loss reset mouth/eye/gaze/brow-cheek/filter và calibration phát đúng một lần mỗi loss epoch.
 
+- Phase 3D Head & Neck đang triển khai. 3D-01/02 đã thay `headRotation` camera-derived legacy bằng
+  orientation neutral-relative đã xác minh và diagnostics raw/relative local-only; các bước sau sẽ tách yaw/pitch/roll, phân phối
+  parent-local/rest-relative giữa `neck` và `head`, rồi áp constraints/filter/loss-recovery. Cho tới khi
+  3D đạt toàn bộ gate, gain/distribution/filter/loss vẫn chưa phải contract hoàn chỉnh. Torso/chest animation không
+  thuộc 3D và cần phase riêng.
+
 - Hai chế độ nguồn dữ liệu: theo dõi cục bộ (cho chính nhân vật của người dùng) và dữ liệu nhận qua RTCDataChannel (cho nhân vật của người đối thoại) — cùng một Renderer, khác nguồn input. Về model 3D phía nhận: khi thiết lập cuộc gọi, phía nhận tải model GLB của người gọi từ Backend API (không truyền trực tiếp qua WebRTC DataChannel vì file model có thể lớn). Backend lưu sẵn URL/reference tới model đã chọn của từng user trong hồ sơ tài khoản (FR-04); phía nhận dùng URL này để tải model đúng trước khi bắt đầu nhận skeleton data. Nhờ đó, người dùng B thấy đúng nhân vật ảo (màu tóc, trang phục) mà người dùng A đã tùy chỉnh.
 
 - Bảng giới hạn góc khớp giải phẫu (khuỷu tay, cổ tay, vai) được định nghĩa tĩnh trong cấu hình, dùng chung cho cả theo dõi cục bộ và dữ liệu nhận từ xa, đảm bảo FR-08 áp dụng nhất quán cho cả hai chế độ.

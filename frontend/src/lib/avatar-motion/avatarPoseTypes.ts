@@ -34,11 +34,7 @@ export interface AvatarPosePacketV1 {
   expressions: Record<string, number>;
   /** Gaze normalized; chỉ chứa số suy ra, không chứa landmark hoặc ảnh. */
   gaze?: AvatarGazeV1;
-  /**
-   * LEGACY / UNVERIFIED: quaternion lấy từ MediaPipe facial transform và renderer hiện
-   * áp như rest-relative local delta. Phase 3A không thay đổi hành vi hoặc dùng field này
-   * trong arm acceptance cho tới khi camera/world-to-parent-local semantic được xác minh.
-   */
+  /** Phase 3D: verified motion-frame, neutral-relative head share after head/neck distribution. */
   headRotation: QuaternionData | null;
   /**
    * Quaternion delta trong normalized humanoid space.

@@ -3,14 +3,15 @@ import type { RawHandCandidateV1, RawTrackingFrameV1 } from "../tracking/rawTrac
 import { AvatarMotionProcessor } from "./avatarMotionProcessor";
 import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import { buildIdleArmPose } from "./idleArmPose";
-import { rotateVector, vectorAngularDeltaDegrees } from "./motionMath";
+import { angularDeltaDegrees, multiplyQuaternions, rotateVector, vectorAngularDeltaDegrees } from "./motionMath";
 import { DEFAULT_AVATAR_MOTION_CONFIG } from "./motionConfig";
+import { createHeadFrozenPreset, headEulerDegrees } from "./headOrientation";
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
 const zero = { x: 0, y: 0, z: 0 };
 const leftBasis = { primaryLocal: { x: 1, y: 0, z: 0 }, secondaryLocal: { x: 0, y: 1, z: 0 }, binormalLocal: { x: 0, y: 0, z: 1 }, primaryWorld: { x: 1, y: 0, z: 0 }, secondaryWorld: { x: 0, y: 1, z: 0 }, binormalWorld: { x: 0, y: 0, z: 1 }, worldRotation: identity };
 const rightBasis = { primaryLocal: { x: -1, y: 0, z: 0 }, secondaryLocal: { x: 0, y: 1, z: 0 }, binormalLocal: { x: 0, y: 0, z: -1 }, primaryWorld: { x: -1, y: 0, z: 0 }, secondaryWorld: { x: 0, y: 1, z: 0 }, binormalWorld: { x: 0, y: 0, z: -1 }, worldRotation: { x: 0, y: 1, z: 0, w: 0 } };
-const rigProfile: NormalizedAvatarRigProfile = { version: 1, modelGeneration: 1, modelFingerprint: "test", torsoReference: { rightWorld: { x: 1, y: 0, z: 0 }, upWorld: { x: 0, y: 1, z: 0 }, forwardWorld: { x: 0, y: 0, z: 1 }, worldRotation: identity }, joints: {
+const rigProfile: NormalizedAvatarRigProfile = { version: 1, modelGeneration: 1, modelFingerprint: "test", torsoReference: { rightWorld: { x: 1, y: 0, z: 0 }, upWorld: { x: 0, y: 1, z: 0 }, forwardWorld: { x: 0, y: 0, z: 1 }, worldRotation: identity }, headNeckCapability: { head: true, neck: true }, joints: {
   leftUpperArm: { parentJoint: "leftShoulder", childJoint: "leftLowerArm", parentMode: "fixed-rest", controlledParentJoint: null, restLocalPosition: zero, restLocalRotation: identity, restWorldPosition: zero, restWorldRotation: identity, parentRestWorldRotation: identity, restWorldDirection: { x: 1, y: 0, z: 0 }, anatomicalRestBasis: leftBasis },
   leftLowerArm: { parentJoint: "leftUpperArm", childJoint: "leftHand", parentMode: "controlled", controlledParentJoint: "leftUpperArm", restLocalPosition: zero, restLocalRotation: identity, restWorldPosition: zero, restWorldRotation: identity, parentRestWorldRotation: identity, restWorldDirection: { x: 1, y: 0, z: 0 }, anatomicalRestBasis: leftBasis },
   rightUpperArm: { parentJoint: "rightShoulder", childJoint: "rightLowerArm", parentMode: "fixed-rest", controlledParentJoint: null, restLocalPosition: zero, restLocalRotation: identity, restWorldPosition: zero, restWorldRotation: identity, parentRestWorldRotation: identity, restWorldDirection: { x: -1, y: 0, z: 0 }, anatomicalRestBasis: rightBasis },
@@ -989,6 +990,24 @@ describe("AvatarMotionProcessor", () => {
       processor.process(partial(450, -.8));
       expect(processor.getLastDiagnostics()?.arms[current.side].segmentLossState).toEqual({ upper: "returning", lower: "returning" });
     }
+  });
+  it("publishes only a deliberately calibrated neutral-relative head rotation", () => {
+    let now = 0; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(rigProfile);
+    const value = frame(); value.face.blendshapes = { jawOpen: .02, eyeBlinkLeft: .02, eyeBlinkRight: .02, mouthSmileLeft: .02, mouthSmileRight: .02 };
+    value.face.facialTransform = createHeadFrozenPreset("yaw-left-15");
+    expect(processor.process(value).headRotation).toEqual(identity);
+    processor.startFaceCalibration();
+    for (let index = 0; index < 36; index += 1) {
+      now = (index + 1) * 40; value.frameTimestampMs = now; value.face.sampledAtMs = now; processor.process(value);
+    }
+    expect(processor.getFaceCalibrationSnapshot().status).toBe("ready");
+    now += 40; value.frameTimestampMs = now; value.face.sampledAtMs = now; value.face.facialTransform = createHeadFrozenPreset("yaw-left-35");
+    const packet = processor.process(value);
+    expect(headEulerDegrees(packet.headRotation!).yaw).toBeGreaterThan(15);
+    expect(packet.jointRotations.neck).toBeDefined();
+    const diagnostic = processor.getLastDiagnostics()!.head;
+    expect(diagnostic).toMatchObject({ semantic: "neutral-relative-verified", rejectionReason: null, calibrationStatus: "ready", responseInputClamped: false, distribution: { mode: "distributed" } });
+    expect(angularDeltaDegrees(multiplyQuaternions(packet.jointRotations.neck!, packet.headRotation!), diagnostic.responseOutput!)).toBeLessThan(1e-6);
   });
 
   it("requires a stable wrist reacquire before blending the complete arm chain", () => {

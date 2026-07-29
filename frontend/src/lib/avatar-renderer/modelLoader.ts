@@ -54,7 +54,11 @@ export function createRigProfile(modelGeneration: number, fingerprint: string, b
       parentRestWorldRotation: quaternionData(bone.parent.getWorldQuaternion(new Quaternion()).normalize()), restWorldDirection: vectorData(restDirection),
       anatomicalRestBasis: { primaryLocal: vectorData(primaryLocal), secondaryLocal: vectorData(secondaryLocal), binormalLocal: vectorData(binormalLocal), primaryWorld: vectorData(restDirection), secondaryWorld: vectorData(secondaryWorld), binormalWorld: vectorData(binormalWorld), worldRotation: quaternionData(frameWorldRotation) } };
   }
-  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, joints };
+  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, headNeckCapability: {
+    head: Boolean(bones.head), neck: Boolean(bones.neck),
+    ...(bones.head ? { headRestLocalRotation: quaternionData(bones.head.quaternion.clone().normalize()) } : {}),
+    ...(bones.neck ? { neckRestLocalRotation: quaternionData(bones.neck.quaternion.clone().normalize()) } : {}),
+  }, joints };
   return validateRigProfile(profile) ? freezeRigProfile(profile) : null;
 }
 

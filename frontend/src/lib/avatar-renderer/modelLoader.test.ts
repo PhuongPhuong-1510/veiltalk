@@ -74,5 +74,6 @@ describe("AvatarModelLoader", () => {
     expect(profile?.modelGeneration).toBe(7); expect(profile?.joints.leftLowerArm).toMatchObject({ parentJoint: "leftUpperArm", childJoint: "leftHand", controlledParentJoint: "leftUpperArm", restLocalPosition: { x: 1, y: 0, z: 0 }, restWorldPosition: { x: 1.2, y: 0, z: 0 } });
     expect(Object.isFrozen(profile)).toBe(true); expect(Object.isFrozen(profile?.joints.leftUpperArm.restWorldDirection)).toBe(true); expect(Object.isFrozen(profile?.joints.leftUpperArm.restLocalPosition)).toBe(true); expect(Object.isFrozen(profile?.joints.leftUpperArm.restWorldPosition)).toBe(true); expect(JSON.stringify(profile)).not.toMatch(/Object3D|uuid|children/);
     expect(profile?.torsoReference.forwardWorld).toEqual({ x: 0, y: 0, z: 1 }); expect(Object.isFrozen(profile?.joints.leftUpperArm.anatomicalRestBasis)).toBe(true);
+    expect(profile?.headNeckCapability).toMatchObject({ head: false, neck: true, neckRestLocalRotation: { x: 0, y: 0, z: 0, w: 1 } }); expect(Object.isFrozen(profile?.headNeckCapability)).toBe(true);
   });
 });

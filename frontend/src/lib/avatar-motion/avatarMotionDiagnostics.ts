@@ -1,5 +1,9 @@
 import type { AvatarOutputMotionState, QuaternionData, Vector3Data } from "./avatarPoseTypes";
 import type { HandMatchContinuity } from "./handPoseMatching";
+import type { HeadEulerDegrees, HeadOrientationRejectionReason } from "./headOrientation";
+import type { HeadNeckDistributionResult } from "./headNeckDistribution";
+import type { HeadTemporalResult } from "./headTemporal";
+import type { HeadLossResult } from "./headLossRecovery";
 
 export type ArmSide = "left" | "right";
 export type PoleSource = "fresh" | "hand" | "previous" | "rest" | "unavailable";
@@ -167,6 +171,23 @@ export interface AvatarMotionDiagnosticSnapshot {
   arms: Record<ArmSide, ArmFrameDiagnostic>;
   handTwist: Record<ArmSide, HandTwistRigDiagnostic>;
   armStability: Record<ArmSide, ArmStabilityDiagnostic>;
-  /** headRotation vẫn là legacy/unverified; không thuộc acceptance arm Phase 3A. */
-  headRotationSemantic: "legacy-unverified";
+  head: {
+    semantic: "neutral-relative-verified";
+    matrixStorage: "column-major-4x4";
+    conversionOwner: "coordinateAdapter";
+    calibrationStatus: "idle" | "collecting" | "ready" | "failed";
+    raw: QuaternionData | null;
+    rawEulerDegrees: HeadEulerDegrees | null;
+    neutral: QuaternionData | null;
+    neutralRelative: QuaternionData | null;
+    neutralRelativeEulerDegrees: HeadEulerDegrees | null;
+    responseInputEulerDegrees: HeadEulerDegrees | null;
+    responseOutputEulerDegrees: HeadEulerDegrees | null;
+    responseOutput: QuaternionData | null;
+    responseInputClamped: boolean;
+    temporal: HeadTemporalResult | null;
+    loss: HeadLossResult;
+    distribution: HeadNeckDistributionResult | null;
+    rejectionReason: HeadOrientationRejectionReason | null;
+  };
 }
