@@ -106,13 +106,27 @@ export function clearDiagnosticHelpers(group: Group): void {
 }
 
 const lm = (x: number, y: number, z: number): RawNormalizedLandmarkV1 => ({ x, y, z, visibility: 1 });
-export type DebugPresetName = "tPose" | "armsDown" | "leftArmUp" | "rightArmUp" | "leftElbow90" | "rightElbow90" | "bothForward" | "twistReferenceA" | "twistReferenceB";
+export type DebugPresetName = "tPose" | "armsDown" | "leftArmUp" | "rightArmUp" | "leftElbow90" | "rightElbow90" | "bothForward" | "twistReferenceA" | "twistReferenceB"
+  | "torsoYawLeft" | "torsoYawRight" | "torsoPitchForward" | "torsoPitchBack" | "torsoRollLeft" | "torsoRollRight"
+  | "shrugLeft" | "shrugRight" | "shrugBoth" | "shoulderForwardLeft" | "shoulderBackLeft";
 export function createDebugPreset(name: DebugPresetName, timestamp = 1000): RawTrackingFrameV1 {
   const points = Array.from({ length: 33 }, () => lm(0, 0, 0));
   // MediaPipe anatomical left appears on image-right for a person facing the camera.
   points[11] = lm(.2, 0, 0); points[12] = lm(-.2, 0, 0); points[13] = lm(.5, 0, 0); points[15] = lm(.8, 0, 0); points[19] = lm(.9, 0, 0);
   points[14] = lm(-.5, 0, 0); points[16] = lm(-.8, 0, 0); points[20] = lm(-.9, 0, 0);
   points[23] = lm(.15, .55, 0); points[24] = lm(-.15, .55, 0);
+  if (name === "torsoYawLeft" || name === "torsoYawRight") {
+    const sign = name === "torsoYawLeft" ? 1 : -1;
+    points[11] = lm(.14, 0, .14 * sign); points[12] = lm(-.14, 0, -.14 * sign);
+  }
+  if (name === "torsoPitchForward") { points[11].z = -.18; points[12].z = -.18; }
+  if (name === "torsoPitchBack") { points[11].z = .18; points[12].z = .18; }
+  if (name === "torsoRollLeft") { points[11].y = -.12; points[12].y = .12; }
+  if (name === "torsoRollRight") { points[11].y = .12; points[12].y = -.12; }
+  if (name === "shrugLeft" || name === "shrugBoth") points[11].y = -.12;
+  if (name === "shrugRight" || name === "shrugBoth") points[12].y = -.12;
+  if (name === "shoulderForwardLeft") points[11].z = -.18;
+  if (name === "shoulderBackLeft") points[11].z = .18;
   if (name === "armsDown") { points[13] = lm(.2, .35, 0); points[15] = lm(.2, .7, 0); points[14] = lm(-.2, .35, 0); points[16] = lm(-.2, .7, 0); }
   if (name === "leftArmUp") { points[13] = lm(.2, -.35, 0); points[15] = lm(.2, -.7, 0); }
   if (name === "rightArmUp") { points[14] = lm(-.2, -.35, 0); points[16] = lm(-.2, -.7, 0); }

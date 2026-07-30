@@ -23,7 +23,10 @@ import { createArmTemporalState, updateSegmentTemporalOutput, type ArmTemporalSt
 import { angularDeltaDegrees, vectorAngularDeltaDegrees } from "./motionMath";
 import { buildIdleArmPose, type IdleArmPose } from "./idleArmPose";
 import type { ArmSide, AvatarMotionDiagnosticSnapshot, HandSampleClassification, HandTrackingEpochResetReason, MotionSampleDisposition, PoleSource, TorsoBasisSource } from "./avatarMotionDiagnostics";
-import type { TorsoBasis } from "./torsoBasis";
+import { inspectTorsoBasis, type TorsoBasis } from "./torsoBasis";
+import { buildTorsoSemanticObservation, solveTorsoOrientation, TorsoCalibrationProcessor } from "./torsoOrientation";
+import { distributeTorsoRotation } from "./torsoDistribution";
+import { TorsoTemporalProcessor } from "./torsoTemporal";
 import { matchHandsToPose, type HandMatchPreviousState, type HandPoseMatchResult, type HandSideMatchResult } from "./handPoseMatching";
 import { computeHandPalmBasis, type HandPalmBasisOutput } from "./handPalmBasis";
 import { buildHandMotionDiagnostics, type HandMotionDiagnosticsSnapshot } from "./handMotionDiagnostics";
@@ -214,6 +217,8 @@ export class AvatarMotionProcessor {
   private readonly faceExpressionLoss: FaceExpressionLossProcessor;
   private readonly headTemporal = new HeadTemporalProcessor();
   private readonly headLossRecovery = new HeadLossRecoveryProcessor();
+  private readonly torsoCalibration = new TorsoCalibrationProcessor();
+  private readonly torsoTemporal = new TorsoTemporalProcessor();
   private headNeutralRotation: QuaternionData | null = null;
   private lastFaceProcessedSampledAtMs: number | null = null;
   private mouthTimingEnabled = true;
@@ -314,6 +319,9 @@ export class AvatarMotionProcessor {
   cancelFaceCalibration(): void { this.faceCalibration.cancel(); this.headNeutralRotation = null; this.expressionFilters.clear(); this.headTemporal.reset(); this.headLossRecovery.reset(); }
   resetFaceCalibration(): void { this.faceCalibration.reset(); this.headNeutralRotation = null; this.expressionFilters.clear(); this.headTemporal.reset(); this.headLossRecovery.reset(); }
   getFaceCalibrationSnapshot(): FaceCalibrationSnapshot { return this.faceCalibration.snapshot(); }
+  startTorsoCalibration(): void { this.torsoCalibration.start(); this.torsoTemporal.reset(); }
+  resetTorsoCalibration(): void { this.torsoCalibration.reset(); this.torsoTemporal.reset(); }
+  getTorsoCalibrationSnapshot() { return this.torsoCalibration.snapshot(); }
   setMouthTimingEnabled(enabled: boolean): void { if (this.mouthTimingEnabled !== enabled) this.mouthTiming.reset(); this.mouthTimingEnabled = enabled; }
   setAudioActivitySource(source: AudioActivitySource | null): void { this.mouthTiming.setAudioSource(source); }
   resetMouthTiming(): void { this.mouthTiming.reset(); }
@@ -568,7 +576,21 @@ export class AvatarMotionProcessor {
         stabilityState.previousHandAppliedTwistRadians = twistResult.diagnostic.appliedTwistRadians;
         stabilityState.previousFrameAtMs = processedTimestampMs;
       }
-      this.diagnostics = { version: 1, processedAtMs: processedTimestampMs, torso: { right: torso.right, up: torso.up, forward: torso.forward, source: torsoSource }, arms: armDiagnostics, handTwist: handTwistDiagnostics, armStability: armStabilityDiagnostics, head: { semantic: "neutral-relative-verified", matrixStorage: "column-major-4x4", conversionOwner: "coordinateAdapter", calibrationStatus: calibrationSnapshot.status, ...head, responseInputEulerDegrees: headResponse?.inputEulerDegrees ?? null, responseOutputEulerDegrees: headResponse?.outputEulerDegrees ?? null, responseOutput: headResponse?.output ?? null, responseInputClamped: headResponse?.inputClamped ?? false, temporal: headTemporal, loss: headLoss, distribution: headDistribution } };
+      const torsoObservation = frame.pose.worldLandmarks ? inspectTorsoBasis(frame.pose.worldLandmarks, this.config.armFrame.minimumPoseVisibility, this.config.armFrame.minimumSegmentLength) : null;
+      const torsoSemanticObservation = frame.pose.worldLandmarks && torsoObservation ? buildTorsoSemanticObservation(frame.pose.worldLandmarks, torsoObservation, this.config.armFrame.minimumPoseVisibility, this.config.armFrame.minimumSegmentLength) : null;
+      this.torsoCalibration.process(frame.pose.state, frame.pose.sampledAtMs, torsoSemanticObservation);
+      const torsoCalibration = this.torsoCalibration.snapshot(); const torsoOrientation = solveTorsoOrientation(torsoSemanticObservation, torsoCalibration.neutral);
+      const torsoTemporal = torsoOrientation.outputEulerDegrees && frame.pose.sampledAtMs !== null
+        ? this.torsoTemporal.process(torsoOrientation.outputEulerDegrees, frame.pose.sampledAtMs, this.filtered)
+        : null;
+      const appliedTorsoEuler = torsoTemporal?.output ?? torsoOrientation.outputEulerDegrees;
+      const torsoDistribution = appliedTorsoEuler && this.rigProfile.torsoShoulderCapability
+        ? distributeTorsoRotation(appliedTorsoEuler, this.rigProfile.torsoShoulderCapability)
+        : null;
+      if (torsoDistribution) Object.assign(jointRotations, torsoDistribution.deltas);
+      this.diagnostics = { version: 1, processedAtMs: processedTimestampMs, torso: { right: torso.right, up: torso.up, forward: torso.forward, worldRotation: torso.worldRotation, source: torsoSource,
+        visibility: torsoObservation?.visibility ?? { leftShoulder: null, rightShoulder: null, leftHip: null, rightHip: null }, observationRejectionReason: torsoObservation?.rejectionReason ?? "missing-landmark", rejectionReason: torsoOrientation.rejectionReason,
+        calibration: torsoCalibration, observationMode: torsoOrientation.mode, pitchObservable: torsoOrientation.pitchObservable, raw: torsoOrientation.raw, neutralRelative: torsoOrientation.neutralRelative, inputEulerDegrees: torsoOrientation.inputEulerDegrees, outputEulerDegrees: appliedTorsoEuler, responseOutput: torsoDistribution?.total ?? torsoOrientation.output, temporal: torsoTemporal, distribution: torsoDistribution }, arms: armDiagnostics, handTwist: handTwistDiagnostics, armStability: armStabilityDiagnostics, head: { semantic: "neutral-relative-verified", matrixStorage: "column-major-4x4", conversionOwner: "coordinateAdapter", calibrationStatus: calibrationSnapshot.status, ...head, responseInputEulerDegrees: headResponse?.inputEulerDegrees ?? null, responseOutputEulerDegrees: headResponse?.outputEulerDegrees ?? null, responseOutput: headResponse?.output ?? null, responseInputClamped: headResponse?.inputClamped ?? false, temporal: headTemporal, loss: headLoss, distribution: headDistribution } };
     } else this.diagnostics = null;
     return { version: 1, sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze, headRotation, jointRotations, handMotion: handContext.diagnostics };
   }
@@ -877,12 +899,12 @@ export class AvatarMotionProcessor {
   }
 
   reset(): void {
-    this.headNeutralRotation = null;
+    this.headNeutralRotation = null; this.torsoCalibration.reset(); this.torsoTemporal.reset();
     this.sequence = 0; this.faceCalibration.reset(); this.mouthTiming.reset(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.faceExpressionLoss.reset(); this.lastFaceProcessedSampledAtMs = null; this.resetArmState(); this.resetHandTrackingState("processor-reset"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
   dispose(): void {
     this.rigProfile = null;
-    this.headNeutralRotation = null;
+    this.headNeutralRotation = null; this.torsoCalibration.reset(); this.torsoTemporal.reset();
     this.sequence = 0; this.faceCalibration.reset(); this.mouthTiming.dispose(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.faceExpressionLoss.reset(); this.lastFaceProcessedSampledAtMs = null; this.resetArmState(); this.resetHandTrackingState("dispose"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
 
@@ -915,7 +937,7 @@ export class AvatarMotionProcessor {
   private poleFilter(side: ArmSide): OneEuroVectorFilter {
     let filter = this.poleFilters.get(side); if (!filter) { filter = new OneEuroVectorFilter(this.config.filter.pole, this.config.filter.maxTimestampGapMs); this.poleFilters.set(side, filter); } return filter;
   }
-  private resetFilters(): void { this.expressionFilters.clear(); this.directionFilters.clear(); this.poleFilters.clear(); this.headTemporal.reset(); this.headLossRecovery.reset(); }
+  private resetFilters(): void { this.expressionFilters.clear(); this.directionFilters.clear(); this.poleFilters.clear(); this.headTemporal.reset(); this.headLossRecovery.reset(); this.torsoTemporal.reset(); }
   private resetFaceTemporalAfterLongLoss(): void { this.mouthTiming.reset(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.expressionFilters.clear(); }
   private resetArmState(): void {
     for (const side of ["left", "right"] as const) {

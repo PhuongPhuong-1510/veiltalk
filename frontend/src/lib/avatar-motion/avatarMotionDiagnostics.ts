@@ -4,6 +4,9 @@ import type { HeadEulerDegrees, HeadOrientationRejectionReason } from "./headOri
 import type { HeadNeckDistributionResult } from "./headNeckDistribution";
 import type { HeadTemporalResult } from "./headTemporal";
 import type { HeadLossResult } from "./headLossRecovery";
+import type { TorsoCalibrationSnapshot, TorsoEulerDegrees, TorsoObservationMode } from "./torsoOrientation";
+import type { TorsoDistributionResult } from "./torsoDistribution";
+import type { TorsoTemporalResult } from "./torsoTemporal";
 
 export type ArmSide = "left" | "right";
 export type PoleSource = "fresh" | "hand" | "previous" | "rest" | "unavailable";
@@ -167,7 +170,10 @@ export interface ArmFrameDiagnostic {
 export interface AvatarMotionDiagnosticSnapshot {
   version: 1;
   processedAtMs: number;
-  torso: { right: Vector3Data; up: Vector3Data; forward: Vector3Data; source: TorsoBasisSource };
+  torso: { right: Vector3Data; up: Vector3Data; forward: Vector3Data; worldRotation: QuaternionData; source: TorsoBasisSource;
+    visibility: Record<"leftShoulder" | "rightShoulder" | "leftHip" | "rightHip", number | null>;
+    rejectionReason: string | null; observationRejectionReason: string | null; calibration: TorsoCalibrationSnapshot;
+    observationMode: TorsoObservationMode; pitchObservable: boolean; raw: QuaternionData | null; neutralRelative: QuaternionData | null; inputEulerDegrees: TorsoEulerDegrees | null; outputEulerDegrees: TorsoEulerDegrees | null; responseOutput: QuaternionData | null; temporal: TorsoTemporalResult | null; distribution: TorsoDistributionResult | null };
   arms: Record<ArmSide, ArmFrameDiagnostic>;
   handTwist: Record<ArmSide, HandTwistRigDiagnostic>;
   armStability: Record<ArmSide, ArmStabilityDiagnostic>;

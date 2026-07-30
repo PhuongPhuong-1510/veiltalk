@@ -19,6 +19,21 @@ export interface RigTorsoReference {
   worldRotation: QuaternionData;
 }
 
+export type TorsoShoulderJoint = "hips" | "spine" | "chest" | "upperChest" | "leftShoulder" | "rightShoulder";
+export interface RigBoneRestProfile {
+  available: boolean;
+  parentSemantic: AvatarJointName | null;
+  restLocalRotation: QuaternionData | null;
+  restWorldRotation: QuaternionData | null;
+  parentRestWorldRotation: QuaternionData | null;
+}
+export interface TorsoShoulderRigCapability {
+  mode: "full" | "without-upper-chest" | "reduced-chain" | "unsupported";
+  bones: Record<TorsoShoulderJoint, RigBoneRestProfile>;
+  shoulderStatus: Record<"left" | "right", "available" | "missing" | "invalid-parent">;
+  futureUpperArmControlledParent: Record<"left" | "right", "leftShoulder" | "rightShoulder" | null>;
+}
+
 export interface ControlledJointProfile {
   parentJoint: AvatarJointName;
   childJoint: AvatarJointName;
@@ -38,6 +53,7 @@ export interface NormalizedAvatarRigProfile {
   modelGeneration: number;
   modelFingerprint: string;
   torsoReference: RigTorsoReference;
+  torsoShoulderCapability?: TorsoShoulderRigCapability;
   headNeckCapability?: { head: boolean; neck: boolean; headRestLocalRotation?: QuaternionData; neckRestLocalRotation?: QuaternionData };
   joints: Record<ControlledArmJoint, ControlledJointProfile>;
 }
@@ -61,6 +77,12 @@ const orthonormal = (a: Vector3Data, b: Vector3Data, c: Vector3Data) => unitVect
 export function validateRigProfile(profile: NormalizedAvatarRigProfile): boolean {
   if (profile.version !== 1 || !Number.isInteger(profile.modelGeneration) || !profile.modelFingerprint) return false;
   if (!orthonormal(profile.torsoReference.rightWorld, profile.torsoReference.upWorld, profile.torsoReference.forwardWorld) || !unitQuaternion(profile.torsoReference.worldRotation)) return false;
+  if (profile.torsoShoulderCapability) {
+    for (const bone of Object.values(profile.torsoShoulderCapability.bones)) {
+      if (!bone.available) { if (bone.restLocalRotation || bone.restWorldRotation || bone.parentRestWorldRotation) return false; continue; }
+      if (!bone.restLocalRotation || !bone.restWorldRotation || !bone.parentRestWorldRotation || !unitQuaternion(bone.restLocalRotation) || !unitQuaternion(bone.restWorldRotation) || !unitQuaternion(bone.parentRestWorldRotation)) return false;
+    }
+  }
   for (const [name, expected] of Object.entries(HIERARCHY) as Array<[ControlledArmJoint, typeof HIERARCHY[ControlledArmJoint]]>) {
     const joint = profile.joints[name];
     if (!joint || joint.parentJoint !== expected.parentJoint || joint.childJoint !== expected.childJoint || joint.parentMode !== expected.parentMode || joint.controlledParentJoint !== expected.controlledParentJoint) return false;
@@ -75,6 +97,10 @@ export function validateRigProfile(profile: NormalizedAvatarRigProfile): boolean
 export function freezeRigProfile(profile: NormalizedAvatarRigProfile): NormalizedAvatarRigProfile {
   Object.values(profile.torsoReference).forEach(Object.freeze); Object.freeze(profile.torsoReference);
   if (profile.headNeckCapability) Object.freeze(profile.headNeckCapability);
+  if (profile.torsoShoulderCapability) {
+    for (const bone of Object.values(profile.torsoShoulderCapability.bones)) { if (bone.restLocalRotation) Object.freeze(bone.restLocalRotation); if (bone.restWorldRotation) Object.freeze(bone.restWorldRotation); if (bone.parentRestWorldRotation) Object.freeze(bone.parentRestWorldRotation); Object.freeze(bone); }
+    Object.freeze(profile.torsoShoulderCapability.bones); Object.freeze(profile.torsoShoulderCapability.shoulderStatus); Object.freeze(profile.torsoShoulderCapability.futureUpperArmControlledParent); Object.freeze(profile.torsoShoulderCapability);
+  }
   for (const joint of Object.values(profile.joints)) {
     Object.values(joint.anatomicalRestBasis).forEach(Object.freeze); Object.freeze(joint.anatomicalRestBasis);
     Object.freeze(joint.restLocalPosition); Object.freeze(joint.restLocalRotation); Object.freeze(joint.restWorldPosition); Object.freeze(joint.restWorldRotation); Object.freeze(joint.parentRestWorldRotation); Object.freeze(joint.restWorldDirection); Object.freeze(joint);

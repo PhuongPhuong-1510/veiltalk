@@ -17,6 +17,16 @@ const rigProfile: NormalizedAvatarRigProfile = { version: 1, modelGeneration: 1,
   rightUpperArm: { parentJoint: "rightShoulder", childJoint: "rightLowerArm", parentMode: "fixed-rest", controlledParentJoint: null, restLocalPosition: zero, restLocalRotation: identity, restWorldPosition: zero, restWorldRotation: identity, parentRestWorldRotation: identity, restWorldDirection: { x: -1, y: 0, z: 0 }, anatomicalRestBasis: rightBasis },
   rightLowerArm: { parentJoint: "rightUpperArm", childJoint: "rightHand", parentMode: "controlled", controlledParentJoint: "rightUpperArm", restLocalPosition: zero, restLocalRotation: identity, restWorldPosition: zero, restWorldRotation: identity, parentRestWorldRotation: identity, restWorldDirection: { x: -1, y: 0, z: 0 }, anatomicalRestBasis: rightBasis },
 } };
+const torsoBone = (parentSemantic: "hips" | "spine" | null) => ({ available: true, parentSemantic, restLocalRotation: identity, restWorldRotation: identity, parentRestWorldRotation: identity });
+const torsoRigProfile: NormalizedAvatarRigProfile = { ...rigProfile, torsoShoulderCapability: {
+  mode: "without-upper-chest",
+  bones: {
+    hips: torsoBone(null), spine: torsoBone("hips"), chest: torsoBone("spine"),
+    upperChest: { available: false, parentSemantic: null, restLocalRotation: null, restWorldRotation: null, parentRestWorldRotation: null },
+    leftShoulder: { available: false, parentSemantic: null, restLocalRotation: null, restWorldRotation: null, parentRestWorldRotation: null },
+    rightShoulder: { available: false, parentSemantic: null, restLocalRotation: null, restWorldRotation: null, parentRestWorldRotation: null },
+  }, shoulderStatus: { left: "missing", right: "missing" }, futureUpperArmControlledParent: { left: null, right: null },
+} };
 
 const landmark = (x: number, y: number, z = 0) => ({ x, y, z, visibility: 1 });
 function frame(state: "tracked" | "lost" | "not-sampled" = "tracked"): RawTrackingFrameV1 {
@@ -86,6 +96,23 @@ function edgeOnLeftHand(timestamp: number): RawHandCandidateV1 {
 }
 
 describe("AvatarMotionProcessor", () => {
+  it("3E-03 calibrates torso diagnostics without adding torso joint rotations", () => {
+    let now = 1; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(rigProfile); processor.startTorsoCalibration();
+    let beforeKeys: string[] = [];
+    for (let i = 0; i < 12; i++) { now = i + 1; const input = frame(); input.pose.sampledAtMs = now; input.frameTimestampMs = now; const packet = processor.process(input); if (i === 0) beforeKeys = Object.keys(packet.jointRotations).sort(); }
+    expect(processor.getTorsoCalibrationSnapshot().status).toBe("ready"); const diagnostic = processor.getLastDiagnostics()!.torso;
+    expect(diagnostic.outputEulerDegrees).toEqual({ yaw: 0, pitch: 0, roll: 0 }); expect(Object.keys(processor.process(frame()).jointRotations).sort()).toEqual(beforeKeys); expect(beforeKeys).not.toContain("hips"); expect(beforeKeys).not.toContain("spine"); expect(beforeKeys).not.toContain("chest"); expect(beforeKeys).not.toContain("upperChest");
+  });
+  it("3E-04 emits the capability-aware torso chain after calibration", () => {
+    let now = 1; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(torsoRigProfile); processor.startTorsoCalibration();
+    for (let i = 0; i < 12; i++) { now = i + 1; const input = frame(); input.pose.sampledAtMs = now; input.frameTimestampMs = now; processor.process(input); }
+    now = 20; const moved = frame(); moved.pose.sampledAtMs = now; moved.frameTimestampMs = now;
+    setPoseLandmark(moved, 11, -.2, .2); setPoseLandmark(moved, 12, .2, .4);
+    const packet = processor.process(moved); const distribution = processor.getLastDiagnostics()!.torso.distribution!;
+    expect(distribution.mode).toBe("distributed"); expect(distribution.activeBones).toEqual(["hips", "spine", "chest"]);
+    expect(packet.jointRotations.hips).toBeDefined(); expect(packet.jointRotations.spine).toBeDefined(); expect(packet.jointRotations.chest).toBeDefined(); expect(packet.jointRotations.upperChest).toBeUndefined();
+    expect(Object.values(packet.jointRotations.chest!)).toSatisfy((values: number[]) => values.every(Number.isFinite));
+  });
   it("publishes one processor-timed jaw value to both jawOpen and aa", () => {
     const processor = new AvatarMotionProcessor({ filtered: true, now: () => 120 });
     const packet = processor.process(frame());

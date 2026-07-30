@@ -6,6 +6,7 @@ import { selectGazeCapability } from "./gazeCapability";
 
 const REQUIRED = ["head", "neck", "leftUpperArm", "leftLowerArm", "leftHand", "rightUpperArm", "rightLowerArm", "rightHand"] as const;
 const OPTIONAL = ["chest", "leftShoulder", "rightShoulder"] as const;
+const TORSO_SHOULDER = ["hips", "spine", "chest", "upperChest", "leftShoulder", "rightShoulder"] as const;
 
 export function inspectModel(root: Object3D, profile: AvatarModelRigProfile | undefined, sourceUrl: string, loadTimeMs: number, fileSizeBytes: number | null, licenseStatus: ModelCapabilityReport["licenseStatus"], vrm: VRM | null = null): ModelCapabilityReport {
   const materials = new Set<Material>();
@@ -31,6 +32,18 @@ export function inspectModel(root: Object3D, profile: AvatarModelRigProfile | un
     ?? (profile?.boneNodes[key as keyof AvatarModelRigProfile["boneNodes"]] && root.getObjectByName(profile.boneNodes[key as keyof AvatarModelRigProfile["boneNodes"]]!)));
   const requiredBones = Object.fromEntries(REQUIRED.map((key) => [key, has(key)]));
   const optionalBones = Object.fromEntries(OPTIONAL.map((key) => [key, has(key)]));
+  const node = (key: string): Object3D | null => vrm?.humanoid.getNormalizedBoneNode(key as Parameters<typeof vrm.humanoid.getNormalizedBoneNode>[0])
+    ?? (profile?.boneNodes[key as keyof AvatarModelRigProfile["boneNodes"]] ? root.getObjectByName(profile.boneNodes[key as keyof AvatarModelRigProfile["boneNodes"]]!) ?? null : null);
+  const torsoBones = Object.fromEntries(TORSO_SHOULDER.map((key) => [key, has(key)])) as ModelCapabilityReport["torsoShoulder"]["bones"];
+  const semanticByNode = new Map<Object3D, string>();
+  for (const key of [...TORSO_SHOULDER, "leftUpperArm", "rightUpperArm"] as const) { const value = node(key); if (value) semanticByNode.set(value, key); }
+  const parents = Object.fromEntries(TORSO_SHOULDER.map((key) => { const value = node(key); return [key, value?.parent ? (semanticByNode.get(value.parent) ?? (value.parent.name || "(unnamed)")) : null]; })) as ModelCapabilityReport["torsoShoulder"]["parents"];
+  const hierarchy: ModelCapabilityReport["torsoShoulder"]["hierarchy"] = torsoBones.hips && torsoBones.spine && torsoBones.chest && torsoBones.upperChest
+    ? "full" : torsoBones.hips && torsoBones.spine && torsoBones.chest ? "without-upper-chest" : torsoBones.chest ? "reduced-chain" : "unsupported";
+  const shoulderStatus = (side: "left" | "right"): "available" | "missing" | "invalid-parent" => {
+    const shoulder = node(`${side}Shoulder`); if (!shoulder) return "missing";
+    return node(`${side}UpperArm`)?.parent === shoulder ? "available" : "invalid-parent";
+  };
   const extension = sourceUrl.split("?")[0].split(".").pop()?.toLowerCase();
   const format = extension === "vrm" ? "vrm" : extension === "glb" ? "glb" : extension === "gltf" ? "gltf" : "unknown";
   const unsupported: string[] = [];
@@ -56,6 +69,7 @@ export function inspectModel(root: Object3D, profile: AvatarModelRigProfile | un
     loaded: true, format, vrmVersion: vrm?.meta.metaVersion ?? null, fileSizeBytes, loadTimeMs,
     humanoidRig: Object.values(requiredBones).every(Boolean), restPose: profile?.restPose ?? inferredRestPose,
     forwardAxis: profile?.forwardAxis ?? (vrm ? "-Z" : "unknown"), forwardAxisReason: profile ? "rig profile" : vrm ? "three-vrm normalized humanoid convention after VRM0 rotation" : "No VRM metadata or rig profile; cannot infer safely.", requiredBones, optionalBones,
+    torsoShoulder: { bones: torsoBones, parents, hierarchy, shoulderStatus: { left: shoulderStatus("left"), right: shoulderStatus("right") }, upperArmParentMode: { left: "fixed-rest", right: "fixed-rest" } },
     expressions: expressionNames, faceExpressions, gaze, mtoonMaterial: mtoon || Boolean(vrm?.materials?.some((material) => material.type.toLowerCase().includes("mtoon"))), materialCount: materials.size,
     textureCount: textures.size, triangleCount: Math.round(triangles), drawCallsEstimate: drawCalls,
     licenseStatus, unsupportedFeatures: unsupported, normalizedArmRestDirections,

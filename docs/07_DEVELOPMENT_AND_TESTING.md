@@ -512,12 +512,10 @@ calibration lifecycle, packet integration và stale renderer target. Targeted ga
 
 ### 6.10. Phase 3D — Head & Neck Retargeting
 
-Trạng thái **IN PROGRESS**. 3D-01/02 đã implement, automated 77/77 PASS trên bốn file targeted
-`coordinateAdapter`, `headOrientation`, `faceCalibration`, `avatarMotionProcessor`; TypeScript check
-PASS, manual webcam acceptance đang chờ. Contract, thứ tự task và gate nằm tại
-`docs/P4_T10_PHASE3D_HEAD_NECK_RETARGETING_PLAN.md`. Mỗi task con chỉ chạy targeted tests liên quan;
-automated PASS không thay thế manual webcam acceptance cho sign, amplitude, smoothness, distribution
-neck/head và loss/recovery. Torso animation không thuộc matrix 3D.
+Trạng thái **COMPLETE**. Final targeted gate 10 file, 105/105 PASS; TypeScript/lint/build PASS và
+manual webcam acceptance được người dùng xác nhận ngày 2026-07-30. Contract, thứ tự task và evidence
+nằm tại `docs/P4_T10_PHASE3D_HEAD_NECK_RETARGETING_PLAN.md`. Automated PASS không thay thế manual
+webcam acceptance cho sign, amplitude, smoothness, distribution neck/head và loss/recovery.
 
 3D-03 response curve: hai file targeted, 68/68 PASS; TypeScript/lint PASS. Manual webcam ba trục,
 neutral, amplitude và pitch inversion được người dùng xác nhận PASS ngày 2026-07-30.
@@ -529,5 +527,44 @@ head/neck được người dùng xác nhận PASS ngày 2026-07-30.
 3D-05 constraints/filter: bốn file targeted (`headTemporal`, distribution, processor, renderer
 smoothing), 71/71 PASS; TypeScript/lint PASS. Manual webcam smoothness/latency/held-amplitude PASS
 ngày 2026-07-30.
+
+### 6.11. Phase 3E — Torso & Shoulder Retargeting
+
+Trạng thái **TORSO BASELINE COMPLETE — 3E-01/02/03/04 COMPLETE; shoulder 3E-05/06 DEFERRED và code đã revert về mốc sau 3E-04**. Automated matrix phải bao phủ torso coordinate/neutral,
+phân bổ `hips/spine/chest/upperChest`, shoulder independence, hierarchy-safe torso→shoulder→arm,
+capability fallback, temporal/loss/lifecycle, packet privacy và performance. Automated PASS không thay
+thế manual webcam acceptance trên ít nhất hai model. Contract, thứ tự subtask và toàn bộ gate nằm tại
+`docs/P4_T10_PHASE3E_TORSO_SHOULDER_RETARGETING_PLAN.md`.
+
+3E-01 diagnostics/capability COMPLETE: targeted năm file 83/83 PASS; TypeScript, lint và build PASS;
+manual acceptance được người dùng xác nhận 2026-07-30. 3E-02 targeted sáu file 98/98 PASS;
+TypeScript/lint/build và manual fallback/probe/reload/tracking matrix PASS ngày 2026-07-30. Full frontend suite hiện 490/494 do bốn lỗi cô lập trong
+`handTwistRootCauseValidation.test.ts` khi mock renderer thiếu `capability.gaze`; file này chạy riêng vẫn
+tái hiện và không thuộc đường code 3E-01/02. Manual gate 3E-01/02 đã PASS.
+
+3E-03 targeted năm file 89/89 PASS; TypeScript/lint/build PASS. Matrix khóa neutral identity,
+yaw/pitch/roll opposite signs, axis separation, duplicate timestamp, invalid geometry và packet output
+invariance; shoulder-only fallback tiếp tục torso yaw/body-roll khi hông ngoài khung và khóa regression head
+landmarks không được tác động torso output. Manual webcam
+PASS ngày 2026-07-30.
+
+3E-04 targeted năm file 92/92 PASS; TypeScript/lint/build PASS. Matrix khóa share sum bằng 1,
+multi-bone không nhận 100%, curve nhẹ/lớn liên tục, fallback thiếu upperChest, exact world recomposition với
+rest rotation không-identity, packet chỉ phát bone capability cho phép và renderer nhận semantic torso joints.
+Manual vòng đầu ngày 2026-07-30 phát hiện yaw ngược, neutral rung và yaw amplitude thấp. Corrective matrix bổ
+sung đúng dấu camera→avatar, yaw gần 1:1 tới 70°, soft-limit 80°, neutral deadband 1–3°, timestamp-aware
+One Euro filter, duplicate hold và lifecycle reset. Corrective targeted sáu file 95/95, lint/build PASS.
+Full suite tại gate 3E-04 là 493/497 do cùng bốn blocker Phase 3B;
+manual webcam distribution/continuity đã PASS sau corrective tuning.
+
+Manual corrective tuning tiếp theo dùng evidence shoulder-only `Input Roll 8.1° → Output 7.8°`: body-roll
+đổi sang deadband 2–4°/gain 0.65/soft-limit 25°, đồng thời neck roll share giảm từ 25–45% xuống 15–30%
+mà vẫn bảo toàn tổng head target. Targeted sáu file 91/91, lint/build PASS; manual retest được người dùng
+xác nhận PASS ngày 2026-07-30.
+
+3E-05/06 shoulder experiment không đạt manual acceptance: shoulder rotation thể hiện thành nâng upper arm thay
+vì shrug tự nhiên trên model tham chiếu. Theo quyết định người dùng ngày 2026-07-30, toàn bộ shoulder solver,
+hierarchy rebase, targeted tests và DEV controls đã được gỡ; upper arm trở lại `fixed-rest`. Đây là deferred
+scope, không được ghi nhận là PASS.
 
 *— Hết tài liệu —*

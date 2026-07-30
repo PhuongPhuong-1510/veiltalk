@@ -13,6 +13,10 @@ describe("renderer rest-relative application", () => {
     const rest = data(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), .2)); const a = data(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), .5)); const b = data(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), .8));
     const firstA = absoluteLocalFromRestDelta(rest, a); expect(absoluteLocalFromRestDelta(rest, a)).toEqual(firstA); absoluteLocalFromRestDelta(rest, b); expect(absoluteLocalFromRestDelta(rest, a)).toEqual(firstA);
   });
+  it.each(["hips", "spine", "chest", "upperChest", "leftShoulder", "rightShoulder"])("keeps %s at rest for identity and applies a synthetic rest-relative delta", () => {
+    const rest = data(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), .2)); const identity = { x: 0, y: 0, z: 0, w: 1 }; const delta = data(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), .25));
+    const neutral = absoluteLocalFromRestDelta(rest, identity); expect(neutral.x).toBeCloseTo(rest.x); expect(neutral.y).toBeCloseTo(rest.y); expect(neutral.z).toBeCloseTo(rest.z); expect(neutral.w).toBeCloseTo(rest.w); expect(absoluteLocalFromRestDelta(rest, delta)).not.toEqual(rest);
+  });
   it("does not apply renderer smoothing to processor-owned mouth timing channels", () => {
     expect(isProcessorTimedExpression("jawOpen")).toBe(true);
     expect(isProcessorTimedExpression("aa")).toBe(true);

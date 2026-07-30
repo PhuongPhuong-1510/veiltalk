@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMExpressionMorphTargetBind, VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import { inspectModel } from "./modelCapability";
 import type { LoadedAvatarModel, ModelLoadOptions } from "./modelTypes";
-import { freezeRigProfile, validateRigProfile, type ControlledArmJoint, type NormalizedAvatarRigProfile } from "../avatar-motion/normalizedRigProfile";
+import { freezeRigProfile, validateRigProfile, type ControlledArmJoint, type NormalizedAvatarRigProfile, type TorsoShoulderJoint, type TorsoShoulderRigCapability } from "../avatar-motion/normalizedRigProfile";
 import type { FaceExpressionBinding } from "./faceExpressionApplyPlan";
 
 const quaternionData = (value: Quaternion) => ({ x: value.x, y: value.y, z: value.z, w: value.w });
@@ -34,6 +34,14 @@ export function createRigProfile(modelGeneration: number, fingerprint: string, b
   if ([torsoRight, torsoUp, torsoForward].some((axis) => axis.lengthSq() < 1e-8)) return null;
   const torsoRotation = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(torsoRight, torsoUp, torsoForward)).normalize();
   const torsoReference = { rightWorld: vectorData(torsoRight), upWorld: vectorData(torsoUp), forwardWorld: vectorData(torsoForward), worldRotation: quaternionData(torsoRotation) };
+  const torsoNames: TorsoShoulderJoint[] = ["hips", "spine", "chest", "upperChest", "leftShoulder", "rightShoulder"];
+  const semanticByNode = new Map<Object3D, TorsoShoulderJoint>(); for (const name of torsoNames) { const bone = bones[name]; if (bone) semanticByNode.set(bone, name); }
+  const torsoRestBones = Object.fromEntries(torsoNames.map((name) => {
+    const bone = bones[name]; if (!bone?.parent) return [name, { available: false, parentSemantic: null, restLocalRotation: null, restWorldRotation: null, parentRestWorldRotation: null }];
+    bone.updateWorldMatrix(true, false); return [name, { available: true, parentSemantic: semanticByNode.get(bone.parent) ?? null, restLocalRotation: quaternionData(bone.quaternion.clone().normalize()), restWorldRotation: quaternionData(bone.getWorldQuaternion(new Quaternion()).normalize()), parentRestWorldRotation: quaternionData(bone.parent.getWorldQuaternion(new Quaternion()).normalize()) }];
+  })) as TorsoShoulderRigCapability["bones"];
+  const torsoMode = bones.hips && bones.spine && bones.chest && bones.upperChest ? "full" : bones.hips && bones.spine && bones.chest ? "without-upper-chest" : bones.chest ? "reduced-chain" : "unsupported";
+  const shoulderStatus = (side: "left" | "right") => { const shoulder = bones[`${side}Shoulder`]; const upper = bones[`${side}UpperArm`]; return !shoulder ? "missing" as const : upper?.parent === shoulder ? "available" as const : "invalid-parent" as const; };
   const joints = {} as NormalizedAvatarRigProfile["joints"];
   for (const [name, definition] of Object.entries(pairs) as Array<[ControlledArmJoint, typeof pairs[ControlledArmJoint]]>) {
     const bone = bones[name], child = bones[definition.child]; if (!bone || !child || !bone.parent) return null;
@@ -54,7 +62,7 @@ export function createRigProfile(modelGeneration: number, fingerprint: string, b
       parentRestWorldRotation: quaternionData(bone.parent.getWorldQuaternion(new Quaternion()).normalize()), restWorldDirection: vectorData(restDirection),
       anatomicalRestBasis: { primaryLocal: vectorData(primaryLocal), secondaryLocal: vectorData(secondaryLocal), binormalLocal: vectorData(binormalLocal), primaryWorld: vectorData(restDirection), secondaryWorld: vectorData(secondaryWorld), binormalWorld: vectorData(binormalWorld), worldRotation: quaternionData(frameWorldRotation) } };
   }
-  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, headNeckCapability: {
+  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, torsoShoulderCapability: { mode: torsoMode, bones: torsoRestBones, shoulderStatus: { left: shoulderStatus("left"), right: shoulderStatus("right") }, futureUpperArmControlledParent: { left: shoulderStatus("left") === "available" ? "leftShoulder" : null, right: shoulderStatus("right") === "available" ? "rightShoulder" : null } }, headNeckCapability: {
     head: Boolean(bones.head), neck: Boolean(bones.neck),
     ...(bones.head ? { headRestLocalRotation: quaternionData(bones.head.quaternion.clone().normalize()) } : {}),
     ...(bones.neck ? { neckRestLocalRotation: quaternionData(bones.neck.quaternion.clone().normalize()) } : {}),
@@ -102,7 +110,7 @@ export class AvatarModelLoader {
         restRotations[key] = { x: node.quaternion.x, y: node.quaternion.y, z: node.quaternion.z, w: node.quaternion.w };
       }
     }
-    const semanticBones = ["head", "neck", "chest", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand", "leftEye", "rightEye"] as const;
+    const semanticBones = ["hips", "spine", "chest", "upperChest", "head", "neck", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand", "leftEye", "rightEye"] as const;
     if (vrm) for (const semantic of semanticBones) {
       const node = vrm.humanoid.getNormalizedBoneNode(semantic); if (!node) continue;
       bones[semantic] = node; restRotations[semantic] = { x: node.quaternion.x, y: node.quaternion.y, z: node.quaternion.z, w: node.quaternion.w };

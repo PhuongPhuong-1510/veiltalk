@@ -8,7 +8,8 @@ describe("Phase 3D head/neck distribution", () => {
     expect(light.axes.yaw.headShare).toBeCloseTo(.75); expect(light.axes.yaw.neckShare).toBeCloseTo(.25); expect(light.axes.yaw.progress).toBe(0);
     expect(light.axes.pitch.headShare).toBeCloseTo(.7); expect(light.axes.pitch.neckShare).toBeCloseTo(.3); expect(light.axes.pitch.progress).toBe(0);
     const large = distributeHeadNeckRotation({ yaw: 60, pitch: 40, roll: 35 }, { head: true, neck: true });
-    expect(large.axes.yaw.headShare).toBeCloseTo(.5); expect(large.axes.pitch.headShare).toBeCloseTo(.5); expect(large.axes.roll.headShare).toBeCloseTo(.55);
+    expect(light.axes.roll.headShare).toBeCloseTo(.85); expect(light.axes.roll.neckShare).toBeCloseTo(.15);
+    expect(large.axes.yaw.headShare).toBeCloseTo(.5); expect(large.axes.pitch.headShare).toBeCloseTo(.5); expect(large.axes.roll.headShare).toBeCloseTo(.70); expect(large.axes.roll.neckShare).toBeCloseTo(.30);
     const around = [14.99, 15, 15.01].map((yaw) => distributeHeadNeckRotation({ yaw, pitch: 0, roll: 0 }, { head: true, neck: true }).axes.yaw.headShare);
     expect(Math.max(...around) - Math.min(...around)).toBeLessThan(1e-5);
   });

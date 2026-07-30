@@ -6,7 +6,7 @@ export type AvatarSourceTrackingState = TrackingSampleState;
 export type AvatarOutputMotionState = "active" | "held" | "returning" | "idle";
 
 export type AvatarJointName =
-  | "neck" | "chest"
+  | "hips" | "spine" | "chest" | "upperChest" | "neck"
   | "leftShoulder" | "leftUpperArm" | "leftLowerArm" | "leftHand"
   | "rightShoulder" | "rightUpperArm" | "rightLowerArm" | "rightHand";
 

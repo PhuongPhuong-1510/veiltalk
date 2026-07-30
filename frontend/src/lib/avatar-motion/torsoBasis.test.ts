@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTorsoBasis } from "./torsoBasis";
+import { buildTorsoBasis, inspectTorsoBasis } from "./torsoBasis";
 
 const point = (x: number, y: number, z = 0, visibility = 1) => ({ x, y, z, visibility });
 describe("torso reference basis", () => {
@@ -14,5 +14,11 @@ describe("torso reference basis", () => {
   it("rejects low-confidence and degenerate landmarks", () => {
     const landmarks = Array.from({ length: 33 }, () => point(0, 0)); landmarks[11] = point(.2, 0, 0, .1); landmarks[12] = point(-.2, 0); landmarks[23] = point(.1, .5); landmarks[24] = point(-.1, .5);
     expect(buildTorsoBasis(landmarks)).toBeNull(); landmarks[11].visibility = 1; landmarks[23] = point(0, 0); landmarks[24] = point(0, 0); expect(buildTorsoBasis(landmarks)).toBeNull();
+  });
+  it("reports visibility and specific rejection reasons without changing the production basis", () => {
+    expect(inspectTorsoBasis([]).rejectionReason).toBe("missing-landmark");
+    const landmarks = Array.from({ length: 33 }, () => point(0, 0)); landmarks[11] = point(.2, 0, 0, .2); landmarks[12] = point(-.2, 0); landmarks[23] = point(.1, .5); landmarks[24] = point(-.1, .5);
+    const low = inspectTorsoBasis(landmarks); expect(low.rejectionReason).toBe("low-visibility"); expect(low.visibility.leftShoulder).toBe(.2); expect(low.basis).toBeNull();
+    landmarks[11] = point(-.2, 0); expect(inspectTorsoBasis(landmarks).rejectionReason).toBe("degenerate-shoulder-axis");
   });
 });

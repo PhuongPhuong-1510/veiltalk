@@ -183,11 +183,13 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
   easing về neutral/đóng miệng → idle. Reacquire cần hai sample mới liên tiếp rồi recovery blend.
   Long-loss reset mouth/eye/gaze/brow-cheek/filter và calibration phát đúng một lần mỗi loss epoch.
 
-- Phase 3D Head & Neck đang triển khai. 3D-01/02 đã thay `headRotation` camera-derived legacy bằng
-  orientation neutral-relative đã xác minh và diagnostics raw/relative local-only; các bước sau sẽ tách yaw/pitch/roll, phân phối
-  parent-local/rest-relative giữa `neck` và `head`, rồi áp constraints/filter/loss-recovery. Cho tới khi
-  3D đạt toàn bộ gate, gain/distribution/filter/loss vẫn chưa phải contract hoàn chỉnh. Torso/chest animation không
-  thuộc 3D và cần phase riêng.
+- Phase 3D Head & Neck đã hoàn thành: `headRotation` camera-derived legacy được thay bằng orientation
+  neutral-relative đã xác minh, tách yaw/pitch/roll, phân phối parent-local/rest-relative giữa `neck`
+  và `head`, kèm constraints/filter/loss-recovery.
+- Phase 3E Torso & Shoulder đã được lập kế hoạch, chưa triển khai. Phase này sẽ tạo torso orientation
+  neutral-relative, phân bổ yaw/pitch/roll giữa `hips/spine/chest/upperChest`, giải hai shoulder độc lập
+  từ torso + arm geometry và đổi arm chain sang current-frame parent targets để giữ tay đúng khi parent
+  torso/shoulder chuyển động. Nguồn: `docs/P4_T10_PHASE3E_TORSO_SHOULDER_RETARGETING_PLAN.md`.
 
 - Hai chế độ nguồn dữ liệu: theo dõi cục bộ (cho chính nhân vật của người dùng) và dữ liệu nhận qua RTCDataChannel (cho nhân vật của người đối thoại) — cùng một Renderer, khác nguồn input. Về model 3D phía nhận: khi thiết lập cuộc gọi, phía nhận tải model GLB của người gọi từ Backend API (không truyền trực tiếp qua WebRTC DataChannel vì file model có thể lớn). Backend lưu sẵn URL/reference tới model đã chọn của từng user trong hồ sơ tài khoản (FR-04); phía nhận dùng URL này để tải model đúng trước khi bắt đầu nhận skeleton data. Nhờ đó, người dùng B thấy đúng nhân vật ảo (màu tóc, trang phục) mà người dùng A đã tùy chỉnh.
 

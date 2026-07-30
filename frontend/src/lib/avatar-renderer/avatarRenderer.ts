@@ -116,6 +116,11 @@ export class AvatarRenderer {
   }
   /** DEV-only gaze probe; never mutates AvatarPosePacketV1. */
   setDiagnosticGazeOverride(value: { yaw: number; pitch: number } | null): void { this.diagnosticGazeOverride = value ? { yaw: Math.min(1, Math.max(-1, value.yaw)), pitch: Math.min(1, Math.max(-1, value.pitch)) } : null; }
+  /** DEV-only bone probe; applies a rest-relative delta directly and never mutates the packet/processor. */
+  setDiagnosticBoneRotationOverride(name: AvatarJointName, delta: QuaternionData | null): boolean {
+    this.assertUsable(); const bone = this.model?.bones[name]; const rest = this.model?.restRotations[name]; if (!bone || !rest) return false;
+    const value = delta ? absoluteLocalFromRestDelta(rest, delta) : rest; bone.quaternion.set(value.x, value.y, value.z, value.w).normalize(); this.currentRotations[name] = value; return true;
+  }
   dispose(): void {
     if (this.disposed) return;
     this.stop(); this.loader.invalidate();

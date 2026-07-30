@@ -166,8 +166,9 @@ Giá trị khởi đầu để tuning, chưa phải acceptance cuối:
    - Preserve sign và recomposition theo order `YXZ` đã khóa.
 
 3. **Curve phân bổ liên tục**
-   - Vùng nhẹ dùng tỷ lệ khởi đầu yaw/roll 75% head + 25% neck, pitch 70% + 30%.
-   - Khi magnitude tăng, nội suy smoothstep đến yaw/pitch 50% + 50%, roll 55% + 45%.
+   - Vùng nhẹ dùng tỷ lệ khởi đầu yaw 75% head + 25% neck, pitch 70% + 30%; roll được retune sau
+     manual 3E thành 85% head + 15% neck để giảm cảm giác cổ bị bẻ.
+   - Khi magnitude tăng, nội suy smoothstep đến yaw/pitch 50% + 50%; roll đạt 70% head + 30% neck.
    - Không có `if small/large` đổi mode đột ngột; tổng tỷ lệ mỗi trục luôn bằng 1.
 
 4. **Hierarchy-safe composition**

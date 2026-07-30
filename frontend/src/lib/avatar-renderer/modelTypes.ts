@@ -28,6 +28,13 @@ export interface ModelCapabilityReport {
   forwardAxis: AvatarModelRigProfile["forwardAxis"] | "unknown";
   requiredBones: Record<string, boolean>;
   optionalBones: Record<string, boolean>;
+  torsoShoulder: {
+    bones: Record<"hips" | "spine" | "chest" | "upperChest" | "leftShoulder" | "rightShoulder", boolean>;
+    parents: Record<"hips" | "spine" | "chest" | "upperChest" | "leftShoulder" | "rightShoulder", string | null>;
+    hierarchy: "full" | "without-upper-chest" | "reduced-chain" | "unsupported";
+    shoulderStatus: Record<"left" | "right", "available" | "missing" | "invalid-parent">;
+    upperArmParentMode: Record<"left" | "right", "fixed-rest">;
+  };
   expressions: string[];
   faceExpressions: FaceExpressionCapabilityRow[];
   gaze: GazeCapability;

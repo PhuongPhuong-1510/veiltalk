@@ -19,6 +19,8 @@ import {
   type HandCalibrationStepId,
 } from "../../lib/avatar-motion/handCalibrationAnalysis";
 import "./avatarRendererDevHarness.css";
+import type { AvatarMotionDiagnosticSnapshot } from "../../lib/avatar-motion/avatarMotionDiagnostics";
+import { Quaternion, Vector3 } from "three";
 
 const MODEL_URL = "/models/avatars/reference-avatar-4.vrm";
 const number = (value: number | null | undefined, digits = 1) => value === null || value === undefined || !Number.isFinite(value) ? "—" : value.toFixed(digits);
@@ -41,6 +43,7 @@ export default function AvatarRendererDevHarness() {
   const [zoom, setZoom] = useState(1); const [verticalOffset, setVerticalOffset] = useState(0);
   const [error, setError] = useState<string | null>(null); const [capability, setCapability] = useState<ModelCapabilityReport | null>(null); const [packet, setPacket] = useState<AvatarPosePacketV1 | null>(null);
   const [rendererMetrics, setRendererMetrics] = useState<RendererMetricsSnapshot | null>(null); const [trackingMetrics, setTrackingMetrics] = useState<TrackingMetricsSnapshot | null>(null);
+  const [motionDiagnostics, setMotionDiagnostics] = useState<AvatarMotionDiagnosticSnapshot | null>(null);
   const [modelLoading, setModelLoading] = useState(false);
 
   // Mức 2B-1 — Hand Calibration Test: chỉ thu thập diagnostic đã có sẵn (packet.handMotion,
@@ -145,7 +148,7 @@ export default function AvatarRendererDevHarness() {
   useEffect(() => { rendererRef.current?.setVerticalOffset(verticalOffset); }, [verticalOffset]);
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const renderer = rendererRef.current; setPacket(latestPacket.current); if (!renderer) return;
+      const renderer = rendererRef.current; setPacket(latestPacket.current); setMotionDiagnostics(processorRef.current.getLastDiagnostics()); if (!renderer) return;
       setRendererMetrics(renderer.getMetrics());
     }, 400); return () => window.clearInterval(timer);
   }, []);
@@ -184,7 +187,13 @@ export default function AvatarRendererDevHarness() {
     rendererRef.current = null; processorRef.current.setRigProfile(null);
   }, []);
   function reloadModel() { const renderer = rendererRef.current; if (!renderer || modelLoading) return; void loadRendererModel(renderer); }
-  async function toggleTracking() { if (!tracking || !videoRef.current) return; if (trackingRunning) { tracking.stop(); setTrackingRunning(false); } else { setError(null); processorRef.current.resetFaceCalibration(); await tracking.start(videoRef.current); processorRef.current.startFaceCalibration(); setTrackingRunning(true); } }
+  function probeTorsoBone() {
+    const renderer = rendererRef.current; if (!renderer) return; const report = capability?.torsoShoulder; const name = report?.bones.upperChest ? "upperChest" : report?.bones.chest ? "chest" : report?.bones.spine ? "spine" : report?.bones.hips ? "hips" : null;
+    if (!name) { setError("Model không có torso bone để chạy synthetic probe."); return; }
+    const q = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 15 * Math.PI / 180); renderer.setDiagnosticBoneRotationOverride(name, { x: q.x, y: q.y, z: q.z, w: q.w });
+  }
+  function clearTorsoProbe() { const renderer = rendererRef.current; if (!renderer || !capability) return; for (const name of ["hips", "spine", "chest", "upperChest", "leftShoulder", "rightShoulder"] as const) renderer.setDiagnosticBoneRotationOverride(name, null); }
+  async function toggleTracking() { if (!tracking || !videoRef.current) return; if (trackingRunning) { tracking.stop(); setTrackingRunning(false); } else { setError(null); processorRef.current.resetFaceCalibration(); processorRef.current.resetTorsoCalibration(); await tracking.start(videoRef.current); processorRef.current.startFaceCalibration(); processorRef.current.startTorsoCalibration(); setTrackingRunning(true); } }
   function toggleRenderer() { const renderer = rendererRef.current; if (!renderer) return; if (rendererRunning) renderer.stop(); else renderer.start(); setRendererRunning(!rendererRunning); }
   function toggleFreeze() { if (frozenRaw.current) { frozenRaw.current = null; setFrozen(false); return; } if (!latestRaw.current) return; frozenRaw.current = structuredClone(latestRaw.current); setFrozen(true); processInput(frozenRaw.current); }
   function replay() {
@@ -217,6 +226,7 @@ export default function AvatarRendererDevHarness() {
     <section className="dev-controls">
       <button onClick={() => void toggleTracking()}>{trackingRunning ? "Stop tracking" : "Start tracking"}</button><button onClick={toggleRenderer}>{rendererRunning ? "Stop renderer" : "Start renderer"}</button><button onClick={reloadModel} disabled={modelLoading}>{modelLoading ? "Loading model…" : "Reload model"}</button>
       <button onClick={toggleFreeze} disabled={!frozen && !latestRaw.current}>{frozen ? "Unfreeze" : "Freeze current"}</button><button onClick={replay} disabled={!frozen}>Replay as new sample</button>
+      <button onClick={probeTorsoBone} disabled={!capability}>Probe torso +15°</button><button onClick={clearTorsoProbe} disabled={!capability}>Clear torso probe</button>
       <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Smoothing</label><label><input type="checkbox" checked={simulatedFaceLoss} onChange={(e) => setSimulatedFaceLoss(e.target.checked)} /> Simulate Face loss</label>
       <label>Zoom <input type="range" min="0.5" max="3" step="0.05" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {zoom.toFixed(2)}x</label>
       <label>Vị trí trên/dưới <input type="range" min="-0.5" max="0.5" step="0.01" value={verticalOffset} onChange={(e) => setVerticalOffset(Number(e.target.value))} /> {verticalOffset.toFixed(2)}</label>
@@ -259,6 +269,8 @@ export default function AvatarRendererDevHarness() {
         <p>Pose model: <strong>{trackingMetrics?.poseModel ?? `${poseModel} (chưa chạy)`}</strong> · delegate {trackingMetrics?.selectedDelegate ?? "—"}</p>
         <p>Pose inference: {number(trackingMetrics?.inferenceTimeMs.pose.average)}ms trung bình · p95 {number(trackingMetrics?.inferenceTimeMs.pose.p95)}ms · max {number(trackingMetrics?.inferenceTimeMs.pose.max)}ms</p></article>
       <article><h2>Head/neck capability</h2>{modelLoading && <p>Đang tải model mới; model hiện tại vẫn được giữ cho tới khi swap thành công.</p>}{capability ? <><p>Format: <strong>{capability.format}</strong> · VRM {capability.vrmVersion ?? "—"}</p><p>Humanoid: <strong>{capability.humanoidRig ? "yes" : "no"}</strong> · rest {capability.restPose}</p><p>Head: <strong>{capability.requiredBones.head ? "supported" : "missing"}</strong></p><p>Neck: <strong>{capability.requiredBones.neck ? "supported" : "missing"}</strong></p></> : !modelLoading && <p>Chưa có model sẵn sàng.</p>}</article>
+      <article><h2>3E torso/shoulder baseline</h2>{capability ? <><p>Torso chain: <strong>{capability.torsoShoulder.hierarchy}</strong></p><p>Bones: {Object.entries(capability.torsoShoulder.bones).map(([name, present]) => `${name}=${present ? "yes" : "no"}`).join(" · ")}</p><p>Shoulders: L={capability.torsoShoulder.shoulderStatus.left} · R={capability.torsoShoulder.shoulderStatus.right}</p><p>Upper-arm parent: L/R={capability.torsoShoulder.upperArmParentMode.left}</p></> : <p>Chưa có capability.</p>}{motionDiagnostics && <><p>Basis source: <strong>{motionDiagnostics.torso.source}</strong> · observation {motionDiagnostics.torso.observationRejectionReason ?? "—"}</p><p>Calibration: <strong>{motionDiagnostics.torso.calibration.status}</strong> · {motionDiagnostics.torso.calibration.acceptedSamples} accepted/{motionDiagnostics.torso.calibration.rejectedSamples} rejected · solve {motionDiagnostics.torso.rejectionReason ?? "ready"}</p><p>Visibility: LS {number(motionDiagnostics.torso.visibility.leftShoulder, 2)} · RS {number(motionDiagnostics.torso.visibility.rightShoulder, 2)} · LH {number(motionDiagnostics.torso.visibility.leftHip, 2)} · RH {number(motionDiagnostics.torso.visibility.rightHip, 2)}</p><p>Input Y/P/R: {number(motionDiagnostics.torso.inputEulerDegrees?.yaw, 1)} / {number(motionDiagnostics.torso.inputEulerDegrees?.pitch, 1)} / {number(motionDiagnostics.torso.inputEulerDegrees?.roll, 1)}</p><p>Output Y/P/R: {number(motionDiagnostics.torso.outputEulerDegrees?.yaw, 1)} / {number(motionDiagnostics.torso.outputEulerDegrees?.pitch, 1)} / {number(motionDiagnostics.torso.outputEulerDegrees?.roll, 1)}</p></>}</article>
+      <article><h2>3E semantic mode</h2>{motionDiagnostics ? <><p>Mode: <strong>{motionDiagnostics.torso.observationMode}</strong></p><p>Pitch: <strong>{motionDiagnostics.torso.pitchObservable ? "live" : "held-neutral"}</strong></p><p>Distribution: <strong>{motionDiagnostics.torso.distribution?.mode ?? "—"}</strong> · {motionDiagnostics.torso.distribution?.activeBones.join(" → ") ?? "—"}</p><p>Shares H/S/C/U: {motionDiagnostics.torso.distribution ? ["hips", "spine", "chest", "upperChest"].map((name) => number(motionDiagnostics.torso.distribution!.shares.yaw[name as "hips" | "spine" | "chest" | "upperChest"], 2)).join(" / ") : "—"}</p></> : <p>Chưa có torso observation.</p>}</article>
       <article><h2>Tracking state</h2>{packet && Object.entries(packet.tracking).map(([name, state]) => <p key={name}>{name}: {state.sourceState} → {state.outputState}</p>)}</article>
     </section>
   </main>;

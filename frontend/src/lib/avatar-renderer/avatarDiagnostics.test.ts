@@ -37,6 +37,14 @@ describe("avatar diagnostics", () => {
     const frame = createDebugPreset("rightElbow90");
     expect(processor.process(frame).jointRotations).toEqual(processor.process(structuredClone(frame)).jointRotations);
   });
+  it("provides deterministic 3E torso and independent-shoulder observation presets", () => {
+    for (const name of ["torsoYawLeft", "torsoYawRight", "torsoPitchForward", "torsoPitchBack", "torsoRollLeft", "torsoRollRight", "shrugLeft", "shrugRight", "shrugBoth", "shoulderForwardLeft", "shoulderBackLeft"] as const) {
+      expect(createDebugPreset(name)).toEqual(createDebugPreset(name));
+      expect(createDebugPreset(name).pose.worldLandmarks).toHaveLength(33);
+    }
+    const left = createDebugPreset("shrugLeft").pose.worldLandmarks!; const right = createDebugPreset("shrugRight").pose.worldLandmarks!;
+    expect(left[11].y).not.toBe(left[12].y); expect(right[11].y).not.toBe(right[12].y);
+  });
 
   it("proves a one-vector upper-arm solver cannot observe elbow-plane changes", () => {
     const processor = new AvatarMotionProcessor({ filtered: false, constraints: false, now: () => 2000 });

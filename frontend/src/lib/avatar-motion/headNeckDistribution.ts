@@ -17,7 +17,7 @@ export interface HeadNeckDistributionResult {
 export const DEFAULT_HEAD_NECK_DISTRIBUTION_CONFIG: HeadNeckDistributionConfig = {
   yaw: { lightHeadShare: .75, largeHeadShare: .5, largeMotionStartsDegrees: 15, largeMotionFullDegrees: 45 },
   pitch: { lightHeadShare: .7, largeHeadShare: .5, largeMotionStartsDegrees: 10, largeMotionFullDegrees: 35 },
-  roll: { lightHeadShare: .75, largeHeadShare: .55, largeMotionStartsDegrees: 10, largeMotionFullDegrees: 30 },
+  roll: { lightHeadShare: .85, largeHeadShare: .70, largeMotionStartsDegrees: 10, largeMotionFullDegrees: 30 },
 };
 
 const smoothstep = (value: number): number => { const t = Math.min(1, Math.max(0, value)); return t * t * (3 - 2 * t); };
