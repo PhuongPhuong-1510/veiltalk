@@ -340,8 +340,8 @@ export class AvatarMotionProcessor {
         }
       }
       const solved = isNewSample && frame.pose.worldLandmarks && frame.pose.landmarks ? solveAnatomicalArmFrames(frame.pose.worldLandmarks, frame.pose.landmarks, this.rigProfile, {
-        left: { previousPole: this.armState.left.previousPole, previousPoleWasFresh: this.armState.left.poleSource === "fresh", previousDepthDegenerate: this.armState.left.depthDegenerate, lastValidPoleAtMs: this.armState.left.lastValidPoleAtMs, previousPrimary: this.armState.left.previousPrimary, previousSecondary: this.armState.left.previousSecondary, calibratedLength: this.armState.left.calibratedLength, previousObservedElbow: this.armState.left.previousObservedElbow, inferenceStartedAtMs: this.armState.left.inferenceStartedAtMs, elbowWasVisible: this.armState.left.elbowWasVisible, wristWasVisible: this.armState.left.wristWasVisible },
-        right: { previousPole: this.armState.right.previousPole, previousPoleWasFresh: this.armState.right.poleSource === "fresh", previousDepthDegenerate: this.armState.right.depthDegenerate, lastValidPoleAtMs: this.armState.right.lastValidPoleAtMs, previousPrimary: this.armState.right.previousPrimary, previousSecondary: this.armState.right.previousSecondary, calibratedLength: this.armState.right.calibratedLength, previousObservedElbow: this.armState.right.previousObservedElbow, inferenceStartedAtMs: this.armState.right.inferenceStartedAtMs, elbowWasVisible: this.armState.right.elbowWasVisible, wristWasVisible: this.armState.right.wristWasVisible },
+        left: { previousPole: this.armState.left.previousPole, previousPoleWasFresh: this.armState.left.poleSource === "fresh", previousDepthDegenerate: this.armState.left.depthDegenerate, lastValidPoleAtMs: this.armState.left.lastValidPoleAtMs, previousPrimary: this.armState.left.previousPrimary, previousSecondary: this.armState.left.previousSecondary, calibratedLength: this.armState.left.calibratedLength, previousObservedElbow: this.armState.left.previousObservedElbow, inferenceStartedAtMs: this.armState.left.inferenceStartedAtMs, elbowWasVisible: this.armState.left.elbowWasVisible, wristWasVisible: this.armState.left.wristWasVisible, previousElbowDirection: this.armState.left.previousElbowDirection },
+        right: { previousPole: this.armState.right.previousPole, previousPoleWasFresh: this.armState.right.poleSource === "fresh", previousDepthDegenerate: this.armState.right.depthDegenerate, lastValidPoleAtMs: this.armState.right.lastValidPoleAtMs, previousPrimary: this.armState.right.previousPrimary, previousSecondary: this.armState.right.previousSecondary, calibratedLength: this.armState.right.calibratedLength, previousObservedElbow: this.armState.right.previousObservedElbow, inferenceStartedAtMs: this.armState.right.inferenceStartedAtMs, elbowWasVisible: this.armState.right.elbowWasVisible, wristWasVisible: this.armState.right.wristWasVisible, previousElbowDirection: this.armState.right.previousElbowDirection },
       }, processedTimestampMs, this.config.armFrame, this.constraints, this.filtered
         ? (name, direction) => this.directionFilter(name).filter(direction, sampledAtMs!) : undefined,
       this.filtered ? (side, pole) => this.poleFilter(side).filter(pole, sampledAtMs!) : undefined,
@@ -357,12 +357,23 @@ export class AvatarMotionProcessor {
         const state = this.armState[side]; const geometry = solved?.sides[side] ?? null;
         const stabilityState = this.armStabilityState[side];
         const names = side === "left" ? { upper: "leftUpperArm" as const, lower: "leftLowerArm" as const } : { upper: "rightUpperArm" as const, lower: "rightLowerArm" as const };
-        // Một cánh tay chỉ là một nghiệm hình học dùng được khi cả upper và lower cùng hợp lệ.
-        // Nếu wrist bị che mà vẫn nhận upper mới trong khi lower giữ quaternion cũ, hai đoạn xương
-        // thuộc hai thời điểm khác nhau và forearm có thể bị kéo quét ngang mặt.
-        const chainGeometryValid = Boolean(geometry?.segmentValidity.upper && geometry.segmentValidity.lower);
+        // Phase 3E — Partial arm tracking: hai đoạn xương được nghiệm thu ĐỘC LẬP.
+        //
+        // Trước đây một cánh tay chỉ dùng được khi cả upper và lower cùng hợp lệ, vì lo rằng
+        // nhận upper mới trong khi lower giữ giá trị cũ sẽ ghép hai thời điểm khác nhau và
+        // kéo forearm quét ngang mặt. Nhưng nỗi lo đó chỉ đúng nếu hold lưu WORLD rotation.
+        // `updateSegmentTemporalOutput` giữ parent-local rest-relative delta (xem
+        // armTemporalState.ts), nên lower bị hold vẫn xoay theo upper như một khối cứng và
+        // giữ nguyên góc gập — không có chuyện quét ngang mặt. Ràng buộc cũ đổi lại làm mất
+        // cả cánh tay trên mỗi khi cổ tay bị che, dù vai và khuỷu vẫn quan sát rõ: upper bị
+        // ép null → hold → return về tư thế buông tay.
+        //
+        // `chainGeometryValid` giờ chỉ hỏi "chuỗi tay còn gốc hợp lệ không" (vai→khuỷu). Mất
+        // riêng cổ tay không còn giết cả chain; nó chỉ vô hiệu hóa đúng đoạn lower.
+        const chainGeometryValid = Boolean(geometry?.segmentValidity.upper);
+        const lowerGeometryValid = Boolean(geometry?.segmentValidity.lower);
         const currentUpperTarget = isNewSample && chainGeometryValid ? geometry?.deltas[names.upper] ?? null : null;
-        const currentLowerTarget = isNewSample && chainGeometryValid ? geometry?.deltas[names.lower] ?? null : null;
+        const currentLowerTarget = isNewSample && lowerGeometryValid ? geometry?.deltas[names.lower] ?? null : null;
         const poseUpperTargetAngularDeltaRadians = quaternionAngularDeltaRadians(stabilityState.previousPoseUpperTarget, currentUpperTarget);
         const poseLowerTargetAngularDeltaRadians = quaternionAngularDeltaRadians(stabilityState.previousPoseLowerTarget, currentLowerTarget);
         if (isNewSample) state.lastConsumedPoseSampledAtMs = sampledAtMs;
@@ -410,12 +421,21 @@ export class AvatarMotionProcessor {
           if (elbowSourceChanged || poleSourceUpgraded || chainTrackingReacquired) { trackingReacquired = true; for (const segment of ["upper", "lower"] as const) { state.segments[segment].lossState = "recovering"; state.segments[segment].recoveryStartedAtMs = null; } }
           state.elbowSource = acceptedGeometry.elbowSource;
           state.previousPrimary = acceptedGeometry.primary; state.previousSecondary = acceptedGeometry.secondary;
+          // Phase 3E: mỏ neo phía gập chỉ được cập nhật khi frame này còn xác định được mặt
+          // phẳng gập (solver trả null khi tay gần duỗi thẳng). Giữ mỏ neo cũ trong các frame
+          // suy biến — đó chính là lúc cần nó nhất để elbow inference không lật phía.
+          if (acceptedGeometry.elbowDirection) state.previousElbowDirection = acceptedGeometry.elbowDirection;
           if (acceptedGeometry.elbowSource === "observed") { state.previousObservedElbow = acceptedGeometry.elbowPosition; state.inferenceStartedAtMs = null; if (acceptedGeometry.observedLengths) this.updateLengthCalibration(state, acceptedGeometry.observedLengths); }
           else state.inferenceStartedAtMs ??= processedTimestampMs;
         } else if (solved?.diagnostics[side].hardRejectionReason?.startsWith("elbow-inference")) state.inferenceStartedAtMs ??= processedTimestampMs;
         const segmentTemporal = {} as Record<"upper" | "lower", { output: QuaternionData; state: ArmLossState; progress: number }>;
         for (const segment of ["upper", "lower"] as const) {
-          const name = names[segment]; const solvedDelta = acceptedGeometry?.deltas[name] ?? null;
+          // Lower chỉ nhận target mới khi chính đoạn đó có nghiệm hình học; mất cổ tay thì
+          // solvedDelta=null đưa riêng lower vào hold (giữ local delta) trong khi upper vẫn
+          // được cập nhật bình thường từ vai→khuỷu.
+          const name = names[segment];
+          const segmentGeometryValid = segment === "upper" ? chainGeometryValid : lowerGeometryValid;
+          const solvedDelta = segmentGeometryValid ? acceptedGeometry?.deltas[name] ?? null : null;
           segmentTemporal[segment] = isTrackedDuplicate
             ? { output: state.segments[segment].currentOutputDelta, state: state.segments[segment].lossState, progress: this.diagnostics?.arms[side].transitionProgress ?? 1 }
             : updateSegmentTemporalOutput(state.segments[segment], solvedDelta, Boolean(solvedDelta && isNewSample), processedTimestampMs, this.config.loss.holdMs, this.config.loss.returnMs, this.config.loss.recoveryMs, this.config.armFrame.invalidGraceMs, this.idlePose?.[side][segment]);
@@ -423,8 +443,11 @@ export class AvatarMotionProcessor {
         }
         const lowerName = names.lower;
         const poseLowerDelta = segmentTemporal.lower.output;
+        // Hand twist bám vào lower-arm frame, nên gate theo chính lower chứ không theo chain:
+        // mất cổ tay thì lower đang hold, twist phải freeze theo (nếu không twist sẽ tiếp tục
+        // xoay một đoạn xương đã đóng băng).
         const freshLowerGeometryValid = isNewSample
-          ? chainGeometryValid
+          ? lowerGeometryValid
           : null;
         const armChainOutputValid = state.invalidCandidateStartedAtMs === null;
         const twistResult = this.applyHandTwist(side, poseLowerDelta, handContext, frame, processedTimestampMs, freshLowerGeometryValid, armChainOutputValid);
@@ -449,7 +472,11 @@ export class AvatarMotionProcessor {
           poleSourceChanged: Boolean(acceptedGeometry) && acceptedGeometry!.poleSource !== previousPoleSourceForDiagnostic,
           trackingReacquired,
           elbowInference: { ...base.elbowInference,
-            source: geometry?.elbowSource ?? (temporalState === "held" ? "held" : temporalState === "returning" ? "returning" : "unavailable"),
+            // Phase 3E: frame duplicate (không phải sample mới) không có `geometry`, nhưng cánh
+            // tay vẫn đang chạy trên nghiệm của sample gần nhất. Lùi về `state.elbowSource` thay
+            // vì báo "unavailable" — nếu không, ở FPS thấp phần lớn frame hiển thị sai trạng
+            // thái và che mất nguồn lỗi thật khi chẩn đoán.
+            source: geometry?.elbowSource ?? (temporalState === "held" ? "held" : temporalState === "returning" ? "returning" : state.elbowSource),
             durationMs: state.inferenceStartedAtMs === null ? 0 : processedTimestampMs - state.inferenceStartedAtMs,
             calibratedUpperLength: state.calibratedLength.upper, calibratedLowerLength: state.calibratedLength.lower } };
         const currentElbowSource = armDiagnostics[side].elbowInference.source;

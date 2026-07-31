@@ -61,6 +61,44 @@ export interface AvatarMotionConfig {
     calibrationWindowSamples: number;
     elbowInferenceTimeoutMs: number;
     elbowInferenceReachSlackRatio: number;
+    /**
+     * Phase 3E — Việc 4. Khi khuỷu bị che, `inferElbow` chọn phía gập bằng prior pole. Nếu
+     * prior đảo dấu giữa hai frame, nghiệm nhảy sang phía đối diện và cẳng tay quằn qua thân
+     * người — đo được trên tay gần duỗi thẳng (bendPlaneQuality ≈ 0.04), nơi pole gần như
+     * không xác định nên rất dễ đổi dấu. Dưới ngưỡng này, pole suy biến tới mức không được
+     * phép quyết định phía gập: giữ nguyên phía của lần suy đoán/quan sát gần nhất.
+     */
+    elbowInferenceMinimumBendQuality: number;
+    /**
+     * Phase 3E. `elbowInferenceTimeoutMs` tồn tại để chặn sai số tích luỹ khi suy đoán phải
+     * dựa vào dữ liệu CŨ (pole lịch sử, chiều dài chưa chắc chắn). Nhưng khi vai và cổ tay đều
+     * được quan sát tươi ngay frame này và chiều dài xương đã calibrate từ quan sát thật, khuỷu
+     * là nghiệm hình học đầy đủ — không có gì tích luỹ để mà hết hạn.
+     *
+     * Đo trên webcam: giơ tay chào để khuỷu ra ngoài khung hình, khuỷu KHÔNG BAO GIỜ quan sát
+     * lại được nên đồng hồ inference chạy mãi; sau 1.2 giây tay avatar rơi xuống giữa lúc người
+     * dùng vẫn đang giơ. Cờ này cho phép suy đoán chạy vô thời hạn đúng trong điều kiện đủ chắc.
+     */
+    elbowInferenceUnboundedWhenFullyObserved: boolean;
+    /**
+     * Phase 3E. `inferElbow` giải ra khuỷu trên một ĐƯỜNG TRÒN nghiệm — vô số vị trí đều thoả
+     * đúng hai chiều dài xương. Prior pole chọn một điểm trên đó, và khi khuỷu ra ngoài khung
+     * hình lâu, prior có thể trỏ vào phía TRONG thân người: nghiệm vẫn đúng toán học nhưng
+     * cẳng tay xuyên qua ngực/bụng — đo được trên webcam khi giơ tay chào.
+     *
+     * Khuỷu người thật luôn lệch ra phía ngoài thân (bên trái lệch trái, bên phải lệch phải).
+     * Đây là biên độ tối thiểu theo trục `torso.right` mà nghiệm phải nằm về đúng phía; dưới
+     * mức này coi như nghiệm đã lấn vào trong thân và pole bị lật ra ngoài.
+     */
+    elbowInferenceMinimumLateralBias: number;
+    /**
+     * Phase 3E — Việc 4. Tuổi tối đa của prior pole dùng cho elbow inference. `inferElbow`
+     * trước đây đọc `previousPole` không kiểm tra tuổi, trong khi tầng chọn pole của khung
+     * xương đã bỏ nó sau `poleFallbackTimeoutMs` — hai bên dùng hai pole khác nhau. Cho phép
+     * dài hơn `poleFallbackTimeoutMs` (pole cũ vẫn tốt hơn rest-pose để giữ phía gập) nhưng
+     * không vô hạn.
+     */
+    elbowInferencePoleMaxAgeMs: number;
   };
   /** Mức 2B-5 POC webcam; mọi giá trị theo thời gian thực, không theo frame count. */
   handTwist: {
@@ -113,6 +151,10 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     calibrationWindowSamples: 30,
     elbowInferenceTimeoutMs: 1_200,
     elbowInferenceReachSlackRatio: 0.12,
+    elbowInferenceMinimumBendQuality: 0.15,
+    elbowInferenceUnboundedWhenFullyObserved: true,
+    elbowInferenceMinimumLateralBias: 0.05,
+    elbowInferencePoleMaxAgeMs: 2_000,
   },
   handTwist: {
     // Occlusion ngắn được debounce 80 ms; sau đó twist cũ phải rời hết trong khoảng 180 ms

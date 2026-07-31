@@ -221,6 +221,139 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(solved.segmentValidity).toEqual({ upper: true, lower: true });
     expect(Number.isFinite(solved.elbowPosition.x)).toBe(true);
   });
+  // Phase 3E — Việc 4: chống lật phía khuỷu khi suy đoán.
+  it("keeps the inferred elbow on the anchored bend side even when the prior pole flips sign", () => {
+    // Tay gần duỗi thẳng: vai(0,0) khuỷu(1,.02) cổ tay(2,0) → bendPlaneQuality ≈ 0.04, mặt
+    // phẳng gập gần như không xác định nên pole cực dễ đảo dấu. Trước khi có mỏ neo phía gập,
+    // prior +Y và −Y cho hai nghiệm khuỷu ĐỐI DẤU nhau — chính là cú quằn qua thân người.
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(0, 0); world[13] = lm(1, .02); world[15] = lm(2, 0);
+    world[12] = lm(0, 0); world[14] = lm(-1, .02); world[16] = lm(-2, 0);
+    world[23] = lm(.2, -1); world[24] = lm(-.2, -1);
+    const image = imageFrame(world); image[13].visibility = 0;
+    const anchoredUp = { x: 0, y: 1, z: 0 };
+    const solveWithPrior = (previousPole: { x: number; y: number; z: number }) => solveAnatomicalArmFrames(world, image, profile, {
+      left: { previousPole, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0, calibratedLength: { upper: 1, lower: 1 }, inferenceStartedAtMs: 20, previousElbowDirection: anchoredUp },
+      right: emptyHistory(),
+    }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+
+    const aligned = solveWithPrior({ x: 0, y: 1, z: 0 });
+    const flipped = solveWithPrior({ x: 0, y: -1, z: 0 });
+    // Hai nghiệm phải trùng nhau: mỏ neo quyết định phía, không phải dấu của prior.
+    expect(flipped.elbowPosition.y).toBeCloseTo(aligned.elbowPosition.y, 9);
+    expect(flipped.elbowPosition.y).toBeGreaterThan(0);
+    expect(flipped.diagnostic.confidenceFlags).toContain("elbow-side-flip-prevented");
+    expect(aligned.diagnostic.confidenceFlags).not.toContain("elbow-side-flip-prevented");
+  });
+
+  it("stops trusting a stale history pole for elbow inference once it exceeds its max age", () => {
+    // Pole lịch sử không được dùng vô thời hạn: tầng chọn pole của khung xương đã bỏ nó sau
+    // `poleFallbackTimeoutMs`, nên inference cũng phải hết hạn thay vì chạy trên pole cũ mãi.
+    const world = frame(), image = imageFrame(world); image[13].visibility = 0;
+    const withPoleAge = (nowMs: number) => solveAnatomicalArmFrames(world, image, profile, {
+      left: { previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0, calibratedLength: { upper: 1, lower: 1 }, inferenceStartedAtMs: nowMs - 50 },
+      right: emptyHistory(),
+    }, nowMs, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+
+    expect(withPoleAge(100).elbowSource).toBe("inferred-history");
+    const stale = DEFAULT_AVATAR_MOTION_CONFIG.armFrame.elbowInferencePoleMaxAgeMs + 500;
+    expect(withPoleAge(stale).elbowSource).toBe("inferred-rest-prior");
+  });
+
+  // Phase 3E: giơ tay chào làm khuỷu ra ngoài khung hình vĩnh viễn. Đo trên webcam thấy tay
+  // avatar rơi xuống sau 1.2 giây (elbow-inference-timeout) giữa lúc người dùng vẫn đang giơ.
+  it("keeps inferring the elbow past the timeout while shoulder and wrist stay observed", () => {
+    const world = frame(), image = imageFrame(world); image[13].visibility = 0;
+    const beyondTimeout = DEFAULT_AVATAR_MOTION_CONFIG.armFrame.elbowInferenceTimeoutMs + 3_000;
+    const observedCalibration: ArmGeometryHistory = {
+      previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: beyondTimeout - 100,
+      calibratedLength: { upper: 1, lower: 1 }, inferenceStartedAtMs: 0,
+    };
+    const solved = solveAnatomicalArmFrames(world, image, profile, { left: observedCalibration, right: emptyHistory() }, beyondTimeout, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+    expect(solved).not.toBeNull();
+    expect(solved.elbowSource).toBe("inferred-history");
+    expect(solved.segmentValidity).toEqual({ upper: true, lower: true });
+    expect(solved.diagnostic.confidenceFlags).toContain("elbow-inference-sustained");
+    // Confidence không được suy giảm theo thời gian khi nghiệm vẫn tươi mỗi frame.
+    expect(solved.diagnostic.elbowInference.confidence).toBeGreaterThan(0);
+    // Ràng buộc hình học vẫn tuyệt đối.
+    expect(solved.diagnostic.upperSegmentLength).toBeCloseTo(1, 6);
+    expect(solved.diagnostic.lowerSegmentLength).toBeCloseTo(1, 6);
+  });
+
+  it("still times out an inference that never had observed bone lengths", () => {
+    // Chưa từng quan sát được khuỷu → chiều dài chỉ là prior giải phẫu, sai số CÓ tích luỹ.
+    // Trường hợp này timeout phải giữ nguyên.
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[13] = lm(.5, 0); world[15] = lm(.5, -.3);
+    world[12] = lm(-.2, 0); world[14] = lm(-.5, 0); world[16] = lm(-.5, -.3);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    const beyondTimeout = DEFAULT_AVATAR_MOTION_CONFIG.armFrame.elbowInferenceTimeoutMs + 3_000;
+    const result = solveAnatomicalArmFrames(world, image, profile, { left: { ...emptyHistory(), inferenceStartedAtMs: 0 }, right: emptyHistory() }, beyondTimeout, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false);
+    expect(result.sides.left).toBeNull();
+    expect(result.diagnostics.left.hardRejectionReason).toBe("elbow-inference-timeout");
+  });
+
+  // Phase 3E: đo trên webcam — giơ tay chào, khuỷu ra ngoài khung, suy đoán chạy vô thời hạn
+  // và prior pole trỏ vào trong thân → cẳng tay xuyên qua ngực. Nghiệm "đúng toán học" nhưng
+  // sai giải phẫu. Khuỷu người thật luôn lệch ra phía ngoài thân.
+  it("pushes an inferred elbow out of the torso even when the prior points inward", () => {
+    // Vai trái ở +X, nên phía ngoài thân của tay trái là +X. Cổ tay giơ cao (+Y).
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.5, .4); world[15] = lm(.3, .9);
+    world[14] = lm(-.5, .4); world[16] = lm(-.3, .9);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    // Prior VÀ mỏ neo đều trỏ vào trong thân (−X cho tay trái) — trường hợp xấu nhất.
+    const inwardHistory: ArmGeometryHistory = {
+      previousPole: { x: -1, y: 0, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+      calibratedLength: { upper: .5, lower: .5 }, inferenceStartedAtMs: 0, previousElbowDirection: { x: -1, y: 0, z: 0 },
+    };
+    const solved = solveAnatomicalArmFrames(world, image, profile, { left: inwardHistory, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+    expect(solved).not.toBeNull();
+    expect(solved.diagnostic.confidenceFlags).toContain("elbow-anatomy-flip");
+    // Khuỷu phải nằm về phía ngoài thân (x lớn hơn trung điểm vai), không lấn sang phía đối diện.
+    expect(solved.elbowPosition.x).toBeGreaterThan(0);
+    // Ràng buộc chiều dài xương vẫn tuyệt đối sau khi lật.
+    expect(solved.diagnostic.upperSegmentLength).toBeCloseTo(.5, 6);
+    expect(solved.diagnostic.lowerSegmentLength).toBeCloseTo(.5, 6);
+  });
+
+  it("leaves an already-outward inferred elbow untouched by the anatomy guard", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.5, .4); world[15] = lm(.3, .9);
+    world[14] = lm(-.5, .4); world[16] = lm(-.3, .9);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    const outwardHistory: ArmGeometryHistory = {
+      previousPole: { x: 1, y: 0, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+      calibratedLength: { upper: .5, lower: .5 }, inferenceStartedAtMs: 0, previousElbowDirection: { x: 1, y: 0, z: 0 },
+    };
+    const solved = solveAnatomicalArmFrames(world, image, profile, { left: outwardHistory, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+    expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-anatomy-flip");
+    expect(solved.elbowPosition.x).toBeGreaterThan(0);
+  });
+
+  it("does not anchor the bend side from a degenerate near-straight frame", () => {
+    // Mỏ neo phía gập chỉ được ghi khi mặt phẳng gập còn xác định. Tay gần duỗi thẳng thì
+    // hướng lệch khuỷu là nhiễu — ghi nó vào sẽ khóa nhầm phía cho các frame sau.
+    const straight = Array.from({ length: 33 }, () => lm(0, 0));
+    straight[11] = lm(0, 0); straight[13] = lm(1, .02); straight[15] = lm(2, 0);
+    straight[12] = lm(0, 0); straight[14] = lm(-1, .02); straight[16] = lm(-2, 0);
+    straight[23] = lm(.2, -1); straight[24] = lm(-.2, -1);
+    const straightSolved = solveAnatomicalArmFrames(straight, imageFrame(straight), profile, { left: emptyHistory(), right: emptyHistory() }, 0, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+    expect(straightSolved.diagnostic.bendPlaneQuality).toBeLessThan(DEFAULT_AVATAR_MOTION_CONFIG.armFrame.elbowInferenceMinimumBendQuality);
+    expect(straightSolved.elbowDirection).toBeNull();
+
+    // Tay gập rõ thì ngược lại: mỏ neo phải được ghi.
+    const bent = frame();
+    const bentSolved = solveAnatomicalArmFrames(bent, imageFrame(bent), profile, { left: emptyHistory(), right: emptyHistory() }, 0, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+    expect(bentSolved.elbowDirection).not.toBeNull();
+  });
+
   it("does not flicker the elbow segment when visibility oscillates around the old hard threshold", () => {
     // P0-4/5: trước đây `visibility < 0.5` reject ngay lập tức. visibility dao động
     // 0.47↔0.53 (đúng dải đo được khi tay bị che một phần ở webcam thật) từng làm cẳng tay
@@ -254,8 +387,13 @@ describe("three-point anatomical arm-frame solver", () => {
     const history: ArmGeometryHistory = { previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0, calibratedLength: { upper: 1, lower: 1 }, inferenceStartedAtMs: 0 };
     const unreachable = solveAnatomicalArmFrames(world, image, profile, { left: history, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false);
     expect(unreachable.sides.left).toBeNull(); expect(unreachable.diagnostics.left.hardRejectionReason).toBe("elbow-inference-unreachable");
-    world[15] = lm(1, 1); const expired = solveAnatomicalArmFrames(world, imageFrame(world).map((p, index) => index === 13 ? { ...p, visibility: 0 } : p), profile, { left: history, right: emptyHistory() }, 1_300, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false);
-    expect(expired.sides.left).toBeNull(); expect(expired.diagnostics.left.hardRejectionReason).toBe("elbow-inference-timeout");
+    // Phase 3E: timeout chỉ áp dụng khi chiều dài xương CHƯA đến từ quan sát thật (sai số có
+    // tích luỹ) — xem test "still times out an inference that never had observed bone lengths".
+    // Với calibration quan sát + cổ tay tươi, suy đoán được phép chạy tiếp; ở đây `frame()` có
+    // hai vai trùng điểm nên không dựng nổi prior giải phẫu và bị chặn từ bước sớm hơn.
+    const uncalibrated: ArmGeometryHistory = { ...history, calibratedLength: { upper: null, lower: null } };
+    world[15] = lm(1, 1); const expired = solveAnatomicalArmFrames(world, imageFrame(world).map((p, index) => index === 13 ? { ...p, visibility: 0 } : p), profile, { left: uncalibrated, right: emptyHistory() }, 1_300, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false);
+    expect(expired.sides.left).toBeNull(); expect(expired.diagnostics.left.hardRejectionReason).toBe("elbow-inference-uncalibrated");
   });
   it("rejects a pole angular outlier even when no other confidence flag is raised", () => {
     // Tracking sạch (không near-edge/depth-degenerate/weak-offset) nhưng pole nhảy ~180° trong
