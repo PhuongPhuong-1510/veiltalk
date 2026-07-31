@@ -898,11 +898,15 @@ describe("AvatarMotionProcessor", () => {
     processor.process(sample(100, false)); now = 150; processor.process(sample(150, true));
     expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" }); expect(processor.getLastDiagnostics()?.arms.left.observation.lowerRejectionReason).toBe("wrist-outside-frame");
     now = 260; processor.process(sample(260, true)); expect(processor.getLastDiagnostics()?.arms.left.lossState).toBe("held"); expect(processor.getLastDiagnostics()?.arms.right.lossState).toBe("active");
-    now = 300; processor.process(sample(300, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "held", lower: "held" });
-    now = 400; processor.process(sample(400, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "recovering", lower: "recovering" });
+    // Phase 3E: chỉ cổ tay trái ra ngoài khung; vai/khuỷu vẫn rõ nên upper không rời "active".
+    now = 300; processor.process(sample(300, false));
+    expect(processor.getLastDiagnostics()?.arms.left.segmentLossState.upper).toBe("active");
+    now = 400; processor.process(sample(400, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState.lower).toBe("recovering");
     now = 600; processor.process(sample(600, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" });
   });
-  it("keeps the complete arm chain coherent when a wrist is partially occluded", () => {
+  // Phase 3E: mất RIÊNG cổ tay không được giết cánh tay trên. Upper phải tiếp tục bám
+  // vai→khuỷu, lower giữ parent-local delta (khối cứng theo upper) rồi mới return riêng.
+  it("keeps the upper arm tracking while only the wrist is occluded", () => {
     const cases = [
       { side: "left", elbowIndex: 13, wristIndex: 15, upperName: "leftUpperArm", lowerName: "leftLowerArm" },
       { side: "right", elbowIndex: 14, wristIndex: 16, upperName: "rightUpperArm", lowerName: "rightLowerArm" },
@@ -921,18 +925,54 @@ describe("AvatarMotionProcessor", () => {
       };
 
       now = 150;
-      const held = processor.process(partial(150, -.5));
-      expect(held.jointRotations[current.upperName]).toEqual(initialPacket.jointRotations[current.upperName]);
-      expect(held.jointRotations[current.lowerName]).toEqual(initialPacket.jointRotations[current.lowerName]);
+      const partialPacket = processor.process(partial(150, -.5));
+      // Khuỷu đã di chuyển thật → upper phải đi theo, KHÔNG được đứng im như trước.
+      expect(partialPacket.jointRotations[current.upperName]).not.toEqual(initialPacket.jointRotations[current.upperName]);
+      // Lower mất nghiệm hình học → giữ nguyên parent-local delta của lần cuối hợp lệ.
+      expect(partialPacket.jointRotations[current.lowerName]).toEqual(initialPacket.jointRotations[current.lowerName]);
       expect(processor.getLastDiagnostics()?.arms[current.side].segmentLossState).toEqual({ upper: "active", lower: "active" });
 
+      // Che lâu: chỉ lower đi vào return; upper vẫn bám người thật.
       now = 450;
       processor.process(partial(450, -.8));
-      expect(processor.getLastDiagnostics()?.arms[current.side].segmentLossState).toEqual({ upper: "returning", lower: "returning" });
+      const lateState = processor.getLastDiagnostics()?.arms[current.side].segmentLossState;
+      expect(lateState?.upper).toBe("active");
+      expect(lateState?.lower).toBe("returning");
     }
   });
 
-  it("requires a stable wrist reacquire before blending the complete arm chain", () => {
+  // Chống tái phát lỗi "forearm quét ngang mặt": trong hold window, lower phải giữ nguyên
+  // parent-local delta kể cả khi upper liên tục đổi hướng. Giữ local delta cố định nghĩa là
+  // cẳng tay xoay theo cánh tay trên như một khối cứng, không tự quét sang hướng khác.
+  it("freezes the lower-arm local delta while the upper arm keeps moving during wrist occlusion", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    processor.process(sampledFrame(100));
+    const partial = (timestamp: number, elbowY: number) => {
+      const value = sampledFrame(timestamp);
+      value.pose.worldLandmarks![13].y = elbowY;
+      value.pose.landmarks![13].y = .5 + elbowY * .4;
+      value.pose.landmarks![15].x = 1.2;
+      return value;
+    };
+
+    now = 150; const first = processor.process(partial(150, -.3));
+    now = 200; const second = processor.process(partial(200, -.6));
+    now = 250; const third = processor.process(partial(250, -.9));
+
+    // Upper đổi mỗi frame theo khuỷu quan sát được.
+    expect(second.jointRotations.leftUpperArm).not.toEqual(first.jointRotations.leftUpperArm);
+    expect(third.jointRotations.leftUpperArm).not.toEqual(second.jointRotations.leftUpperArm);
+    // Lower local delta bất biến suốt hold window.
+    expect(second.jointRotations.leftLowerArm).toEqual(first.jointRotations.leftLowerArm);
+    expect(third.jointRotations.leftLowerArm).toEqual(first.jointRotations.leftLowerArm);
+  });
+
+  // Phase 3E: cổ tay bị che rồi quay lại. Upper không bao giờ rời "active" (vai/khuỷu luôn
+  // rõ trong kịch bản này); chỉ lower đi qua held → recovering → active và phải blend chứ
+  // không snap khi wrist trở lại.
+  it("blends the lower arm back without snapping when the wrist is reacquired", () => {
     let now = 100;
     const processor = new AvatarMotionProcessor({ filtered: false, now: () => now });
     processor.setRigProfile(rigProfile);
@@ -945,21 +985,18 @@ describe("AvatarMotionProcessor", () => {
 
     now = 150; processor.process(occluded(150));
     now = 250; const held = processor.process(occluded(250));
-    expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "held", lower: "held" });
+    const heldState = processor.getLastDiagnostics()?.arms.left.segmentLossState;
+    expect(heldState?.upper).toBe("active");
+    expect(heldState?.lower).toBe("held");
 
+    // Wrist quay lại: lower không được snap thẳng sang target quan sát.
     now = 280; const firstValid = processor.process(sampledFrame(280));
-    expect(firstValid.jointRotations.leftUpperArm).toEqual(held.jointRotations.leftUpperArm);
-    expect(firstValid.jointRotations.leftLowerArm).toEqual(held.jointRotations.leftLowerArm);
-    now = 320; processor.process(sampledFrame(320));
-    expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "held", lower: "held" });
-
-    now = 370; const recoveryStart = processor.process(sampledFrame(370));
-    for (const name of ["leftUpperArm", "leftLowerArm"] as const) {
-      for (const key of ["x", "y", "z", "w"] as const) {
-        expect(recoveryStart.jointRotations[name]![key]).toBeCloseTo(held.jointRotations[name]![key], 12);
-      }
+    for (const key of ["x", "y", "z", "w"] as const) {
+      expect(firstValid.jointRotations.leftLowerArm![key]).toBeCloseTo(held.jointRotations.leftLowerArm![key], 12);
     }
-    expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "recovering", lower: "recovering" });
+
+    now = 370; processor.process(sampledFrame(370));
+    expect(processor.getLastDiagnostics()?.arms.left.segmentLossState.lower).toBe("recovering");
 
     now = 570; processor.process(sampledFrame(570));
     expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" });

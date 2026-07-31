@@ -135,6 +135,20 @@ export default function AvatarRendererDevHarness() {
         <p>Pose inference: {number(trackingMetrics?.inferenceTimeMs.pose.average)}ms trung bình · p95 {number(trackingMetrics?.inferenceTimeMs.pose.p95)}ms · max {number(trackingMetrics?.inferenceTimeMs.pose.max)}ms</p></article>
       <article><h2>Capability</h2>{modelLoading && <p>Đang tải model mới; model hiện tại vẫn được giữ cho tới khi swap thành công.</p>}{capability ? <pre>{JSON.stringify(capability, null, 2)}</pre> : !modelLoading && <p>Chưa có model sẵn sàng.</p>}</article>
       <article><h2>Tracking state</h2>{packet && Object.entries(packet.tracking).map(([name, state]) => <p key={name}>{name}: {state.sourceState} → {state.outputState}</p>)}</article>
+      <article><h2>Phase 3E partial-arm</h2>
+        {(["left", "right"] as const).map((side) => {
+          const arm = motionDiagnostics?.arms[side];
+          if (!arm) return <p key={side}>{side}: —</p>;
+          const flag = (name: string) => arm.confidenceFlags.includes(name);
+          return <p key={side}>
+            <strong>{side}</strong>: upper <em>{arm.segmentLossState.upper}</em> · lower <em>{arm.segmentLossState.lower}</em><br />
+            elbow {arm.elbowInference.source} · pole {arm.poleSource}
+            {flag("elbow-side-flip-prevented") && <> · <strong>side-flip chặn</strong></>}
+            {arm.hardRejectionReason && <> · reject {arm.hardRejectionReason}</>}
+            {arm.observation.lowerRejectionReason && <> · lower {arm.observation.lowerRejectionReason}</>}
+          </p>;
+        })}
+      </article>
       <article><h2>Phase 3A arm-frame</h2><p>Head: legacy/unverified, excluded from arm acceptance.</p><pre>{JSON.stringify(motionDiagnostics, null, 2)}</pre></article>
     </section>
   </main>;

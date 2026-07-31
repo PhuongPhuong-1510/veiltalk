@@ -266,9 +266,23 @@ Các TC này được đo chi tiết trong Performance Test Report. Dưới đâ
 ## 6. P4-T10 — Quy trình kiểm thử Avatar Retargeting
 
 Trạng thái Phase 3B và acceptance gate chi tiết nằm tại
-`docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`. Automated PASS không thay thế webcam
-acceptance; tính đến 2026-07-29, Phase 3B vẫn **IN PROGRESS** vì chiều pronation/supination tay
-phải còn sai trên webcam.
+`docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`; Phase 3E partial arm tracking tại
+`docs/P4_T10_PHASE3E_PARTIAL_ARM_ACCEPTANCE_REPORT.md`. Automated PASS **không thay thế** webcam
+acceptance — Phase 3E là ví dụ trực tiếp: 390/390 automated PASS nhưng webcam vẫn lộ hai lỗi
+(tay rơi sau 1.2 s do inference timeout, rồi cẳng tay xuyên thân) mà không test tự động nào bắt
+được. Tính đến 2026-08-01, Phase 3B và Phase 3E đều đã nghiệm thu webcam.
+
+### 6.0. Manual webcam gate — Phase 3E partial arm
+
+| Kịch bản | Kỳ vọng |
+|---|---|
+| Che bàn tay, giữ vai + khuỷu rõ | Upper bám người thật; cẳng tay giữ góc gập, xoay theo upper như khối cứng; không duỗi thẳng, không quét ngang mặt |
+| Che bàn tay kéo dài | Chỉ lower `returning`; upper vẫn `active` |
+| Giơ tay chào (khuỷu ngoài khung), giữ > 2 giây | Tay giữ tư thế giơ, không rơi xuống; panel hiện `elbow-inference-sustained` |
+| Giơ tay chào — kiểm tra xuyên thân | Cẳng tay nằm ngoài thân; có thể thấy flag `elbow-anatomy-flip` |
+| Buông tay ra ngoài khung (mất cả khuỷu lẫn cổ tay) | Reject `missing-elbow-and-wrist` và giữ tư thế — đây là hành vi đúng, không phải lỗi |
+
+Đọc trạng thái tại panel **Phase 3E partial-arm** trong DEV harness `/dev/avatar-renderer`.
 
 ### 6.1. Automated gates
 

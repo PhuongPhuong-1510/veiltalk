@@ -12,13 +12,20 @@ import { inverseQuaternion, multiplyQuaternions, quaternionFromBasis, rotateVect
 export type GeometryDiagnostic = Omit<ArmFrameDiagnostic, "lossState" | "transitionProgress" | "invalidDurationMs" | "validRecoveryDurationMs" | "sampleDisposition" | "segmentLossState" | "upperArmAngularDeltaDeg" | "lowerArmAngularDeltaDeg" | "poleAngularDeltaDeg" | "poleSourceChanged" | "trackingReacquired">;
 export interface ArmGeometryHistory { previousPole: Vector3Data | null; previousPoleWasFresh: boolean; previousDepthDegenerate: boolean; lastValidPoleAtMs: number | null; previousPrimary?: { upper: Vector3Data | null; lower: Vector3Data | null }; previousSecondary?: { upper: Vector3Data | null; lower: Vector3Data | null }; calibratedLength?: { upper: number | null; lower: number | null }; previousObservedElbow?: Vector3Data | null; inferenceStartedAtMs?: number | null;
   /** P0-4/5: trạng thái hysteresis theo landmark, để quyết định "quan sát được" không dao động quanh một ngưỡng duy nhất. */
-  elbowWasVisible?: boolean; wristWasVisible?: boolean }
+  elbowWasVisible?: boolean; wristWasVisible?: boolean;
+  /**
+   * Phase 3E: hướng khuỷu lệch khỏi trục vai–cổ tay ở lần solve gần nhất (đã normalize, vuông
+   * góc trục). Dùng để khóa phía gập khi suy đoán khuỷu, chống nghiệm lật qua thân người.
+   */
+  previousElbowDirection?: Vector3Data | null }
 export interface SideArmGeometryResult {
   deltas: ArmDeltaOutput; targetWorldRotations: Partial<Record<ControlledArmJoint, QuaternionData>>;
   acceptedPole: Vector3Data; poleSource: PoleSource; acceptedFreshPole: boolean; depthDegenerate: boolean; diagnostic: GeometryDiagnostic;
   segmentValidity: { upper: boolean; lower: boolean };
   primary: { upper: Vector3Data; lower: Vector3Data | null }; secondary: { upper: Vector3Data; lower: Vector3Data | null };
   elbowSource: ElbowSource; elbowPosition: Vector3Data; observedLengths: { upper: number; lower: number } | null;
+  /** Phase 3E: hướng khuỷu lệch trục vai–cổ tay của frame này, để frame sau khóa phía gập. */
+  elbowDirection: Vector3Data | null;
 }
 export interface AnatomicalArmSolveResult { torso: TorsoBasis; torsoWasObserved: boolean; sides: Record<ArmSide, SideArmGeometryResult | null>; diagnostics: Record<ArmSide, GeometryDiagnostic>;
   /** P0-4/5: trạng thái hysteresis mới nhất, để caller lưu vào history cho frame sau. */
@@ -116,7 +123,16 @@ function handPalmPole(wrist: Vector3, index: RawNormalizedLandmarkV1 | undefined
   return { pole: vectorData(projected.normalize()), rejectionReason: null };
 }
 
-function inferElbow(shoulder: Vector3, wrist: Vector3, upperLength: number, lowerLength: number, prior: Vector3Data, reachSlackRatio: number): { elbow: Vector3; reachRatio: number; confidence: number } | null {
+/**
+ * Two-bone IK dạng nghiệm đóng: biết vai, cổ tay và hai chiều dài xương, khuỷu nằm trên một
+ * đường tròn giao của hai mặt cầu. `prior` chọn điểm nào trên đường tròn đó — tức chọn PHÍA gập.
+ *
+ * Phase 3E: `previousElbowDirection` (hướng khuỷu→trục vai-cổ tay của lần suy đoán/quan sát gần
+ * nhất, đã chiếu vuông góc trục) dùng để khóa phía gập. Nếu nghiệm mới rơi sang nửa mặt phẳng
+ * đối diện, lật pole lại. Không có nó, prior đảo dấu một frame là khuỷu nhảy qua thân người —
+ * đo được chính xác hiện tượng này trên tay gần duỗi thẳng.
+ */
+function inferElbow(shoulder: Vector3, wrist: Vector3, upperLength: number, lowerLength: number, prior: Vector3Data, reachSlackRatio: number, previousElbowDirection: Vector3Data | null, lateralOutward: Vector3 | null, minimumLateralBias: number): { elbow: Vector3; reachRatio: number; confidence: number; elbowDirection: Vector3Data; sideFlipPrevented: boolean; anatomyFlipApplied: boolean } | null {
   const shoulderToWrist = wrist.clone().sub(shoulder), distance = shoulderToWrist.length(); if (!Number.isFinite(distance) || distance < 1e-6) return null;
   const minimumReach = Math.abs(upperLength - lowerLength), maximumReach = upperLength + lowerLength, slack = maximumReach * reachSlackRatio;
   if (distance < minimumReach - slack || distance > maximumReach + slack) return null;
@@ -124,9 +140,27 @@ function inferElbow(shoulder: Vector3, wrist: Vector3, upperLength: number, lowe
   const x = (upperLength * upperLength - lowerLength * lowerLength + clampedDistance * clampedDistance) / (2 * clampedDistance);
   const radiusSquared = upperLength * upperLength - x * x; if (radiusSquared < -1e-6) return null;
   const pole = vector(prior).addScaledVector(axis, -vector(prior).dot(axis)); if (pole.lengthSq() < 1e-8) return null; pole.normalize();
+  // Khóa phía gập theo lần trước. Chiếu hướng cũ lên cùng mặt phẳng vuông góc trục hiện tại
+  // rồi so dấu; đối phía thì lật pole thay vì chấp nhận nghiệm nhảy ngang.
+  let sideFlipPrevented = false;
+  if (previousElbowDirection) {
+    const previous = vector(previousElbowDirection);
+    previous.addScaledVector(axis, -previous.dot(axis));
+    if (previous.lengthSq() > 1e-8 && pole.dot(previous.normalize()) < 0) { pole.negate(); sideFlipPrevented = true; }
+  }
+  // Ràng buộc giải phẫu — THẮNG mỏ neo lịch sử. Mỏ neo giữ nghiệm ổn định nhưng không biết
+  // phía nó khóa vào có hợp lý với cơ thể người hay không: mỏ neo ghi ở tư thế cũ, rồi người
+  // dùng giơ tay lên, nó trỏ thẳng vào trong thân. Khuỷu người thật luôn lệch ra ngoài, nên
+  // nghiệm lấn vào trong thân bị lật ra bất kể prior và mỏ neo nói gì.
+  let anatomyFlipApplied = false;
+  if (lateralOutward) {
+    const outward = lateralOutward.clone();
+    outward.addScaledVector(axis, -outward.dot(axis));
+    if (outward.lengthSq() > 1e-8 && pole.dot(outward.normalize()) < minimumLateralBias) { pole.negate(); anatomyFlipApplied = true; sideFlipPrevented = false; }
+  }
   const center = shoulder.clone().addScaledVector(axis, x); const elbow = center.addScaledVector(pole, Math.sqrt(Math.max(0, radiusSquared)));
   const reachRatio = distance / maximumReach; const violation = distance < minimumReach ? minimumReach - distance : distance > maximumReach ? distance - maximumReach : 0;
-  return { elbow, reachRatio, confidence: Math.max(0, 1 - violation / Math.max(1e-6, slack)) };
+  return { elbow, reachRatio, confidence: Math.max(0, 1 - violation / Math.max(1e-6, slack)), elbowDirection: vectorData(pole), sideFlipPrevented, anatomyFlipApplied };
 }
 
 function targetBoneWorld(primary: Vector3, pole: Vector3, rest: NormalizedAvatarRigProfile["joints"][ControlledArmJoint]): QuaternionData | null {
@@ -162,6 +196,9 @@ function solveSide(
   else {
     if (!wrist) return reject("missing-elbow-and-wrist", flags);
     let upperCalibration = history.calibratedLength?.upper, lowerCalibration = history.calibratedLength?.lower;
+    // Chiều dài đến từ quan sát thật hay chỉ là prior giải phẫu? Quyết định việc suy đoán có
+    // được phép chạy vô thời hạn hay không (xem elbowInferenceUnboundedWhenFullyObserved).
+    const calibrationFromObservation = Boolean(upperCalibration && lowerCalibration);
     if (!upperCalibration || !lowerCalibration) {
       // P0-3: chưa calibrated không còn nghĩa là "không thể infer". Dùng prior giải phẫu
       // scale theo bề rộng vai quan sát được ngay frame này, để elbow-inference chạy được
@@ -172,13 +209,35 @@ function solveSide(
       const prior = boneLengthPrior(shoulderWidth);
       upperCalibration = prior.upper; lowerCalibration = prior.lower;
     }
-    if (inferenceDurationMs > config.elbowInferenceTimeoutMs) return reject("elbow-inference-timeout", flags);
-    const prior = history.previousPole ?? history.previousSecondary?.upper ?? profile.joints[i.upper].anatomicalRestBasis.secondaryWorld;
-    const inferred = inferElbow(shoulder, wrist, upperCalibration, lowerCalibration, prior, config.elbowInferenceReachSlackRatio);
+    // Phase 3E: miễn timeout khi nghiệm hình học đầy đủ và tươi — vai + cổ tay quan sát ngay
+    // frame này, chiều dài xương từ quan sát thật. Khuỷu bị khung hình cắt (giơ tay chào) không
+    // bao giờ quan sát lại được, nên đồng hồ inference chạy mãi và làm tay rơi xuống giữa lúc
+    // người dùng vẫn đang giơ. Không có dữ liệu cũ nào tham gia thì không có sai số tích luỹ.
+    const fullyObservedInference = config.elbowInferenceUnboundedWhenFullyObserved && calibrationFromObservation && wristValid;
+    if (!fullyObservedInference && inferenceDurationMs > config.elbowInferenceTimeoutMs) return reject("elbow-inference-timeout", flags);
+    if (fullyObservedInference && inferenceDurationMs > config.elbowInferenceTimeoutMs) flags.push("elbow-inference-sustained");
+    // Phase 3E: prior pole phải còn hạn. Trước đây `previousPole` được dùng bất kể tuổi, trong
+    // khi tầng chọn pole của khung xương đã bỏ nó sau `poleFallbackTimeoutMs` — khuỷu suy đoán
+    // và khung xương chạy trên hai pole khác nhau. Quá hạn thì lùi về rest prior có kiểm soát.
+    const poleAgeMs = history.lastValidPoleAtMs === null || history.lastValidPoleAtMs === undefined ? null : nowMs - history.lastValidPoleAtMs;
+    const historyPoleUsable = Boolean(history.previousPole) && (poleAgeMs === null || poleAgeMs <= config.elbowInferencePoleMaxAgeMs);
+    const historyPrior = historyPoleUsable ? history.previousPole : null;
+    const prior = historyPrior ?? history.previousSecondary?.upper ?? profile.joints[i.upper].anatomicalRestBasis.secondaryWorld;
+    // `torso.right` trỏ từ vai phải sang vai trái (xem buildTorsoBasis). Phía ngoài thân của
+    // tay trái là +right, của tay phải là −right. Không có torso quan sát được thì bỏ qua ràng
+    // buộc thay vì đoán bừa hướng.
+    const lateralOutward = torso ? vector(torso.right).multiplyScalar(side === "left" ? 1 : -1) : null;
+    const inferred = inferElbow(shoulder, wrist, upperCalibration, lowerCalibration, prior, config.elbowInferenceReachSlackRatio, history.previousElbowDirection ?? null, lateralOutward, config.elbowInferenceMinimumLateralBias);
     if (!inferred) return reject("elbow-inference-unreachable", flags);
     elbow = inferred.elbow; inferredPosition = vectorData(elbow); reachRatio = inferred.reachRatio;
-    inferenceConfidence = inferred.confidence * Math.max(0, 1 - inferenceDurationMs / config.elbowInferenceTimeoutMs);
-    elbowSource = history.previousPole || history.previousSecondary?.upper ? "inferred-history" : "inferred-rest-prior"; flags.push("inferred-elbow");
+    if (inferred.sideFlipPrevented) flags.push("elbow-side-flip-prevented");
+    if (inferred.anatomyFlipApplied) flags.push("elbow-anatomy-flip");
+    // Confidence chỉ suy giảm theo thời gian khi suy đoán đang phải dựa vào dữ liệu cũ. Ở chế
+    // độ fully-observed, nghiệm tươi mỗi frame nên giữ nguyên confidence hình học.
+    inferenceConfidence = fullyObservedInference
+      ? inferred.confidence
+      : inferred.confidence * Math.max(0, 1 - inferenceDurationMs / config.elbowInferenceTimeoutMs);
+    elbowSource = historyPrior || history.previousSecondary?.upper ? "inferred-history" : "inferred-rest-prior"; flags.push("inferred-elbow");
   }
   let upper = elbow.clone().sub(shoulder), lower = wrist?.clone().sub(elbow) ?? null; const upperLength = upper.length(), lowerLength = lower?.length() ?? null; const armAxis = wrist?.clone().sub(shoulder) ?? upper.clone();
   if (!Number.isFinite(upperLength) || upperLength < config.minimumSegmentLength) return reject("invalid-upper-segment", flags);
@@ -189,6 +248,8 @@ function solveSide(
   if (directionFilter) { upper = vector(directionFilter(i.upper, vectorData(upper))).normalize(); if (lowerDirectionValid) lower = vector(directionFilter(i.lower, vectorData(lower!))).normalize(); }
   const shoulderToElbow = elbow.clone().sub(shoulder); const elbowOffset = shoulderToElbow.clone().addScaledVector(armAxis, -shoulderToElbow.dot(armAxis));
   const elbowOffsetMagnitude = elbowOffset.length(); const normalizedElbowOffset = lowerDirectionValid ? elbowOffsetMagnitude / (upperLength + lowerLength!) : 0;
+  // Phase 3E: chụp hướng lệch TRƯỚC khi `elbowOffset` bị normalize in-place ở bước chọn pole.
+  const elbowOffsetDirection = elbowOffsetMagnitude > 1e-4 ? vectorData(elbowOffset.clone().normalize()) : null;
   const depthAlignment = Math.abs(armAxis.z); const depthThreshold = history.previousDepthDegenerate ? config.depthDegenerateExitAlignment : config.depthDegenerateEnterAlignment;
   const depthDegenerate = depthAlignment >= depthThreshold; if (depthDegenerate) flags.push("depth-degenerate");
   // A1: chất lượng liên tục, tách theo nguồn suy biến — chỉ ghi vào diagnostic ở bước này,
@@ -297,7 +358,11 @@ function solveSide(
       calibratedUpperLength: history.calibratedLength?.upper ?? null, calibratedLowerLength: history.calibratedLength?.lower ?? null,
       shoulderWristDistance: wrist ? shoulder.distanceTo(wrist) : null, reachRatio,
       distanceFromPreviousElbow: history.previousObservedElbow ? elbow.distanceTo(vector(history.previousObservedElbow)) : null } };
-  return { result: { deltas, targetWorldRotations, acceptedPole: projectedPole, poleSource, acceptedFreshPole: poleSource === "fresh", depthDegenerate, diagnostic,
+  // Phase 3E: hướng khuỷu lệch trục vai–cổ tay, dùng làm mỏ neo phía gập cho frame sau. Chỉ
+  // ghi khi mặt phẳng gập còn đủ xác định (tay chưa gần duỗi thẳng); dưới ngưỡng đó hướng này
+  // là nhiễu và sẽ khóa nhầm phía. Giữ null để caller tiếp tục dùng mỏ neo cũ.
+  const elbowDirection = bendPlaneQuality >= config.elbowInferenceMinimumBendQuality ? elbowOffsetDirection : null;
+  return { result: { deltas, targetWorldRotations, acceptedPole: projectedPole, poleSource, acceptedFreshPole: poleSource === "fresh", depthDegenerate, diagnostic, elbowDirection,
     segmentValidity: { upper: true, lower: lowerDirectionValid }, primary: { upper: vectorData(upper), lower: lowerDirectionValid ? vectorData(lower!) : null },
     secondary: { upper: upperSecondary, lower: lowerDirectionValid ? lowerSecondary : null }, elbowSource, elbowPosition: vectorData(elbow),
     observedLengths: elbowObserved && lowerDirectionValid ? { upper: upperLength, lower: lowerLength! } : null }, diagnostic, visibilityState };
