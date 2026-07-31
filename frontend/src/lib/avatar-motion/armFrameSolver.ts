@@ -14,7 +14,7 @@ export interface ArmGeometryHistory { previousPole: Vector3Data | null; previous
   /** P0-4/5: trạng thái hysteresis theo landmark, để quyết định "quan sát được" không dao động quanh một ngưỡng duy nhất. */
   elbowWasVisible?: boolean; wristWasVisible?: boolean;
   /**
-   * Phase 3E: hướng khuỷu lệch khỏi trục vai–cổ tay ở lần solve gần nhất (đã normalize, vuông
+   * Phase 3B partial-arm: hướng khuỷu lệch khỏi trục vai–cổ tay ở lần solve gần nhất (đã normalize, vuông
    * góc trục). Dùng để khóa phía gập khi suy đoán khuỷu, chống nghiệm lật qua thân người.
    */
   previousElbowDirection?: Vector3Data | null }
@@ -24,7 +24,7 @@ export interface SideArmGeometryResult {
   segmentValidity: { upper: boolean; lower: boolean };
   primary: { upper: Vector3Data; lower: Vector3Data | null }; secondary: { upper: Vector3Data; lower: Vector3Data | null };
   elbowSource: ElbowSource; elbowPosition: Vector3Data; observedLengths: { upper: number; lower: number } | null;
-  /** Phase 3E: hướng khuỷu lệch trục vai–cổ tay của frame này, để frame sau khóa phía gập. */
+  /** Phase 3B partial-arm: hướng khuỷu lệch trục vai–cổ tay của frame này, để frame sau khóa phía gập. */
   elbowDirection: Vector3Data | null;
 }
 export interface AnatomicalArmSolveResult { torso: TorsoBasis; torsoWasObserved: boolean; sides: Record<ArmSide, SideArmGeometryResult | null>; diagnostics: Record<ArmSide, GeometryDiagnostic>;
@@ -127,7 +127,7 @@ function handPalmPole(wrist: Vector3, index: RawNormalizedLandmarkV1 | undefined
  * Two-bone IK dạng nghiệm đóng: biết vai, cổ tay và hai chiều dài xương, khuỷu nằm trên một
  * đường tròn giao của hai mặt cầu. `prior` chọn điểm nào trên đường tròn đó — tức chọn PHÍA gập.
  *
- * Phase 3E: `previousElbowDirection` (hướng khuỷu→trục vai-cổ tay của lần suy đoán/quan sát gần
+ * Phase 3B partial-arm: `previousElbowDirection` (hướng khuỷu→trục vai-cổ tay của lần suy đoán/quan sát gần
  * nhất, đã chiếu vuông góc trục) dùng để khóa phía gập. Nếu nghiệm mới rơi sang nửa mặt phẳng
  * đối diện, lật pole lại. Không có nó, prior đảo dấu một frame là khuỷu nhảy qua thân người —
  * đo được chính xác hiện tượng này trên tay gần duỗi thẳng.
@@ -209,14 +209,14 @@ function solveSide(
       const prior = boneLengthPrior(shoulderWidth);
       upperCalibration = prior.upper; lowerCalibration = prior.lower;
     }
-    // Phase 3E: miễn timeout khi nghiệm hình học đầy đủ và tươi — vai + cổ tay quan sát ngay
+    // Phase 3B partial-arm: miễn timeout khi nghiệm hình học đầy đủ và tươi — vai + cổ tay quan sát ngay
     // frame này, chiều dài xương từ quan sát thật. Khuỷu bị khung hình cắt (giơ tay chào) không
     // bao giờ quan sát lại được, nên đồng hồ inference chạy mãi và làm tay rơi xuống giữa lúc
     // người dùng vẫn đang giơ. Không có dữ liệu cũ nào tham gia thì không có sai số tích luỹ.
     const fullyObservedInference = config.elbowInferenceUnboundedWhenFullyObserved && calibrationFromObservation && wristValid;
     if (!fullyObservedInference && inferenceDurationMs > config.elbowInferenceTimeoutMs) return reject("elbow-inference-timeout", flags);
     if (fullyObservedInference && inferenceDurationMs > config.elbowInferenceTimeoutMs) flags.push("elbow-inference-sustained");
-    // Phase 3E: prior pole phải còn hạn. Trước đây `previousPole` được dùng bất kể tuổi, trong
+    // Phase 3B partial-arm: prior pole phải còn hạn. Trước đây `previousPole` được dùng bất kể tuổi, trong
     // khi tầng chọn pole của khung xương đã bỏ nó sau `poleFallbackTimeoutMs` — khuỷu suy đoán
     // và khung xương chạy trên hai pole khác nhau. Quá hạn thì lùi về rest prior có kiểm soát.
     const poleAgeMs = history.lastValidPoleAtMs === null || history.lastValidPoleAtMs === undefined ? null : nowMs - history.lastValidPoleAtMs;
@@ -248,7 +248,7 @@ function solveSide(
   if (directionFilter) { upper = vector(directionFilter(i.upper, vectorData(upper))).normalize(); if (lowerDirectionValid) lower = vector(directionFilter(i.lower, vectorData(lower!))).normalize(); }
   const shoulderToElbow = elbow.clone().sub(shoulder); const elbowOffset = shoulderToElbow.clone().addScaledVector(armAxis, -shoulderToElbow.dot(armAxis));
   const elbowOffsetMagnitude = elbowOffset.length(); const normalizedElbowOffset = lowerDirectionValid ? elbowOffsetMagnitude / (upperLength + lowerLength!) : 0;
-  // Phase 3E: chụp hướng lệch TRƯỚC khi `elbowOffset` bị normalize in-place ở bước chọn pole.
+  // Phase 3B partial-arm: chụp hướng lệch TRƯỚC khi `elbowOffset` bị normalize in-place ở bước chọn pole.
   const elbowOffsetDirection = elbowOffsetMagnitude > 1e-4 ? vectorData(elbowOffset.clone().normalize()) : null;
   const depthAlignment = Math.abs(armAxis.z); const depthThreshold = history.previousDepthDegenerate ? config.depthDegenerateExitAlignment : config.depthDegenerateEnterAlignment;
   const depthDegenerate = depthAlignment >= depthThreshold; if (depthDegenerate) flags.push("depth-degenerate");
@@ -358,7 +358,7 @@ function solveSide(
       calibratedUpperLength: history.calibratedLength?.upper ?? null, calibratedLowerLength: history.calibratedLength?.lower ?? null,
       shoulderWristDistance: wrist ? shoulder.distanceTo(wrist) : null, reachRatio,
       distanceFromPreviousElbow: history.previousObservedElbow ? elbow.distanceTo(vector(history.previousObservedElbow)) : null } };
-  // Phase 3E: hướng khuỷu lệch trục vai–cổ tay, dùng làm mỏ neo phía gập cho frame sau. Chỉ
+  // Phase 3B partial-arm: hướng khuỷu lệch trục vai–cổ tay, dùng làm mỏ neo phía gập cho frame sau. Chỉ
   // ghi khi mặt phẳng gập còn đủ xác định (tay chưa gần duỗi thẳng); dưới ngưỡng đó hướng này
   // là nhiễu và sẽ khóa nhầm phía. Giữ null để caller tiếp tục dùng mỏ neo cũ.
   const elbowDirection = bendPlaneQuality >= config.elbowInferenceMinimumBendQuality ? elbowOffsetDirection : null;

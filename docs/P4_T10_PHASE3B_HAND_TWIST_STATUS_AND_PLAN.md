@@ -4,10 +4,10 @@
 > Automated gate gần nhất: **386/386 test PASS**, TypeScript, lint và Vite build sạch.
 > Runtime vẫn giữ setter để regression test có thể kiểm tra Pose-only, nhưng production và DEV harness bật Hand Twist mặc định.
 >
-> ⚠️ **Đã bị thay thế một phần bởi Phase 3E.** Invariant "upper/lower là một chain, cùng
-> hold/return" mô tả ở mục 111/124 **không còn đúng**: Phase 3E cho hai đoạn nghiệm thu độc lập
+> ⚠️ **Đã bị thay thế một phần bởi bản sửa occlusion trong chính Phase 3B.** Invariant "upper/lower là một chain, cùng
+> hold/return" mô tả ở mục 111/124 **không còn đúng**: bản sửa occlusion cho hai đoạn nghiệm thu độc lập
 > vì hold lưu parent-local delta nên lower xoay theo upper như khối cứng, không quét ngang mặt.
-> Hành vi hiện hành: `docs/P4_T10_PHASE3E_PARTIAL_ARM_ACCEPTANCE_REPORT.md`.
+> Hành vi hiện hành: `docs/P4_T10_PHASE3B_PARTIAL_ARM_ACCEPTANCE_REPORT.md`.
 
 ## 1. Phase 3B làm gì?
 

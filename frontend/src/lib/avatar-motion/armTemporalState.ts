@@ -46,7 +46,7 @@ export interface ArmTemporalState {
   lengthSamples: { upper: number[]; lower: number[] };
   calibratedLength: { upper: number | null; lower: number | null };
   previousObservedElbow: { x: number; y: number; z: number } | null;
-  /** Phase 3E: mỏ neo phía gập khuỷu, giữ qua các frame để elbow inference không lật phía. */
+  /** Phase 3B partial-arm: mỏ neo phía gập khuỷu, giữ qua các frame để elbow inference không lật phía. */
   previousElbowDirection: { x: number; y: number; z: number } | null;
   inferenceStartedAtMs: number | null;
   elbowSource: ElbowSource;

@@ -898,13 +898,13 @@ describe("AvatarMotionProcessor", () => {
     processor.process(sample(100, false)); now = 150; processor.process(sample(150, true));
     expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" }); expect(processor.getLastDiagnostics()?.arms.left.observation.lowerRejectionReason).toBe("wrist-outside-frame");
     now = 260; processor.process(sample(260, true)); expect(processor.getLastDiagnostics()?.arms.left.lossState).toBe("held"); expect(processor.getLastDiagnostics()?.arms.right.lossState).toBe("active");
-    // Phase 3E: chỉ cổ tay trái ra ngoài khung; vai/khuỷu vẫn rõ nên upper không rời "active".
+    // Phase 3B partial-arm: chỉ cổ tay trái ra ngoài khung; vai/khuỷu vẫn rõ nên upper không rời "active".
     now = 300; processor.process(sample(300, false));
     expect(processor.getLastDiagnostics()?.arms.left.segmentLossState.upper).toBe("active");
     now = 400; processor.process(sample(400, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState.lower).toBe("recovering");
     now = 600; processor.process(sample(600, false)); expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" });
   });
-  // Phase 3E: mất RIÊNG cổ tay không được giết cánh tay trên. Upper phải tiếp tục bám
+  // Phase 3B partial-arm: mất RIÊNG cổ tay không được giết cánh tay trên. Upper phải tiếp tục bám
   // vai→khuỷu, lower giữ parent-local delta (khối cứng theo upper) rồi mới return riêng.
   it("keeps the upper arm tracking while only the wrist is occluded", () => {
     const cases = [
@@ -969,7 +969,7 @@ describe("AvatarMotionProcessor", () => {
     expect(third.jointRotations.leftLowerArm).toEqual(first.jointRotations.leftLowerArm);
   });
 
-  // Phase 3E: cổ tay bị che rồi quay lại. Upper không bao giờ rời "active" (vai/khuỷu luôn
+  // Phase 3B partial-arm: cổ tay bị che rồi quay lại. Upper không bao giờ rời "active" (vai/khuỷu luôn
   // rõ trong kịch bản này); chỉ lower đi qua held → recovering → active và phải blend chứ
   // không snap khi wrist trở lại.
   it("blends the lower arm back without snapping when the wrist is reacquired", () => {
