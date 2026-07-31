@@ -88,7 +88,7 @@ describe("AvatarMotionProcessor", () => {
   describe("Mức 2B-5 Hand twist wiring", () => {
     it("feature flag defaults off and remains bit-for-bit Pose-only", () => {
       const input = frame(); input.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left"), handCandidate(1, RIGHT_WRIST_IMAGE, "right")];
-      const poseOnly = new AvatarMotionProcessor({ filtered: false, now: () => 120 }); poseOnly.setRigProfile(rigProfile);
+      const poseOnly = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => 120 }); poseOnly.setRigProfile(rigProfile);
       const explicitlyOff = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => 120 }); explicitlyOff.setRigProfile(rigProfile);
       expect(explicitlyOff.process(input).jointRotations).toEqual(poseOnly.process(input).jointRotations);
       expect(explicitlyOff.getLastDiagnostics()?.handTwist.left.handTwistApplied).toBe(false);
@@ -96,7 +96,7 @@ describe("AvatarMotionProcessor", () => {
 
     it("first trusted Hand anchors neutral, then correction changes only lowerArm", () => {
       let now = 120;
-      const off = new AvatarMotionProcessor({ filtered: false, now: () => now }); off.setRigProfile(rigProfile);
+      const off = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now }); off.setRigProfile(rigProfile);
       const on = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now }); on.setRigProfile(rigProfile);
       const neutral = frame(); neutral.rawHands = [handCandidateWithMiddleDepth(0, LEFT_WRIST_IMAGE, "left", 100, 0.01)];
       const neutralPose = off.process(neutral); const neutralTwist = on.process(neutral);

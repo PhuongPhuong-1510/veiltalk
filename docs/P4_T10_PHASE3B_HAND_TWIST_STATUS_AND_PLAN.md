@@ -1,8 +1,8 @@
 # P4-T10 — Phase 3B: Hand Forearm Twist
 
-> Trạng thái ngày 2026-07-29: **IN PROGRESS — PARTIAL-OCCLUSION FIX ĐÃ CÓ, CHỜ WEBCAM RE-TEST**.
+> Trạng thái ngày 2026-08-01: **HOÀN THÀNH — người thực hiện đã xác nhận nghiệm thu webcam và duyệt bật mặc định**.
 > Automated gate gần nhất: **386/386 test PASS**, TypeScript, lint và Vite build sạch.
-> Không được đánh dấu Phase 3B hoàn thành trước khi webcam gate trái/phải và nhiều avatar cùng PASS.
+> Runtime vẫn giữ setter để regression test có thể kiểm tra Pose-only, nhưng production và DEV harness bật Hand Twist mặc định.
 
 ## 1. Phase 3B làm gì?
 
@@ -50,7 +50,7 @@ Pose arm swing + Pose temporal output
 
 Các contract đã có trong code và automated test:
 
-- Runtime flag `handTwistEnabled`, mặc định `false`, có setter và checkbox DEV.
+- Runtime flag `handTwistEnabled`, mặc định `true`, có setter và checkbox DEV mặc định bật.
 - DEV harness có lệnh neo neutral riêng tay trái/tay phải/hai tay; frame Hand trusted kế tiếp trở thành zero mà không mở tracking epoch mới.
 - State Hand twist độc lập left/right, không trộn với Pose `ArmTemporalState`.
 - Chỉ lowerArm tương ứng được sửa; upperArm, elbow, pole và Pose swing giữ nguyên.

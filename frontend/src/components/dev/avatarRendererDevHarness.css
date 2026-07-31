@@ -11,14 +11,5 @@
 .dev-stage video { transform: scaleX(-1); }
 .dev-panels { align-items: stretch; margin-top: 12px; } .dev-panels article { flex: 1 1 280px; padding: 12px; border-radius: 10px; background: #171326; }
 .dev-panels pre { max-height: 300px; overflow: auto; white-space: pre-wrap; } .dev-error { padding: 10px; color: #fecaca; background: #531d2d; }
-.dev-diagnostic { margin-top: 12px; padding: 12px; overflow: auto; border-radius: 10px; background: #171326; }
-.dev-diagnostic table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.dev-diagnostic th, .dev-diagnostic td { padding: 7px; border: 1px solid #342a69; vertical-align: top; text-align: left; }
-.dev-diagnostic code { white-space: pre-wrap; word-break: break-all; }
 .dev-controls select, .dev-controls input[type="text"], .dev-controls label > input:not([type]) { margin-left: 6px; padding: 5px; color: white; border: 1px solid #6956d8; background: #171326; }
 @media (max-width: 900px) { .dev-stage { grid-template-columns: 1fr; height: auto; } .dev-stage canvas { height: 48vh; } .dev-stage video { height: 280px; } }
-.dev-hand-calibration { flex-direction: column; align-items: stretch; }
-.dev-hand-calibration-banner { padding: 8px 10px; border-radius: 8px; background: #2a2140; }
-.dev-hand-calibration-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
-.dev-hand-calibration-table th, .dev-hand-calibration-table td { padding: 6px; border: 1px solid #342a69; text-align: left; vertical-align: top; }
-.verdict-PASS { color: #4ade80; } .verdict-WARN { color: #facc15; } .verdict-FAIL { color: #f87171; }

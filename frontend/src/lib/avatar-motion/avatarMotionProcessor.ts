@@ -226,7 +226,7 @@ export class AvatarMotionProcessor {
     this.config = options.config ?? DEFAULT_AVATAR_MOTION_CONFIG;
     this.filtered = options.filtered ?? true;
     this.constraints = options.constraints ?? true;
-    this.handTwistEnabled = options.handTwistEnabled ?? false;
+    this.handTwistEnabled = options.handTwistEnabled ?? true;
   }
 
   setFiltered(enabled: boolean): void { if (this.filtered !== enabled) this.resetFilters(); this.filtered = enabled; }
