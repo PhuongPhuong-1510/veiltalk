@@ -533,7 +533,7 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/src/lib/avatar-renderer/animationFrameLoop.ts` / `rendererMetrics.ts` / `renderSmoothing.ts` | P4-T10: một rAF loop có duplicate guard, metrics FPS/p95/resource và smoothing frame-rate-independent |
 | `frontend/src/lib/avatar-renderer/avatarDiagnostics.ts` | P4-T10 Phase 1/2 DEV-only: rest-basis, angular error, helpers, nine frozen presets và phép đo world direction từ rig profile |
 | `frontend/src/components/avatar/AvatarCanvas.tsx` | React adapter sở hữu canvas, `ResizeObserver` và renderer lifecycle; không chứa IK math |
-| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | Harness local-only tại `/dev/avatar-renderer`; freeze/replay, pose preset, normalized rest-basis/angular-error table, coordinate variants, axes/vector helpers và toggle filter/constraint/smoothing; route bị loại khỏi production build |
+| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | Harness local-only tại `/dev/avatar-renderer`; freeze webcam, axes/vector helpers và toggle filter/constraint/hand-twist/smoothing; coordinate diagnostic cố định theo convention production, không còn preset/replay/manual-neutral/Hand Calibration hoặc bảng H1/H3/H6 legacy; route bị loại khỏi production build |
 | `docs/P4_T10_PHASE1_DIAGNOSTICS_REPORT.md` | Báo cáo nghiệm thu forensic Phase 1: model/rest basis, bằng chứng H1–H3, calibration webcam H6, deterministic replay, privacy và đề xuất Phase 2 chưa triển khai |
 | `docs/P4_T10_PHASE2_ACCEPTANCE_REPORT.md` | Báo cáo review/nghiệm thu Phase 2: H1 fixed, H2 còn mở, deterministic real-model evidence, automated/browser/privacy/lifecycle evidence và điều kiện chuyển phase |
 | `docs/P4_T10_PHASE3A_ACCEPTANCE_REPORT.md` | Phase 3A arm-frame evidence; automated gate và trạng thái manual browser pending |
@@ -559,7 +559,7 @@ rendering, state, routing và design system thuộc các task Phase 4.
 | P4-T07 | Hoàn thành | `frontend/src/App.tsx`, auth helpers — Onboarding/Register |
 | P4-T08 | Hoàn thành | `frontend/src/lib/avatar/avatarSetup.ts`, Avatar Setup UI |
 | P4-T09 | Hoàn thành | `frontend/src/lib/tracking/`, `TrackingDevHarness.tsx` |
-| P4-T10 | IN PROGRESS | Phase 3A anatomical arm-frame đã implement. Phase 3B Hand forearm twist đã có production pipeline và automated regression nhưng webcam gate vẫn FAIL vì chiều pronation/supination tay phải còn sai; Phase 3C chưa bắt đầu |
+| P4-T10 | IN PROGRESS | Phase 3A anatomical arm-frame đã implement. Phase 3B Hand forearm twist hoàn thành và được bật mặc định sau nghiệm thu webcam ngày 2026-08-01; Phase 3C chưa bắt đầu |
 
 ### Design system (P4-T04)
 
@@ -795,7 +795,7 @@ Các thư mục avatar/tracking quan trọng:
 | `frontend/src/lib/avatar-motion/` | Chuyển raw tracking thành `AvatarPosePacketV1`; sở hữu coordinate convention, rig-independent math, Pose/Hand temporal state và diagnostics |
 | `frontend/src/lib/avatar-renderer/` | Load/dispose VRM, capture rig profile và áp packet lên normalized humanoid; không đọc webcam/raw landmarks |
 | `frontend/src/components/avatar/` | React lifecycle adapter cho canvas/renderer; không chứa solver math |
-| `frontend/src/components/dev/` | Harness DEV-only cho tracking/renderer, freeze/replay/calibration/diagnostics; không được dùng như production UI |
+| `frontend/src/components/dev/` | Harness DEV-only cho tracking/renderer, freeze và diagnostics; không được dùng như production UI |
 | `frontend/public/mediapipe/` | WASM và Face/Hand/Pose task self-host cùng origin; raw frame không rời trình duyệt |
 | `frontend/public/models/avatars/` | Model VRM local phục vụ kiểm thử nhiều rig; không mặc nhiên là asset được phép phân phối |
 
@@ -818,12 +818,12 @@ P4-T10 được chia thành các phase con để không trộn forensic diagnosi
    trái/phải. Diagnostics không đi vào packet. `headRotation` giữ legacy/unverified và bị
    loại khỏi arm acceptance.
 
-4. **Phase 3B — Hand forearm twist: IMPLEMENTED, MANUAL ACCEPTANCE FAILED — IN PROGRESS.**
+4. **Phase 3B — Hand forearm twist: HOÀN THÀNH, BẬT MẶC ĐỊNH.**
    Matching, world palm basis, motion-frame conversion, confidence, stabilization, temporal và
    lowerArm quaternion composition đã có production wiring cùng automated regression. Tuy nhiên
-   webcam mới nhất vẫn cho thấy chiều pronation/supination tay phải ngược với động tác thật, kể cả
-   sau thử nghiệm tách application sign. Do đó Phase 3B chưa hoàn thành và không được mô tả là đã
-   xác nhận convention. Chi tiết, phạm vi còn lại và acceptance gate nằm tại
+   Người thực hiện đã xác nhận nghiệm thu webcam ngày 2026-08-01 và duyệt convention hiện tại để
+   bật mặc định trong production/DEV harness. Setter vẫn được giữ để regression test Pose-only.
+   Chi tiết và phạm vi Phase 3B nằm tại
    `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`.
 
 5. **Phase 3C — Rig calibration/constraint extension: NOT STARTED.** Không dùng Phase 3C để che
@@ -1086,7 +1086,7 @@ cùng một frame, cùng gốc) vẫn hợp lệ. Thứ tự làm Mức 2:
   đặt right `-1`; vì vậy giá trị này chưa phải convention đã được nghiệm thu và không được dùng làm
   bằng chứng Phase 3B PASS. Raw/corrected diagnostic, chirality policy và application sign phải được
   đối chiếu đồng thời với world orientation sau renderer trước lần sửa production tiếp theo.
-- `AvatarMotionProcessor` có feature flag runtime `handTwistEnabled` (mặc định `false`) và setter
+- `AvatarMotionProcessor` có feature flag runtime `handTwistEnabled` (mặc định `true`) và setter
   `setHandTwistEnabled()`. Dev harness có checkbox **Hand twist (2B-5)** để so sánh trực tiếp với
   Pose-only.
 - Pose vẫn tạo toàn bộ swing và temporal output Mức 1. Pipeline Hand twist riêng mỗi side là:
@@ -1105,9 +1105,8 @@ cùng một frame, cùng gốc) vẫn hợp lệ. Thứ tự làm Mức 2:
   + stabilization + matching rồi mở epoch mới; quaternion từ epoch cũ không được tái sử dụng. Một
   geometry observation invalid chỉ fallback Pose-only và bắt đầu pending interval; nó không đổi
   epoch/neutral. Chỉ observation invalid tiếp theo vượt `armFrame.invalidGraceMs` mới xác nhận loss.
-- 2B-6 là integration/regression state-management, không được coi là bằng chứng chiều twist đúng.
-  Automated gate hiện xanh nhưng manual right-hand direction gate đang đỏ; trạng thái tổng thể vẫn
-  là Phase 3B IN PROGRESS.
+- 2B-6 là integration/regression state-management. Automated gate xanh và người thực hiện đã xác
+  nhận manual webcam acceptance ngày 2026-08-01; Phase 3B hoàn thành và Hand Twist bật mặc định.
 - Processor chỉ ghép `outputDelta = poseLowerDelta * handTwistDelta`; trục twist là
   `rigProfile.joints[lowerArm].anatomicalRestBasis.primaryLocal`.
 - Không xoay `hand` bone và không phân phối lowerArm/hand. Hand bone hiện chỉ là child nên thừa
