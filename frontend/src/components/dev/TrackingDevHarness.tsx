@@ -5,6 +5,9 @@ import type { RawTrackingFrameV1 } from "../../lib/tracking/rawTrackingTypes";
 import type { TrackingMetricsSnapshot } from "../../lib/tracking/trackingMetrics";
 import { useTracking } from "../../lib/tracking/useTracking";
 import type { TrackingPipelineState, TrackingProfile } from "../../lib/tracking/trackingPipeline";
+import { calculateBodyVisibility } from "../../lib/tracking/camera-readiness/bodyVisibility";
+import { extractReadinessEvidence } from "../../lib/tracking/camera-readiness/readinessEvidence";
+import type { BodyVisibilitySnapshot, CameraReadinessEvidenceSnapshot } from "../../lib/tracking/camera-readiness/readinessTypes";
 import "./trackingDevHarness.css";
 
 const emptyMetrics: TrackingMetricsSnapshot = {
@@ -50,13 +53,20 @@ export default function TrackingDevHarness() {
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [pipelineState, setPipelineState] = useState<TrackingPipelineState>("idle");
   const [frame, setFrame] = useState<RawTrackingFrameV1 | null>(null);
+  const [readinessEvidence, setReadinessEvidence] = useState<CameraReadinessEvidenceSnapshot | null>(null);
+  const [bodyVisibility, setBodyVisibility] = useState<BodyVisibilitySnapshot | null>(null);
   const [metrics, setMetrics] = useState(emptyMetrics);
   const [error, setError] = useState<string | null>(null);
   const [handednessMistakes, setHandednessMistakes] = useState(0);
   const [actualVideoSize, setActualVideoSize] = useState("—");
   const [actualCameraFps, setActualCameraFps] = useState("—");
 
-  const onFrame = useCallback((next: RawTrackingFrameV1) => setFrame(next), []);
+  const onFrame = useCallback((next: RawTrackingFrameV1) => {
+    const evidence = extractReadinessEvidence(next, performance.now());
+    setFrame(next);
+    setReadinessEvidence(evidence);
+    setBodyVisibility(calculateBodyVisibility(evidence));
+  }, []);
   const onMetrics = useCallback((next: TrackingMetricsSnapshot) => setMetrics(next), []);
   const onError = useCallback((reason: unknown) => {
     setError(reason instanceof Error ? (reason.stack ?? reason.message) : "Tracking gặp lỗi không xác định.");
@@ -100,6 +110,9 @@ export default function TrackingDevHarness() {
     if (!videoRef.current || !pipeline) return;
     setError(null);
     setMetrics(emptyMetrics);
+    setFrame(null);
+    setReadinessEvidence(null);
+    setBodyVisibility(null);
     setHandednessMistakes(0);
     setPipelineState("starting");
     try {
@@ -115,6 +128,9 @@ export default function TrackingDevHarness() {
   function stop() {
     if (!pipeline) return;
     pipeline.stop();
+    setFrame(null);
+    setReadinessEvidence(null);
+    setBodyVisibility(null);
     setPipelineState(pipeline.state);
   }
 
@@ -172,6 +188,25 @@ export default function TrackingDevHarness() {
           <button onClick={() => setHandednessMistakes((count) => count + 1)}>Đánh dấu handedness sai</button>
           <p>Handedness sai đã quan sát: <b>{handednessMistakes}</b></p>
         </div>
+      </section>
+
+      <section className="tracking-readiness-diagnostics">
+        <h2>Phase 3H-01/02 readiness diagnostics</h2>
+        <p>Local-only · Light: <b>{readinessEvidence?.light.state ?? "—"}</b> · Pose freshness: <b>{readinessEvidence?.poseFreshness ?? "—"}</b> · Observation: <b>{readinessEvidence?.poseObservation ?? "—"}</b></p>
+        <p>Body visible: <b>{bodyVisibility?.bodyVisiblePercent === null || bodyVisibility?.bodyVisiblePercent === undefined ? "unavailable" : `${number(bodyVisibility.bodyVisiblePercent)}%`}</b> · Left arm complete: <b>{bodyVisibility?.leftArmComplete ? "yes" : "no"}</b> · Right arm complete: <b>{bodyVisibility?.rightArmComplete ? "yes" : "no"}</b></p>
+        <table>
+          <thead><tr><th>Region</th><th>Visibility</th><th>Bounds</th><th>Weight</th><th>Score</th><th>Contribution</th><th>Reasons</th></tr></thead>
+          <tbody>
+            {(readinessEvidence?.regions ?? []).map((region) => {
+              const scored = bodyVisibility?.regions.find((item) => item.region === region.region);
+              return <tr key={region.region}>
+                <td>{region.region}</td><td>{region.visibility === null ? "unknown" : number(region.visibility)}</td><td>{region.bounds}</td>
+                <td>{scored ? number(scored.weight) : "diagnostic-only"}</td><td>{scored ? number(scored.score) : "—"}</td>
+                <td>{scored ? number(scored.contribution) : "—"}</td><td>{region.reasons.join(", ") || "—"}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
       </section>
 
       <section>

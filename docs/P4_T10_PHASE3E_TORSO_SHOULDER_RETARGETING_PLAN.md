@@ -2,7 +2,7 @@
 
 ## 1. Trạng thái và quyết định phạm vi
 
-**Trạng thái:** TORSO BASELINE COMPLETE — 3E-01/02/03/04 COMPLETE; 3E-05/06 shoulder animation DEFERRED theo quyết định người dùng ngày 2026-07-30; code đã revert về mốc sau 3E-04.
+**Trạng thái:** 3E-01/02/03 COMPLETE; 3E-04 và phần hierarchy-safe của 3E-06 đã REIMPLEMENTED ngày 2026-07-30, automated 521/521 PASS, build/lint PASS; manual webcam matrix PENDING. Shoulder độc lập 3E-05 vẫn DEFERRED.
 
 Phase 3E bổ sung chuyển động thân trên và hai vai để avatar không còn cảm giác thân đứng cứng
 trong khi đầu và tay chuyển động. Phase này dùng Pose landmarks đã có ở client, không thêm thư viện,
@@ -115,7 +115,7 @@ Implementation hiện có:
   generation và lưu hierarchy/capability immutable trong rig profile.
 - Capability phân biệt `full`, `without-upper-chest`, `reduced-chain`, `unsupported`; shoulder status và
   future controlled parent được ghi riêng từng bên.
-- Upper arm production vẫn giữ `fixed-rest`; 3E-02 chỉ chuẩn bị metadata, không kích hoạt parent mới.
+- Rig profile vẫn lưu rest parent làm fallback, nhưng runtime hierarchy-safe truyền target world của shoulder trong cùng frame khi torso chain khả dụng.
 - Renderer đã hỗ trợ semantic bone mới qua contract chung và có DEV-only synthetic torso probe;
   identity trả đúng rest, probe không đi vào packet/processor.
 - Targeted sáu file 98/98 PASS; TypeScript, lint và production build PASS. Full suite vẫn có cùng bốn
@@ -151,14 +151,13 @@ Implementation hiện có:
   0.9/max 25°. Đây là giá trị khởi đầu cần manual sign/amplitude tuning, chưa phải acceptance cuối.
 - Start tracking reset/start torso calibration cùng lifecycle Face; DEV panel hiển thị calibration,
   observation rejection và input/output Y/P/R.
-- Output 3E-03 chỉ nằm trong internal diagnostics; regression khóa packet không phát torso joint rotation.
+- Trước lần reimplementation, output 3E-03 chỉ nằm trong diagnostics. Runtime mới phát torso joint rotation sau calibration và qua loss/recovery mềm.
 - Targeted năm file 89/89 PASS; TypeScript, lint và build PASS. Full suite gần nhất 484/488, vẫn chỉ có bốn
   blocker Phase 3B mock `capability.gaze` đã ghi nhận.
 
 ### 3E-04 — Phân bổ hips/spine/chest/upperChest
 
-**Trạng thái:** COMPLETE — corrective sign/amplitude/temporal và roll tuning đã qua automated gates;
-manual retest được người dùng xác nhận PASS ngày 2026-07-30.
+**Trạng thái:** REIMPLEMENTED — distribution/temporal runtime và torso joint packet output đã được khôi phục với current-frame parent targets; automated PASS, manual webcam PENDING.
 
 - Phân bổ theo từng trục và theo capability, tổng share của mỗi trục luôn bằng 1.
 - Không bone nào nhận 100% khi model có từ hai torso bone hợp lệ trở lên.
@@ -170,7 +169,7 @@ manual retest được người dùng xác nhận PASS ngày 2026-07-30.
 **Gate:** chuyển động thân nhìn liên tục, không gãy ở eo/ngực, không dồn vào chest và tổng world orientation
 khớp semantic target trong tolerance trên ít nhất hai model.
 
-Implementation hiện có:
+Implementation trước khi revert:
 
 - `torsoDistribution.ts` phân bổ liên tục theo magnitude. Chuyển động nhẹ ưu tiên upper torso; chuyển động
   lớn tăng share của hips/spine. Các bone thiếu được loại rồi chuẩn hóa lại; chain từ hai bone trở lên không
@@ -180,8 +179,8 @@ Implementation hiện có:
   rotation không-identity và tránh double rotation.
 - Processor chỉ phát các torso joint có trong capability. Model manual hiện tại `without-upper-chest` phát
   `hips/spine/chest`, không phát `upperChest`; renderer dùng packet contract chung đã có.
-- DEV diagnostics hiển thị distribution mode, active chain và share H/S/C/U. Upper-arm vẫn là
-  `fixed-rest` cho tới 3E-06, vì vậy manual 3E-04 chỉ khóa chất lượng torso, chưa dùng arm đồng thời làm gate.
+- DEV diagnostics hiển thị distribution/loss mode. Regression cũ do gate không dùng arm/head đồng thời;
+  runtime mới giải upper arm bằng shoulder target cùng frame và bù head/neck tương đối với torso để tránh double rotation.
 - Theo manual evidence ngày 2026-07-30, camera-space yaw được đổi sang đúng chiều avatar semantic. Yaw giữ
   gần 1:1 từ vùng ngoài neutral deadband tới 70°, rồi soft-limit tiến dần về 80° để tránh snap khi quay gần
   ngang và một vai sắp bị che.
@@ -212,8 +211,7 @@ không có chuyển động đối xứng giả khi chỉ một bên hoạt đ�
 
 ### 3E-06 — Hierarchy-safe torso → shoulder → arm integration
 
-**Trạng thái:** DEFERRED cùng 3E-05 — code thử nghiệm đã được gỡ; arm production trở lại parent `fixed-rest`
-như mốc sau 3E-04.
+**Trạng thái:** PARTIAL IMPLEMENTED — phần torso→head/neck→arm hierarchy đã có và automated PASS; independent shoulder solve vẫn DEFERRED cùng 3E-05. Arm dùng current-frame shoulder target khi capability hợp lệ, fallback rest parent khi không hỗ trợ.
 
 - Solver dựng target world theo đúng thứ tự torso chain, shoulder, upper arm và lower arm.
 - Upper/lower arm tiếp tục giữ direction/pole đã được Phase 3A/3B khóa, nhưng phép đổi sang local dùng

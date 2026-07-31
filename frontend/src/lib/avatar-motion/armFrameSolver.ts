@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from "three";
 import type { RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
 import type { QuaternionData, Vector3Data } from "./avatarPoseTypes";
-import type { ArmFrameDiagnostic, ArmSide, ElbowSource, PoleSource } from "./avatarMotionDiagnostics";
+import type { ArmFrameDiagnostic, ArmSide, ElbowSource, PoleSource, TwistReferenceSource } from "./avatarMotionDiagnostics";
 import type { ArmDeltaOutput } from "./armTemporalState";
 import type { ControlledArmJoint, NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import type { AvatarMotionConfig } from "./motionConfig";
@@ -18,6 +18,12 @@ export interface SideArmGeometryResult {
   acceptedPole: Vector3Data; poleSource: PoleSource; acceptedFreshPole: boolean; depthDegenerate: boolean; diagnostic: GeometryDiagnostic;
   segmentValidity: { upper: boolean; lower: boolean };
   primary: { upper: Vector3Data; lower: Vector3Data | null }; secondary: { upper: Vector3Data; lower: Vector3Data | null };
+  /**
+   * Mốc "twist = 0" của cẳng tay dùng cho Phase 3B, HISTORY-FREE: cùng một hướng `lower` luôn
+   * cho cùng một reference, không phụ thuộc frame trước. KHÁC `secondary.lower` — cái đó là
+   * parallel transport từ frame trước nên tích luỹ holonomy, xem `computeTwistReference`.
+   */
+  twistReference: { lower: Vector3Data | null; lowerSource: TwistReferenceSource };
   elbowSource: ElbowSource; elbowPosition: Vector3Data; observedLengths: { upper: number; lower: number } | null;
 }
 export interface AnatomicalArmSolveResult { torso: TorsoBasis; torsoWasObserved: boolean; sides: Record<ArmSide, SideArmGeometryResult | null>; diagnostics: Record<ArmSide, GeometryDiagnostic>;
@@ -68,6 +74,61 @@ function transportedSecondary(primary: Vector3, previousPrimary: Vector3Data | n
   const from = vector(previousPrimary).normalize(), to = primary.clone().normalize();
   const rotation = new Quaternion().setFromUnitVectors(from, to); const transported = vector(previousSecondary).applyQuaternion(rotation);
   transported.addScaledVector(to, -transported.dot(to)); return transported.lengthSq() > 1e-8 ? vectorData(transported.normalize()) : null;
+}
+
+/**
+ * Trong khoảng bao nhiêu radian quanh điểm đối cực thì coi là antiparallel. `setFromUnitVectors`
+ * ở gần đối cực KHÔNG trả null và cũng KHÔNG nhạy với nhiễu ε (đo được: lệch 0.00°), nhưng nó
+ * PHỤ THUỘC ĐƯỜNG TIẾP CẬN: tới gần đối cực theo +y so với theo +z cho reference lệch 180°.
+ * Vì vậy vùng này phải chuyển sang phép chiếu thuần (lệch 0.00° trong cùng tình huống).
+ */
+const TWIST_REFERENCE_ANTIPARALLEL_DOT = -1 + 1e-4;
+
+/**
+ * Mốc "twist = 0" của cẳng tay cho Phase 3B — HISTORY-FREE.
+ *
+ * Cùng kỹ thuật minimal-twist đã dùng cho upperArm ở `solveSide` (transport rest frame theo
+ * torso rồi lên primary hiện tại), nay áp cho lowerArm. Transport từ một rest frame CỐ ĐỊNH là
+ * idempotent: cùng `lower` ⇒ cùng reference, không tích luỹ.
+ *
+ * KHÔNG được dùng `secondary.lower` làm mốc này. Nó parallel-transport từ FRAME TRƯỚC nên:
+ * - tích luỹ holonomy — đo được 35.08° sau khi cẳng tay đi một vòng kín rồi về đúng hướng đầu;
+ * - nhảy 76.6° khi đổi nhánh fallback.
+ * Mà phép chiếu trong `handForearmTwist` chỉ khử thành phần DỌC trục, không khử roll QUANH
+ * trục, nên mọi roll của mốc đi thẳng 1:1 vào góc twist. Chi tiết:
+ * `docs/P4_T10_PHASE3B_TWIST_REFERENCE_FIX_PLAN.md`.
+ *
+ * Dùng rest basis của CHÍNH lowerArm (không phải upperArm): mốc twist=0 phải là hệ mà cẳng tay
+ * nghỉ trong đó, và trục ÁP twist cũng lấy từ joint này.
+ */
+function computeTwistReference(
+  lower: Vector3,
+  torsoDelta: QuaternionData,
+  basis: NormalizedAvatarRigProfile["joints"][ControlledArmJoint]["anatomicalRestBasis"],
+): { lower: Vector3Data | null; lowerSource: TwistReferenceSource } {
+  const restPrimary = rotateVector(torsoDelta, basis.primaryWorld);
+  const restSecondary = rotateVector(torsoDelta, basis.secondaryWorld);
+  const restBinormal = rotateVector(torsoDelta, basis.binormalWorld);
+  const to = lower.clone().normalize();
+  const restPrimaryVector = vector(restPrimary);
+
+  // Chiếu thuần (Gram-Schmidt) — không có trục quay tuỳ ý nên an toàn cả ở đối cực.
+  const projectOntoLower = (value: Vector3Data): Vector3Data | null => {
+    const projected = vector(value).addScaledVector(to, -vector(value).dot(to));
+    return projected.lengthSq() > 1e-8 ? vectorData(projected.normalize()) : null;
+  };
+
+  // Antiparallel phải kiểm TRƯỚC: trong vùng này transport cho kết quả phụ thuộc đường đi.
+  const antiparallel = restPrimaryVector.lengthSq() > 1e-8 &&
+    to.dot(restPrimaryVector.clone().normalize()) < TWIST_REFERENCE_ANTIPARALLEL_DOT;
+  if (!antiparallel) {
+    const transported = transportedSecondary(lower, restPrimary, restSecondary);
+    if (transported) return { lower: transported, lowerSource: "rest-transport" };
+  }
+  // Hai ứng viên vuông góc nhau nên ít nhất một cái không song song với `lower`.
+  const projected = projectOntoLower(restSecondary) ?? projectOntoLower(restBinormal);
+  if (projected) return { lower: projected, lowerSource: "rest-projection" };
+  return { lower: null, lowerSource: "unavailable" };
 }
 
 /**
@@ -141,6 +202,7 @@ function solveSide(
   history: ArmGeometryHistory, nowMs: number, config: AvatarMotionConfig["armFrame"], constraintsEnabled: boolean,
   directionFilter?: (name: ControlledArmJoint, direction: Vector3Data) => Vector3Data,
   poleFilter?: (side: ArmSide, pole: Vector3Data) => Vector3Data,
+  upperArmParentTargetWorld?: QuaternionData,
 ): { result: SideArmGeometryResult | null; diagnostic: GeometryDiagnostic; visibilityState: { elbow: boolean; wrist: boolean } } {
   const i = INDICES[side]; const ws = world[i.shoulder], we = world[i.elbow], ww = world[i.wrist]; const is = image[i.shoulder], ie = image[i.elbow], iw = image[i.wrist];
   const elbowVisible = visibleWithHysteresis(ie, history.elbowWasVisible, config.visibilityEnter, config.visibilityExit);
@@ -274,13 +336,25 @@ function solveSide(
     lowerSecondary = transportedLower ?? projectToPrimary(upperSecondary, lower!) ?? restCandidates.map((value) => projectToPrimary(value, lower!)).find(Boolean) ?? null;
     if (!lowerSecondary) lowerDirectionValid = false;
   }
+  // Mốc twist của Phase 3B, tính ĐỘC LẬP với `lowerSecondary` phía trên — xem
+  // `computeTwistReference` về lý do không được tái dùng giá trị transport theo lịch sử đó.
+  // Cũng không dùng `restCandidates` (đã bị chiếu lên `armAxis` vai→wrist nên phụ thuộc độ gập
+  // khuỷu, sẽ tiêm swing vào mốc); `computeTwistReference` chiếu trực tiếp lên `lower`.
+  const twistReference = lowerDirectionValid && lower
+    ? computeTwistReference(lower, torsoDelta, profile.joints[i.lower].anatomicalRestBasis)
+    : { lower: null, lowerSource: "unavailable" as TwistReferenceSource };
   const projectedPole = projectToArm(pole ?? upperSecondary); if (!projectedPole) return reject("invalid-pole", flags);
   const targetWorldRotations: Partial<Record<ControlledArmJoint, QuaternionData>> = {}; const deltas: ArmDeltaOutput = {};
   const segments: Array<[ControlledArmJoint, Vector3, Vector3Data]> = [[i.upper, upper, upperSecondary]];
   if (lowerDirectionValid && lower && lowerSecondary) segments.push([i.lower, lower, lowerSecondary]);
   for (const [name, primary, secondary] of segments) {
     const joint = profile.joints[name], targetWorld = targetBoneWorld(primary, vector(secondary), joint); if (!targetWorld) return reject("invalid-frame", flags);
-    const parentTargetWorld = joint.controlledParentJoint ? targetWorldRotations[joint.controlledParentJoint] : joint.parentRestWorldRotation; if (!parentTargetWorld) return reject("invalid-hierarchy", flags);
+    // Upper arm phải được đổi sang local bằng target world của shoulder trong CHÍNH frame
+    // hiện tại. Dùng parent rest khi torso đã xoay sẽ làm renderer cộng rotation torso lần hai.
+    const parentTargetWorld = joint.controlledParentJoint
+      ? targetWorldRotations[joint.controlledParentJoint]
+      : upperArmParentTargetWorld ?? joint.parentRestWorldRotation;
+    if (!parentTargetWorld) return reject("invalid-hierarchy", flags);
     const deltaLocal = multiplyQuaternions(inverseQuaternion(joint.restLocalRotation), multiplyQuaternions(inverseQuaternion(parentTargetWorld), targetWorld));
     const safe = constraintsEnabled ? constrainJointRotation(name, deltaLocal) : deltaLocal; if (!safe) return reject("invalid-constraint", flags);
     deltas[name] = safe; targetWorldRotations[name] = multiplyQuaternions(parentTargetWorld, multiplyQuaternions(joint.restLocalRotation, safe));
@@ -299,7 +373,7 @@ function solveSide(
       distanceFromPreviousElbow: history.previousObservedElbow ? elbow.distanceTo(vector(history.previousObservedElbow)) : null } };
   return { result: { deltas, targetWorldRotations, acceptedPole: projectedPole, poleSource, acceptedFreshPole: poleSource === "fresh", depthDegenerate, diagnostic,
     segmentValidity: { upper: true, lower: lowerDirectionValid }, primary: { upper: vectorData(upper), lower: lowerDirectionValid ? vectorData(lower!) : null },
-    secondary: { upper: upperSecondary, lower: lowerDirectionValid ? lowerSecondary : null }, elbowSource, elbowPosition: vectorData(elbow),
+    secondary: { upper: upperSecondary, lower: lowerDirectionValid ? lowerSecondary : null }, twistReference, elbowSource, elbowPosition: vectorData(elbow),
     observedLengths: elbowObserved && lowerDirectionValid ? { upper: upperLength, lower: lowerLength! } : null }, diagnostic, visibilityState };
 }
 
@@ -309,14 +383,15 @@ export function solveAnatomicalArmFrames(
   directionFilter?: (name: ControlledArmJoint, direction: Vector3Data) => Vector3Data,
   poleFilter?: (side: ArmSide, pole: Vector3Data) => Vector3Data,
   torsoFallback?: TorsoBasis,
+  upperArmParentTargets?: Partial<Record<ArmSide, QuaternionData>>,
 ): AnatomicalArmSolveResult {
   const observedTorso = buildTorsoBasis(worldLandmarks, config.minimumPoseVisibility, config.minimumSegmentLength);
   const torso = observedTorso ?? torsoFallback ?? {
     right: profile.torsoReference.rightWorld, up: profile.torsoReference.upWorld, forward: profile.torsoReference.forwardWorld,
     worldRotation: profile.torsoReference.worldRotation,
   };
-  const left = solveSide("left", worldLandmarks, imageLandmarks, profile, torso, histories.left, nowMs, config, constraintsEnabled, directionFilter, poleFilter);
-  const right = solveSide("right", worldLandmarks, imageLandmarks, profile, torso, histories.right, nowMs, config, constraintsEnabled, directionFilter, poleFilter);
+  const left = solveSide("left", worldLandmarks, imageLandmarks, profile, torso, histories.left, nowMs, config, constraintsEnabled, directionFilter, poleFilter, upperArmParentTargets?.left);
+  const right = solveSide("right", worldLandmarks, imageLandmarks, profile, torso, histories.right, nowMs, config, constraintsEnabled, directionFilter, poleFilter, upperArmParentTargets?.right);
   return { torso, torsoWasObserved: Boolean(observedTorso), sides: { left: left.result, right: right.result }, diagnostics: { left: left.diagnostic, right: right.diagnostic },
     visibilityStates: { left: left.visibilityState, right: right.visibilityState } };
 }

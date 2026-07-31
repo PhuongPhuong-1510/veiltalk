@@ -24,6 +24,7 @@ import { Quaternion, Vector3 } from "three";
 
 const MODEL_URL = "/models/avatars/reference-avatar-4.vrm";
 const number = (value: number | null | undefined, digits = 1) => value === null || value === undefined || !Number.isFinite(value) ? "—" : value.toFixed(digits);
+const degrees = (radians: number | null | undefined) => radians === null || radians === undefined || !Number.isFinite(radians) ? null : radians * 180 / Math.PI;
 
 function emptyCalibrationSamples(): Record<HandCalibrationStepId, HandCalibrationSample[]> {
   return {
@@ -35,7 +36,9 @@ function emptyCalibrationSamples(): Record<HandCalibrationStepId, HandCalibratio
 export default function AvatarRendererDevHarness() {
   const videoRef = useRef<HTMLVideoElement>(null); const rendererRef = useRef<AvatarRenderer | null>(null);
   const modelLoadRequestRef = useRef(0);
-  const processorRef = useRef(new AvatarMotionProcessor()); const latestPacket = useRef<AvatarPosePacketV1 | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
+  // Hand twist là một phần của pipeline đã nghiệm thu, không còn phụ thuộc công tắc DEV.
+  // Sample Hand đáng tin đầu tiên tự neo neutral; model/geometry không hỗ trợ vẫn tự rơi về Pose-only.
+  const processorRef = useRef(new AvatarMotionProcessor({ handTwistEnabled: true })); const latestPacket = useRef<AvatarPosePacketV1 | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
   const [filtered, setFiltered] = useState(true); const [constraints, setConstraints] = useState(true); const [smoothing, setSmoothing] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const [simulatedLoss] = useState(false); const [simulatedFaceLoss, setSimulatedFaceLoss] = useState(false); const [trackingRunning, setTrackingRunning] = useState(false); const [rendererRunning, setRendererRunning] = useState(true);
@@ -232,7 +235,7 @@ export default function AvatarRendererDevHarness() {
       <label>Vị trí trên/dưới <input type="range" min="-0.5" max="0.5" step="0.01" value={verticalOffset} onChange={(e) => setVerticalOffset(Number(e.target.value))} /> {verticalOffset.toFixed(2)}</label>
       <button onClick={() => { setZoom(1); setVerticalOffset(0); }}>Reset khung hình</button>
     </section>
-    {calibrationRunning && <section className="dev-controls dev-hand-calibration">
+    <section className="dev-controls dev-hand-calibration">
       <strong>Mức 2B-1 — Hand Calibration Test</strong>
       {!calibrationRunning
         ? <button onClick={startCalibration}>Start Hand Calibration Test</button>
@@ -262,7 +265,7 @@ export default function AvatarRendererDevHarness() {
         <button onClick={exportCalibrationJson}>Export JSON</button>
         {calibrationCopyStatus && <span> {calibrationCopyStatus}</span>}
       </>}
-    </section>}
+    </section>
     <section className="dev-stage"><AvatarCanvas onReady={attachRenderer} onDispose={detachRenderer} onError={(reason) => setError(`WebGL: ${reason.message}`)} options={{ smoothing, onContextLost: (reason) => setError(reason.message) }} /><div className="dev-camera-preview"><video ref={videoRef} muted playsInline />{!trackingRunning && <p>Camera chưa bật<br /><small>Dùng webcam hoặc preset cố định</small></p>}</div></section>
     <section className="dev-panels">
       <article><h2>Realtime</h2><p>Tracking/Pipeline: {number(trackingMetrics?.cameraFps)} / {number(trackingMetrics?.pipelineFps)} FPS</p><p>Renderer: {number(rendererMetrics?.fps)} FPS · p95 {number(rendererMetrics?.frameTimeP95Ms)}ms</p><p>Processor→draw: {number(rendererMetrics?.processorInputToDrawMs)}ms</p>
@@ -270,7 +273,22 @@ export default function AvatarRendererDevHarness() {
         <p>Pose inference: {number(trackingMetrics?.inferenceTimeMs.pose.average)}ms trung bình · p95 {number(trackingMetrics?.inferenceTimeMs.pose.p95)}ms · max {number(trackingMetrics?.inferenceTimeMs.pose.max)}ms</p></article>
       <article><h2>Head/neck capability</h2>{modelLoading && <p>Đang tải model mới; model hiện tại vẫn được giữ cho tới khi swap thành công.</p>}{capability ? <><p>Format: <strong>{capability.format}</strong> · VRM {capability.vrmVersion ?? "—"}</p><p>Humanoid: <strong>{capability.humanoidRig ? "yes" : "no"}</strong> · rest {capability.restPose}</p><p>Head: <strong>{capability.requiredBones.head ? "supported" : "missing"}</strong></p><p>Neck: <strong>{capability.requiredBones.neck ? "supported" : "missing"}</strong></p></> : !modelLoading && <p>Chưa có model sẵn sàng.</p>}</article>
       <article><h2>3E torso/shoulder baseline</h2>{capability ? <><p>Torso chain: <strong>{capability.torsoShoulder.hierarchy}</strong></p><p>Bones: {Object.entries(capability.torsoShoulder.bones).map(([name, present]) => `${name}=${present ? "yes" : "no"}`).join(" · ")}</p><p>Shoulders: L={capability.torsoShoulder.shoulderStatus.left} · R={capability.torsoShoulder.shoulderStatus.right}</p><p>Upper-arm parent: L/R={capability.torsoShoulder.upperArmParentMode.left}</p></> : <p>Chưa có capability.</p>}{motionDiagnostics && <><p>Basis source: <strong>{motionDiagnostics.torso.source}</strong> · observation {motionDiagnostics.torso.observationRejectionReason ?? "—"}</p><p>Calibration: <strong>{motionDiagnostics.torso.calibration.status}</strong> · {motionDiagnostics.torso.calibration.acceptedSamples} accepted/{motionDiagnostics.torso.calibration.rejectedSamples} rejected · solve {motionDiagnostics.torso.rejectionReason ?? "ready"}</p><p>Visibility: LS {number(motionDiagnostics.torso.visibility.leftShoulder, 2)} · RS {number(motionDiagnostics.torso.visibility.rightShoulder, 2)} · LH {number(motionDiagnostics.torso.visibility.leftHip, 2)} · RH {number(motionDiagnostics.torso.visibility.rightHip, 2)}</p><p>Input Y/P/R: {number(motionDiagnostics.torso.inputEulerDegrees?.yaw, 1)} / {number(motionDiagnostics.torso.inputEulerDegrees?.pitch, 1)} / {number(motionDiagnostics.torso.inputEulerDegrees?.roll, 1)}</p><p>Output Y/P/R: {number(motionDiagnostics.torso.outputEulerDegrees?.yaw, 1)} / {number(motionDiagnostics.torso.outputEulerDegrees?.pitch, 1)} / {number(motionDiagnostics.torso.outputEulerDegrees?.roll, 1)}</p></>}</article>
-      <article><h2>3E semantic mode</h2>{motionDiagnostics ? <><p>Mode: <strong>{motionDiagnostics.torso.observationMode}</strong></p><p>Pitch: <strong>{motionDiagnostics.torso.pitchObservable ? "live" : "held-neutral"}</strong></p><p>Distribution: <strong>{motionDiagnostics.torso.distribution?.mode ?? "—"}</strong> · {motionDiagnostics.torso.distribution?.activeBones.join(" → ") ?? "—"}</p><p>Shares H/S/C/U: {motionDiagnostics.torso.distribution ? ["hips", "spine", "chest", "upperChest"].map((name) => number(motionDiagnostics.torso.distribution!.shares.yaw[name as "hips" | "spine" | "chest" | "upperChest"], 2)).join(" / ") : "—"}</p></> : <p>Chưa có torso observation.</p>}</article>
+      {/* Phase 3B: số liệu để nghiệm thu twist bằng webcam. Góc hiển thị theo ĐỘ vì manual
+          matrix so trực tiếp với góc tay thật; `applied` là góc cuối cùng ghi vào lowerArm. */}
+      <article><h2>3B hand twist (độ)</h2>{motionDiagnostics ? <table><thead><tr><th></th><th>trái</th><th>phải</th></tr></thead><tbody>
+        {([
+          ["reference", (side: "left" | "right") => motionDiagnostics.handTwist[side].twistReferenceSource],
+          ["raw", (side: "left" | "right") => number(degrees(motionDiagnostics.handTwist[side].rawWrappedTwistRadians))],
+          ["corrected", (side: "left" | "right") => number(degrees(motionDiagnostics.handTwist[side].correctedTwistRadians))],
+          ["applied", (side: "left" | "right") => number(degrees(motionDiagnostics.handTwist[side].appliedTwistRadians))],
+          ["clamp", (side: "left" | "right") => motionDiagnostics.handTwist[side].clampApplied ? "CLAMPED" : "—"],
+          ["temporal", (side: "left" | "right") => motionDiagnostics.handTwist[side].temporalTrackingState],
+          ["observation", (side: "left" | "right") => motionDiagnostics.handTwist[side].observationMode],
+          ["neutral", (side: "left" | "right") => motionDiagnostics.handTwist[side].neutralReanchorReason ?? (motionDiagnostics.handTwist[side].neutralInitialized ? "anchored" : "—")],
+          ["rejection", (side: "left" | "right") => motionDiagnostics.handTwist[side].rejectionReason ?? "—"],
+        ] as const).map(([label, read]) => <tr key={label}><td>{label}</td><td><strong>{read("left")}</strong></td><td><strong>{read("right")}</strong></td></tr>)}
+      </tbody></table> : <p>Chưa có motion diagnostics.</p>}</article>
+      <article><h2>3E semantic mode</h2>{motionDiagnostics ? <><p>Mode: <strong>{motionDiagnostics.torso.observationMode}</strong></p><p>Pitch: <strong>{motionDiagnostics.torso.pitchObservable ? "live" : "held-neutral"}</strong></p><p>Runtime: <strong>{motionDiagnostics.torso.distribution?.mode ?? "unsupported"}</strong> · loss {motionDiagnostics.torso.loss.state} · hierarchy-safe parent targets</p></> : <p>Chưa có torso observation.</p>}</article>
       <article><h2>Tracking state</h2>{packet && Object.entries(packet.tracking).map(([name, state]) => <p key={name}>{name}: {state.sourceState} → {state.outputState}</p>)}</article>
     </section>
   </main>;

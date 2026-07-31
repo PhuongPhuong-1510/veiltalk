@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
+import type { Vector3Data } from "./avatarPoseTypes";
 import { solveAnatomicalArmFrames, type ArmGeometryHistory } from "./armFrameSolver";
 import { DEFAULT_AVATAR_MOTION_CONFIG } from "./motionConfig";
 import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
@@ -22,6 +23,20 @@ const frame = (straight = false) => { const p = Array.from({ length: 33 }, () =>
 const imageFrame = (world: RawNormalizedLandmarkV1[]) => world.map((point) => ({ ...point, x: .5 + point.x * .2, y: .5 + point.y * .2 }));
 const emptyHistory = (): ArmGeometryHistory => ({ previousPole: null, previousPoleWasFresh: false, previousDepthDegenerate: false, lastValidPoleAtMs: null });
 describe("three-point anatomical arm-frame solver", () => {
+  it("uses the current-frame shoulder target so torso rotation is not applied twice", () => {
+    const world = frame();
+    const parent = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 30 * Math.PI / 180);
+    const solved = solveAnatomicalArmFrames(
+      world, imageFrame(world), profile, { left: emptyHistory(), right: emptyHistory() }, 0,
+      DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+      { left: { x: parent.x, y: parent.y, z: parent.z, w: parent.w } },
+    ).sides.left!;
+    const local = q3(profile.joints.leftUpperArm.restLocalRotation).multiply(q3(solved.deltas.leftUpperArm!));
+    const recomposedWorld = parent.clone().multiply(local);
+    expect(recomposedWorld.angleTo(q3(solved.targetWorldRotations.leftUpperArm!))).toBeLessThan(1e-6);
+    // Với target tay giữ nguyên trong world, local phải bù đúng rotation parent chứ không còn identity.
+    expect(local.angleTo(new Quaternion())).toBeCloseTo(30 * Math.PI / 180, 6);
+  });
   it("initial opposite elbow pole cannot roll either upperArm 180° away from its minimal-twist rest branch", () => {
     // `frame()` giữ upper direction đúng rest (±X) nhưng elbow-offset pole chiếu thành -Y,
     // đối dấu với rest secondary +Y. Không có history ở frame đầu: nếu nhận nhánh -Y trực tiếp,
@@ -363,5 +378,116 @@ describe("three-point anatomical arm-frame solver", () => {
     const world = frame(); const solved = solveAnatomicalArmFrames(world, imageFrame(world), rotated, { left: emptyHistory(), right: emptyHistory() }, 0, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
     expect(new Vector3(1, 0, 0).applyQuaternion(q3(solved.targetWorldRotations.leftUpperArm!)).angleTo(new Vector3(1, 0, 0))).toBeLessThan(1e-6);
     expect(new Vector3(1, 0, 0).applyQuaternion(q3(solved.targetWorldRotations.leftLowerArm!)).angleTo(new Vector3(0, 1, 0))).toBeLessThan(1e-6);
+  });
+});
+
+/**
+ * Phase 3B fix — `twistReference.lower` phải là hàm KHÔNG phụ thuộc lịch sử của hình học hiện
+ * tại. Xem `docs/P4_T10_PHASE3B_TWIST_REFERENCE_FIX_PLAN.md`. Mỗi test dưới đây đều assert kèm
+ * một điều kiện ÂM trên `secondary.lower` để chứng minh test không pass rỗng: nhánh cũ thật sự
+ * đã trôi/nhảy trong đúng tình huống đó.
+ */
+describe("Phase 3B twist reference (history-free)", () => {
+  const armFrame = DEFAULT_AVATAR_MOTION_CONFIG.armFrame;
+  const solveLeft = (world: RawNormalizedLandmarkV1[], history: ArmGeometryHistory, nowMs: number, rig: NormalizedAvatarRigProfile = profile) =>
+    solveAnatomicalArmFrames(world, imageFrame(world), rig, { left: history, right: emptyHistory() }, nowMs, armFrame, false).sides.left!;
+  /** Roll của b so với a QUANH axis — đúng đại lượng đi 1:1 vào góc twist. */
+  const rollDegrees = (axis: Vector3, a: Vector3Data, b: Vector3Data) => {
+    const unit = axis.clone().normalize();
+    const flatten = (value: Vector3Data) => vector(value).addScaledVector(unit, -vector(value).dot(unit)).normalize();
+    const pa = flatten(a), pb = flatten(b);
+    return Math.atan2(new Vector3().crossVectors(pa, pb).dot(unit), pa.dot(pb)) * 180 / Math.PI;
+  };
+  /** History có transport lower dùng được: previousPrimary/Secondary lạ + pole còn trong hạn. */
+  const historyWithStaleTransport = (previousSecondaryLower: Vector3Data): ArmGeometryHistory => ({
+    previousPole: null, previousPoleWasFresh: false, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+    previousPrimary: { upper: { x: 0, y: 1, z: 0 }, lower: { x: 0, y: 1, z: 0 } },
+    previousSecondary: { upper: { x: 0, y: 0, z: 1 }, lower: previousSecondaryLower },
+  });
+
+  it("U1: cùng hình học, history khác nhau -> twistReference giống nhau (secondary.lower thì không)", () => {
+    const world = frame(); world[15] = lm(2, 0);
+    const fresh = solveLeft(world, emptyHistory(), 100);
+    const stale = solveLeft(world, historyWithStaleTransport({ x: 0, y: 0, z: 1 }), 100);
+    expect(vector(fresh.twistReference.lower!).dot(vector(stale.twistReference.lower!))).toBeGreaterThan(1 - 1e-9);
+    // Assert âm: nhánh cũ THẬT SỰ khác nhau giữa hai history này.
+    expect(vector(fresh.secondary.lower!).dot(vector(stale.secondary.lower!))).toBeLessThan(1 - 1e-3);
+  });
+
+  it("U2: đổi nhánh fallback không làm twistReference đổi (secondary.lower thì nhảy)", () => {
+    const world = frame(); world[15] = lm(2, 0);
+    const references: Vector3Data[] = [], secondaries: Vector3Data[] = [];
+    // transport dùng được (pole còn hạn) / transport hết hạn (nowMs > poleFallbackTimeoutMs) / không history.
+    for (const solved of [
+      solveLeft(world, historyWithStaleTransport({ x: 0, y: 0, z: 1 }), 100),
+      solveLeft(world, historyWithStaleTransport({ x: 0, y: 0, z: 1 }), armFrame.poleFallbackTimeoutMs + 100),
+      solveLeft(world, emptyHistory(), 100),
+    ]) { references.push(solved.twistReference.lower!); secondaries.push(solved.secondary.lower!); }
+    for (const reference of references) expect(vector(reference).dot(vector(references[0]))).toBeGreaterThan(1 - 1e-9);
+    // Assert âm: ít nhất một cặp nhánh cũ lệch nhau rõ rệt.
+    expect(Math.min(...secondaries.map((value) => vector(value).dot(vector(secondaries[0]))))).toBeLessThan(1 - 1e-3);
+  });
+
+  it("U3: vòng kín hướng cẳng tay -> twistReference không tích luỹ roll (secondary.lower thì có)", () => {
+    // Wrist đi một vòng quanh hướng rest rồi TRỞ VỀ đúng điểm đầu. Feed output frame này vào
+    // history frame sau, đúng như avatarMotionProcessor làm.
+    const wristPath = [lm(2, 0), lm(1.8, .8), lm(1.4, 1.4, .6), lm(1.4, .6, 1.4), lm(1.8, -.6, 1), lm(1.9, -.8, .2), lm(1.95, -.3, -.5), lm(2, 0)];
+    let history = emptyHistory();
+    let firstReference: Vector3Data | null = null, firstSecondary: Vector3Data | null = null, firstPrimary: Vector3Data | null = null;
+    let lastReference: Vector3Data | null = null, lastSecondary: Vector3Data | null = null;
+    wristPath.forEach((wrist, index) => {
+      const world = frame(); world[15] = wrist;
+      const solved = solveLeft(world, history, 100 + index * 33);
+      if (index === 0) { firstReference = solved.twistReference.lower; firstSecondary = solved.secondary.lower; firstPrimary = solved.primary.lower; }
+      lastReference = solved.twistReference.lower; lastSecondary = solved.secondary.lower;
+      history = { previousPole: solved.acceptedFreshPole ? solved.acceptedPole : history.previousPole, previousPoleWasFresh: solved.acceptedFreshPole,
+        previousDepthDegenerate: solved.depthDegenerate, lastValidPoleAtMs: solved.acceptedFreshPole ? 100 + index * 33 : history.lastValidPoleAtMs,
+        previousPrimary: solved.primary, previousSecondary: solved.secondary };
+    });
+    const axis = vector(firstPrimary!);
+    // Hướng cẳng tay đã về đúng chỗ cũ ⇒ mốc twist phải về đúng giá trị cũ.
+    expect(Math.abs(rollDegrees(axis, firstReference!, lastReference!))).toBeLessThan(1e-4);
+    // Assert âm: cùng vòng đó nhánh cũ tích luỹ holonomy (đo thực tế ~35°, để biên rộng).
+    expect(Math.abs(rollDegrees(axis, firstSecondary!, lastSecondary!))).toBeGreaterThan(5);
+  });
+
+  it("U4: ở rest pose mốc twist chính là rest secondary, và luôn unit + vuông góc lower", () => {
+    const straight = frame(true);
+    const solved = solveLeft(straight, emptyHistory(), 100);
+    const reference = vector(solved.twistReference.lower!);
+    expect(reference.dot(new Vector3(0, 1, 0))).toBeGreaterThan(1 - 1e-6);
+    expect(solved.twistReference.lowerSource).toBe("rest-transport");
+    for (const wrist of [lm(2, 0), lm(1.4, 1.4, .6), lm(1.8, -.6, 1)]) {
+      const world = frame(); world[15] = wrist;
+      const result = solveLeft(world, emptyHistory(), 100);
+      const value = vector(result.twistReference.lower!);
+      expect(Math.abs(value.length() - 1)).toBeLessThan(1e-6);
+      expect(Math.abs(value.dot(vector(result.primary.lower!).normalize()))).toBeLessThan(1e-6);
+    }
+  });
+
+  it("U5: gần điểm đối cực, hai đường tiếp cận khác nhau vẫn cho mốc gần nhau", () => {
+    // rest primary tay trái là +X; cẳng tay gập ngược về -X là điểm đối cực. Tới đó theo +Y so
+    // với theo +Z: transport sẽ lệch ~180°, phép chiếu thì không.
+    // Elbow ở (1,0), wrist về (0,±ε) ⇒ hướng cẳng tay ≈ -X, đối cực của rest primary +X.
+    const approach = (wrist: RawNormalizedLandmarkV1) => { const world = frame(); world[13] = lm(1, 0); world[15] = wrist; return solveLeft(world, emptyHistory(), 100); };
+    const viaY = approach(lm(0, 1e-4)), viaZ = approach(lm(0, 0, 1e-4));
+    expect(viaY.twistReference.lowerSource).toBe("rest-projection");
+    expect(viaZ.twistReference.lowerSource).toBe("rest-projection");
+    expect(vector(viaY.twistReference.lower!).angleTo(vector(viaZ.twistReference.lower!)) * 180 / Math.PI).toBeLessThan(5);
+  });
+
+  it("U6: dùng rest basis của lowerArm, không phải của upperArm", () => {
+    // Cho lowerArm một rest basis lệch 90° quanh primary chung so với upperArm. Fixture đang
+    // ship dùng CHUNG một object basis cho hai joint nên không test nào khác bắt được lỗi này.
+    const rig: NormalizedAvatarRigProfile = { ...profile, joints: { ...profile.joints,
+      leftLowerArm: { ...profile.joints.leftLowerArm, anatomicalRestBasis: { ...profile.joints.leftLowerArm.anatomicalRestBasis,
+        secondaryWorld: { x: 0, y: 0, z: 1 }, binormalWorld: { x: 0, y: -1, z: 0 } } } } };
+    const straight = frame(true);
+    const upperBasisReference = solveLeft(straight, emptyHistory(), 100).twistReference.lower!;
+    const lowerBasisReference = solveLeft(straight, emptyHistory(), 100, rig).twistReference.lower!;
+    expect(vector(upperBasisReference).dot(new Vector3(0, 1, 0))).toBeGreaterThan(1 - 1e-6);
+    // Phải đi theo basis của lowerArm (+Z), không phải của upperArm (+Y).
+    expect(vector(lowerBasisReference).dot(new Vector3(0, 0, 1))).toBeGreaterThan(1 - 1e-6);
   });
 });

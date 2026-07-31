@@ -335,7 +335,7 @@ là `UNVERIFIED`.
 
 ### 6.5. 2B-5C pronation/supination root-cause validation
 
-Tại `/dev/avatar-renderer`, bật Hand twist, mở bàn tay, gập khuỷu khoảng 90°, giữ cẳng tay không
+Tại `/dev/avatar-renderer`, Hand twist được bật tự động khi khởi tạo pipeline. Mở bàn tay, gập khuỷu khoảng 90°, giữ cẳng tay không
 chĩa thẳng vào camera. Bắt đầu ở handshake/neutral, xoay palm-up 45–60°, trở lại neutral, rồi
 xoay palm-down 45–60°. Freeze và ghi snapshot riêng cho neutral, palm-up và palm-down.
 
@@ -356,8 +356,8 @@ Acceptance gate trước khi đánh dấu 2B-5 PASS:
 
 ### 6.6. 2B-5D arm stability root-cause audit
 
-Tại `/dev/avatar-renderer`, giữ nguyên camera, ánh sáng và tư thế rồi chạy hai lượt: trước hết tắt
-**Hand twist (2B-5)**, sau đó bật lại mà không đổi Pose. Snapshot `motionDiagnostics.armStability`
+Tại `/dev/avatar-renderer`, giữ nguyên camera, ánh sáng và tư thế. Hand twist đã được bật tự động;
+so sánh Pose-only bằng unit/integration test với `handTwistEnabled: false`. Snapshot `motionDiagnostics.armStability`
 được UI cập nhật mỗi 400 ms; không dùng log mỗi frame.
 
 Chụp cho từng side ở tám tình huống: Pose-only giữ yên; twist-on giữ yên; tay gần duỗi; khuỷu 90°;
@@ -405,7 +405,7 @@ vẫn cho chuyển động ngược trên webcam, nên gate này đang **FAIL** 
 Chạy cùng một matrix trên `reference-avatar.vrm`, `reference-avatar-1.vrm` và
 `reference-avatar-2.vrm`. Trước mỗi model/side: reload model, giữ bàn tay ngoài khung cho tới khi
 state ổn định, sau đó đưa tay vào tư thế handshake neutral. Bật Filter, Constraints, Render
-smoothing và Hand twist; ghi rõ mọi khác biệt nếu phải thay cấu hình.
+smoothing; Hand twist đã bật tự động. Ghi rõ mọi khác biệt nếu phải thay cấu hình.
 
 | Case | Động tác | Evidence bắt buộc | Kết quả đạt |
 |---|---|---|---|
@@ -530,7 +530,7 @@ ngày 2026-07-30.
 
 ### 6.11. Phase 3E — Torso & Shoulder Retargeting
 
-Trạng thái **TORSO BASELINE COMPLETE — 3E-01/02/03/04 COMPLETE; shoulder 3E-05/06 DEFERRED và code đã revert về mốc sau 3E-04**. Automated matrix phải bao phủ torso coordinate/neutral,
+Trạng thái **TORSO RUNTIME + HIERARCHY-SAFE HEAD/NECK/ARM REIMPLEMENTED; MANUAL WEBCAM PENDING; shoulder độc lập 3E-05 DEFERRED**. Automated matrix phải bao phủ torso coordinate/neutral,
 phân bổ `hips/spine/chest/upperChest`, shoulder independence, hierarchy-safe torso→shoulder→arm,
 capability fallback, temporal/loss/lifecycle, packet privacy và performance. Automated PASS không thay
 thế manual webcam acceptance trên ít nhất hai model. Contract, thứ tự subtask và toàn bộ gate nằm tại
@@ -548,14 +548,17 @@ invariance; shoulder-only fallback tiếp tục torso yaw/body-roll khi hông ng
 landmarks không được tác động torso output. Manual webcam
 PASS ngày 2026-07-30.
 
-3E-04 targeted năm file 92/92 PASS; TypeScript/lint/build PASS. Matrix khóa share sum bằng 1,
+3E-04 trước khi revert có targeted năm file 92/92 PASS. Matrix đã khóa share sum bằng 1,
 multi-bone không nhận 100%, curve nhẹ/lớn liên tục, fallback thiếu upperChest, exact world recomposition với
 rest rotation không-identity, packet chỉ phát bone capability cho phép và renderer nhận semantic torso joints.
 Manual vòng đầu ngày 2026-07-30 phát hiện yaw ngược, neutral rung và yaw amplitude thấp. Corrective matrix bổ
 sung đúng dấu camera→avatar, yaw gần 1:1 tới 70°, soft-limit 80°, neutral deadband 1–3°, timestamp-aware
 One Euro filter, duplicate hold và lifecycle reset. Corrective targeted sáu file 95/95, lint/build PASS.
-Full suite tại gate 3E-04 là 493/497 do cùng bốn blocker Phase 3B;
-manual webcam distribution/continuity đã PASS sau corrective tuning.
+Full suite tại gate 3E-04 cũ là 493/497; manual gate cũ không chạy đồng thời head/neck và arm nên bỏ sót
+regression parent hierarchy. Runtime mới khóa torso chain recomposition, current-frame shoulder parent cho
+upper arm, head semantic quaternion round-trip, torso duplicate/loss/reacquire và toàn bộ regression Phase
+3A/3B. Gate mới ngày 2026-07-30: **57 file, 521/521 test PASS**, TypeScript/Vite build PASS, lint PASS.
+Manual webcam nhiều pose/model vẫn bắt buộc trước khi COMPLETE.
 
 Manual corrective tuning tiếp theo dùng evidence shoulder-only `Input Roll 8.1° → Output 7.8°`: body-roll
 đổi sang deadband 2–4°/gain 0.65/soft-limit 25°, đồng thời neck roll share giảm từ 25–45% xuống 15–30%
@@ -566,5 +569,19 @@ xác nhận PASS ngày 2026-07-30.
 vì shrug tự nhiên trên model tham chiếu. Theo quyết định người dùng ngày 2026-07-30, toàn bộ shoulder solver,
 hierarchy rebase, targeted tests và DEV controls đã được gỡ; upper arm trở lại `fixed-rest`. Đây là deferred
 scope, không được ghi nhận là PASS.
+
+### 6.12. Phase 3H — Camera Framing & Tracking Readiness
+
+Trạng thái **IN PROGRESS — 3H-01/02 AUTOMATED PASS, MANUAL PENDING; 3H-03→07 PLANNED**, thực hiện sau Phase 3E. Phase này đánh giá local-only
+`bodyVisiblePercent`, `frameOccupancyPercent`, `trackingQualityPercent` và các trạng thái framing, tay ngoài
+khung, ánh sáng chưa đủ. Không dùng framing như phép đo khoảng cách vật lý và không dùng thống kê ảnh như
+phép đo lux. Contract, thứ tự 3H-01→3H-07, automated gates và manual matrix nằm tại
+`docs/P4_T10_PHASE3H_CAMERA_FRAMING_AND_TRACKING_READINESS_PLAN.md`.
+
+3H-01/02 đã implement; targeted hai file 12/12 PASS, TypeScript/lint/build PASS và HTTP smoke
+`/dev/tracking` trả 200. Full frontend suite 506/510; bốn failure cô lập thuộc blocker Phase 3B trong
+`handTwistRootCauseValidation.test.ts` do mock renderer thiếu `capability.gaze`, không thuộc đường code 3H.
+Manual webcam/UI matrix chưa chạy vì browser không khả dụng trong phiên, nên trạng thái 3H-01/02 là
+**AUTOMATED PASS — MANUAL PENDING**, chưa COMPLETE.
 
 *— Hết tài liệu —*

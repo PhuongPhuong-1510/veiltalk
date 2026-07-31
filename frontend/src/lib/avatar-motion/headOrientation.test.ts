@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyHeadResponseCurve, createHeadFrozenPreset, facialTransformToMotionQuaternion, headEulerDegrees, neutralRelativeHeadRotation, solveHeadOrientation } from "./headOrientation";
+import { applyHeadResponseCurve, avatarLocalQuaternionFromSemanticEuler, avatarSemanticEulerFromLocalQuaternion, createHeadFrozenPreset, facialTransformToMotionQuaternion, headEulerDegrees, neutralRelativeHeadRotation, solveHeadOrientation } from "./headOrientation";
 
 describe("Phase 3D head coordinate and neutral contract", () => {
   it("reads MediaPipe column-major matrices and locks yaw/pitch/roll signs", () => {
@@ -48,5 +48,13 @@ describe("Phase 3D head coordinate and neutral contract", () => {
     expect(cameraUp.x * response.output.x).toBeLessThan(0);
     const cameraDown = facialTransformToMotionQuaternion(createHeadFrozenPreset("pitch-down-25"))!;
     expect(cameraDown.x * applyHeadResponseCurve(cameraDown).output.x).toBeLessThan(0);
+  });
+
+  it("round-trips avatar semantic Euler without reusing the camera pitch inversion", () => {
+    const semantic = { yaw: 28, pitch: -17, roll: 9 };
+    const roundTrip = avatarSemanticEulerFromLocalQuaternion(avatarLocalQuaternionFromSemanticEuler(semantic));
+    expect(roundTrip.yaw).toBeCloseTo(semantic.yaw, 6);
+    expect(roundTrip.pitch).toBeCloseTo(semantic.pitch, 6);
+    expect(roundTrip.roll).toBeCloseTo(semantic.roll, 6);
   });
 });

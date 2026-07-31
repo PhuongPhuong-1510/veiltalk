@@ -360,6 +360,12 @@ Thanh điều khiển xuất hiện dưới màn hình video call. Layout: căn 
 | **CTA**               | Nút Primary 'Hoàn tất & Bắt đầu' → chuyển sang SCR-10 (Home).                                                                                                                       |
 | **Back**              | Nút ghost 'Tùy chỉnh lại' → quay về SCR-08.                                                                                                                                         |
 
+**Kế hoạch Phase 3H (chưa triển khai):** SCR-09 sẽ bổ sung một thông báo readiness chính, ổn định theo
+thời gian: quá gần, vị trí phù hợp, hơi xa, quá xa, tay ngoài khung hoặc ánh sáng chưa đủ. UI không hiển
+thị khoảng cách theo mét/centimet. Ba chỉ số `bodyVisiblePercent`, `frameOccupancyPercent` và
+`trackingQualityPercent` mặc định chỉ có trong DEV diagnostics; việc đưa phần trăm ra production cần
+nghiệm thu UI riêng. Chi tiết: `docs/P4_T10_PHASE3H_CAMERA_FRAMING_AND_TRACKING_READINESS_PLAN.md`.
+
 ### 5.8. SCR-10 — Home: Danh sách Trò chuyện
 
 | **Thuộc tính**         | **Đặc tả**                                                                                                                                                                                                                                                                                               |

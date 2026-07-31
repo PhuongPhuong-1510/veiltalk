@@ -72,6 +72,14 @@ export function avatarLocalQuaternionFromSemanticEuler(value: HeadEulerDegrees):
   return { x: q.x, y: q.y, z: q.z, w: q.w };
 }
 
+/** Inverse của avatarLocalQuaternionFromSemanticEuler; không dùng headEulerDegrees vì hàm đó
+ * cố ý đảo pitch tại biên MediaPipe camera. */
+export function avatarSemanticEulerFromLocalQuaternion(rotation: QuaternionData): HeadEulerDegrees {
+  const euler = new Euler().setFromQuaternion(new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w), "YXZ");
+  const degrees = 180 / Math.PI;
+  return { yaw: euler.y * degrees, pitch: euler.x * degrees, roll: euler.z * degrees };
+}
+
 export function solveHeadOrientation(
   tracked: boolean,
   transform: RawMatrixV1 | null,

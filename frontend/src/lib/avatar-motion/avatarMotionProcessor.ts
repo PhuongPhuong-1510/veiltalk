@@ -1,6 +1,6 @@
 import type { RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
 import type { AvatarPartTrackingInfo, AvatarPosePacketV1, QuaternionData } from "./avatarPoseTypes";
-import { applyHeadResponseCurve, solveHeadOrientation } from "./headOrientation";
+import { applyHeadResponseCurve, avatarLocalQuaternionFromSemanticEuler, avatarSemanticEulerFromLocalQuaternion, solveHeadOrientation } from "./headOrientation";
 import { distributeHeadNeckRotation } from "./headNeckDistribution";
 import { HeadTemporalProcessor, type HeadTemporalResult } from "./headTemporal";
 import { HeadLossRecoveryProcessor, type HeadLossResult } from "./headLossRecovery";
@@ -20,13 +20,13 @@ import { OneEuroScalarFilter, OneEuroVectorFilter } from "./oneEuroFilter";
 import type { AvatarJointName } from "./avatarPoseTypes";
 import { TrackingLossStateMachine } from "./trackingLoss";
 import { createArmTemporalState, updateSegmentTemporalOutput, type ArmTemporalState, type ArmLossState } from "./armTemporalState";
-import { angularDeltaDegrees, vectorAngularDeltaDegrees } from "./motionMath";
+import { angularDeltaDegrees, inverseQuaternion, multiplyQuaternions, slerpQuaternionData, vectorAngularDeltaDegrees } from "./motionMath";
 import { buildIdleArmPose, type IdleArmPose } from "./idleArmPose";
-import type { ArmSide, AvatarMotionDiagnosticSnapshot, HandSampleClassification, HandTrackingEpochResetReason, MotionSampleDisposition, PoleSource, TorsoBasisSource } from "./avatarMotionDiagnostics";
+import type { ArmSide, AvatarMotionDiagnosticSnapshot, HandSampleClassification, HandTrackingEpochResetReason, MotionSampleDisposition, PoleSource, TorsoBasisSource, TwistReferenceSource } from "./avatarMotionDiagnostics";
 import { inspectTorsoBasis, type TorsoBasis } from "./torsoBasis";
 import { buildTorsoSemanticObservation, solveTorsoOrientation, TorsoCalibrationProcessor } from "./torsoOrientation";
-import { distributeTorsoRotation } from "./torsoDistribution";
-import { TorsoTemporalProcessor } from "./torsoTemporal";
+import { distributeTorsoRotation, type TorsoChainJoint } from "./torsoDistribution";
+import { TorsoLossRecoveryProcessor, TorsoTemporalProcessor } from "./torsoTemporal";
 import { matchHandsToPose, type HandMatchPreviousState, type HandPoseMatchResult, type HandSideMatchResult } from "./handPoseMatching";
 import { computeHandPalmBasis, type HandPalmBasisOutput } from "./handPalmBasis";
 import { buildHandMotionDiagnostics, type HandMotionDiagnosticsSnapshot } from "./handMotionDiagnostics";
@@ -145,6 +145,7 @@ function inactiveHandTwistDiagnostic(
   sampleClassification: HandSampleClassification,
   state: HandTwistProcessorState,
   reason: string | null = "feature-disabled",
+  twistReferenceSource: TwistReferenceSource = "unavailable",
 ): HandTwistRigDiagnostic {
   const limits = config.handTwist.correctionLimits[side];
   return {
@@ -171,7 +172,7 @@ function inactiveHandTwistDiagnostic(
     clampMinRadians: limits.minRadians, clampMaxRadians: limits.maxRadians,
     targetInfluenceWeight: 0, temporalInfluenceWeight: 0, trusted: false,
     temporalTrackingState: "inactive", appliedTwistRadians: 0, lastAppliedTwistRadians: 0, handTwistApplied: false,
-    rejectionReason: reason, unwrapOwner: "handTwistStabilization",
+    rejectionReason: reason, unwrapOwner: "handTwistStabilization", twistReferenceSource,
   };
 }
 
@@ -219,6 +220,7 @@ export class AvatarMotionProcessor {
   private readonly headLossRecovery = new HeadLossRecoveryProcessor();
   private readonly torsoCalibration = new TorsoCalibrationProcessor();
   private readonly torsoTemporal = new TorsoTemporalProcessor();
+  private readonly torsoLossRecovery = new TorsoLossRecoveryProcessor();
   private headNeutralRotation: QuaternionData | null = null;
   private lastFaceProcessedSampledAtMs: number | null = null;
   private mouthTimingEnabled = true;
@@ -319,8 +321,8 @@ export class AvatarMotionProcessor {
   cancelFaceCalibration(): void { this.faceCalibration.cancel(); this.headNeutralRotation = null; this.expressionFilters.clear(); this.headTemporal.reset(); this.headLossRecovery.reset(); }
   resetFaceCalibration(): void { this.faceCalibration.reset(); this.headNeutralRotation = null; this.expressionFilters.clear(); this.headTemporal.reset(); this.headLossRecovery.reset(); }
   getFaceCalibrationSnapshot(): FaceCalibrationSnapshot { return this.faceCalibration.snapshot(); }
-  startTorsoCalibration(): void { this.torsoCalibration.start(); this.torsoTemporal.reset(); }
-  resetTorsoCalibration(): void { this.torsoCalibration.reset(); this.torsoTemporal.reset(); }
+  startTorsoCalibration(): void { this.torsoCalibration.start(); this.torsoTemporal.reset(); this.torsoLossRecovery.reset(); }
+  resetTorsoCalibration(): void { this.torsoCalibration.reset(); this.torsoTemporal.reset(); this.torsoLossRecovery.reset(); }
   getTorsoCalibrationSnapshot() { return this.torsoCalibration.snapshot(); }
   setMouthTimingEnabled(enabled: boolean): void { if (this.mouthTimingEnabled !== enabled) this.mouthTiming.reset(); this.mouthTimingEnabled = enabled; }
   setAudioActivitySource(source: AudioActivitySource | null): void { this.mouthTiming.setAudioSource(source); }
@@ -343,6 +345,29 @@ export class AvatarMotionProcessor {
       rightHand: this.part("rightHand", frame.rightHand.state, frame.rightHand.sampledAtMs, processedTimestampMs, this.config.freshnessMs.hand),
       pose: this.part("pose", frame.pose.state, frame.pose.sampledAtMs, processedTimestampMs, this.config.freshnessMs.pose),
     };
+    // Torso phải được giải trước mọi child. Đây là target parent của cùng frame cho neck/head
+    // và upperArm; tính ở cuối pipeline sẽ khiến các solver con chỉ còn parent rest cũ.
+    const torsoObservation = frame.pose.worldLandmarks ? inspectTorsoBasis(frame.pose.worldLandmarks, this.config.armFrame.minimumPoseVisibility, this.config.armFrame.minimumSegmentLength) : null;
+    const torsoSemanticObservation = frame.pose.worldLandmarks && torsoObservation ? buildTorsoSemanticObservation(frame.pose.worldLandmarks, torsoObservation, this.config.armFrame.minimumPoseVisibility, this.config.armFrame.minimumSegmentLength) : null;
+    this.torsoCalibration.process(frame.pose.state, frame.pose.sampledAtMs, torsoSemanticObservation);
+    const torsoCalibration = this.torsoCalibration.snapshot();
+    const torsoOrientation = solveTorsoOrientation(torsoSemanticObservation, torsoCalibration.neutral);
+    const torsoTemporal = torsoOrientation.outputEulerDegrees && frame.pose.sampledAtMs !== null
+      ? this.torsoTemporal.process(torsoOrientation.outputEulerDegrees, frame.pose.sampledAtMs, this.filtered)
+      : null;
+    if (!torsoCalibration.neutral) this.torsoLossRecovery.reset();
+    const torsoLoss = this.torsoLossRecovery.process(torsoTemporal?.output ?? null, torsoCalibration.neutral ? frame.pose.state : "not-sampled", frame.pose.sampledAtMs, processedTimestampMs);
+    const torsoDistribution = this.rigProfile?.torsoShoulderCapability
+      ? distributeTorsoRotation(torsoLoss.output, this.rigProfile.torsoShoulderCapability)
+      : null;
+    const upperArmParentTargets: Partial<Record<ArmSide, QuaternionData>> = {};
+    if (torsoDistribution && this.rigProfile?.torsoShoulderCapability) for (const side of ["left", "right"] as const) {
+      const shoulderName = side === "left" ? "leftShoulder" : "rightShoulder";
+      const shoulder = this.rigProfile.torsoShoulderCapability.bones[shoulderName];
+      const parentName = shoulder.parentSemantic as TorsoChainJoint | null;
+      const parentTarget = parentName ? torsoDistribution.targetWorldRotations[parentName] : null;
+      if (shoulder.available && shoulder.restLocalRotation && parentTarget) upperArmParentTargets[side] = multiplyQuaternions(parentTarget, shoulder.restLocalRotation);
+    }
     const calibratedFace = this.faceCalibration.process(frame.face.state, frame.face.sampledAtMs, frame.face.blendshapes, frame.face.facialTransform, processedTimestampMs);
     const faceSampleIsNew = frame.face.state === "tracked" && frame.face.blendshapes !== null && frame.face.sampledAtMs !== null && frame.face.sampledAtMs !== this.lastFaceProcessedSampledAtMs;
     let faceCandidate: FaceMotionSample | null = null;
@@ -376,8 +401,18 @@ export class AvatarMotionProcessor {
       : null;
     if (!this.headNeutralRotation) this.headLossRecovery.reset();
     const headLoss: HeadLossResult = this.headLossRecovery.process(headTemporal?.output ?? null, this.headNeutralRotation ? frame.face.state : "not-sampled", frame.face.sampledAtMs, processedTimestampMs);
+    const desiredHeadWorldDelta = avatarLocalQuaternionFromSemanticEuler(headLoss.output);
+    // Khi face còn được giữ/track, trừ parent torso để tránh double rotation. Khi face đã
+    // return về neutral, giảm dần phép bù để neutral cuối là local-neutral và đi theo thân.
+    const torsoCompensationWeight = headLoss.state === "idle" ? 0 : headLoss.state === "returning" ? 1 - headLoss.progress : 1;
+    const compensatedTorso = torsoDistribution
+      ? slerpQuaternionData({ x: 0, y: 0, z: 0, w: 1 }, torsoDistribution.total, torsoCompensationWeight)
+      : null;
+    const torsoRelativeHeadEuler = torsoDistribution && torsoDistribution.mode !== "unsupported"
+      ? avatarSemanticEulerFromLocalQuaternion(multiplyQuaternions(inverseQuaternion(compensatedTorso!), desiredHeadWorldDelta))
+      : headLoss.output;
     const headDistribution = distributeHeadNeckRotation(
-      headLoss.output,
+      torsoRelativeHeadEuler,
       this.rigProfile?.headNeckCapability ?? { head: true, neck: false },
     );
     const headRotation = headDistribution?.head ?? null;
@@ -414,7 +449,7 @@ export class AvatarMotionProcessor {
       right: inactiveHandTwistDiagnostic("right", this.config, frame.handSampledThisFrame, handSampleClassification, this.handTwistState.right),
     };
     const armStabilityDiagnostics = {} as AvatarMotionDiagnosticSnapshot["armStability"];
-    let jointRotations: AvatarPosePacketV1["jointRotations"] = headDistribution?.neck ? { neck: headDistribution.neck } : {};
+    let jointRotations: AvatarPosePacketV1["jointRotations"] = { ...(torsoDistribution?.deltas ?? {}), ...(headDistribution?.neck ? { neck: headDistribution.neck } : {}) };
     if (this.rigProfile) {
       const sampledAtMs = frame.pose.sampledAtMs;
       const isTrackedDuplicate = poseIsTrackedDuplicate;
@@ -431,7 +466,7 @@ export class AvatarMotionProcessor {
       }, processedTimestampMs, this.config.armFrame, this.constraints, this.filtered
         ? (name, direction) => this.directionFilter(name).filter(direction, sampledAtMs!) : undefined,
       this.filtered ? (side, pole) => this.poleFilter(side).filter(pole, sampledAtMs!) : undefined,
-      this.lastTorso ?? undefined) : null;
+      this.lastTorso ?? undefined, upperArmParentTargets) : null;
       if (solved?.torsoWasObserved) this.lastTorso = solved.torso;
       const torso = solved?.torso ?? this.lastTorso ?? {
         right: this.rigProfile.torsoReference.rightWorld, up: this.rigProfile.torsoReference.upWorld,
@@ -496,6 +531,8 @@ export class AvatarMotionProcessor {
           if (elbowSourceChanged || poleSourceUpgraded || chainTrackingReacquired) { trackingReacquired = true; for (const segment of ["upper", "lower"] as const) { state.segments[segment].lossState = "recovering"; state.segments[segment].recoveryStartedAtMs = null; } }
           state.elbowSource = acceptedGeometry.elbowSource;
           state.previousPrimary = acceptedGeometry.primary; state.previousSecondary = acceptedGeometry.secondary;
+          // Mốc twist lưu trên ĐÚNG biên accept này để luôn cùng frame với `previousPrimary`.
+          state.previousTwistReference = { lower: acceptedGeometry.twistReference.lower, lowerSource: acceptedGeometry.twistReference.lowerSource };
           if (acceptedGeometry.elbowSource === "observed") { state.previousObservedElbow = acceptedGeometry.elbowPosition; state.inferenceStartedAtMs = null; if (acceptedGeometry.observedLengths) this.updateLengthCalibration(state, acceptedGeometry.observedLengths); }
           else state.inferenceStartedAtMs ??= processedTimestampMs;
         } else if (solved?.diagnostics[side].hardRejectionReason?.startsWith("elbow-inference")) state.inferenceStartedAtMs ??= processedTimestampMs;
@@ -576,21 +613,9 @@ export class AvatarMotionProcessor {
         stabilityState.previousHandAppliedTwistRadians = twistResult.diagnostic.appliedTwistRadians;
         stabilityState.previousFrameAtMs = processedTimestampMs;
       }
-      const torsoObservation = frame.pose.worldLandmarks ? inspectTorsoBasis(frame.pose.worldLandmarks, this.config.armFrame.minimumPoseVisibility, this.config.armFrame.minimumSegmentLength) : null;
-      const torsoSemanticObservation = frame.pose.worldLandmarks && torsoObservation ? buildTorsoSemanticObservation(frame.pose.worldLandmarks, torsoObservation, this.config.armFrame.minimumPoseVisibility, this.config.armFrame.minimumSegmentLength) : null;
-      this.torsoCalibration.process(frame.pose.state, frame.pose.sampledAtMs, torsoSemanticObservation);
-      const torsoCalibration = this.torsoCalibration.snapshot(); const torsoOrientation = solveTorsoOrientation(torsoSemanticObservation, torsoCalibration.neutral);
-      const torsoTemporal = torsoOrientation.outputEulerDegrees && frame.pose.sampledAtMs !== null
-        ? this.torsoTemporal.process(torsoOrientation.outputEulerDegrees, frame.pose.sampledAtMs, this.filtered)
-        : null;
-      const appliedTorsoEuler = torsoTemporal?.output ?? torsoOrientation.outputEulerDegrees;
-      const torsoDistribution = appliedTorsoEuler && this.rigProfile.torsoShoulderCapability
-        ? distributeTorsoRotation(appliedTorsoEuler, this.rigProfile.torsoShoulderCapability)
-        : null;
-      if (torsoDistribution) Object.assign(jointRotations, torsoDistribution.deltas);
       this.diagnostics = { version: 1, processedAtMs: processedTimestampMs, torso: { right: torso.right, up: torso.up, forward: torso.forward, worldRotation: torso.worldRotation, source: torsoSource,
         visibility: torsoObservation?.visibility ?? { leftShoulder: null, rightShoulder: null, leftHip: null, rightHip: null }, observationRejectionReason: torsoObservation?.rejectionReason ?? "missing-landmark", rejectionReason: torsoOrientation.rejectionReason,
-        calibration: torsoCalibration, observationMode: torsoOrientation.mode, pitchObservable: torsoOrientation.pitchObservable, raw: torsoOrientation.raw, neutralRelative: torsoOrientation.neutralRelative, inputEulerDegrees: torsoOrientation.inputEulerDegrees, outputEulerDegrees: appliedTorsoEuler, responseOutput: torsoDistribution?.total ?? torsoOrientation.output, temporal: torsoTemporal, distribution: torsoDistribution }, arms: armDiagnostics, handTwist: handTwistDiagnostics, armStability: armStabilityDiagnostics, head: { semantic: "neutral-relative-verified", matrixStorage: "column-major-4x4", conversionOwner: "coordinateAdapter", calibrationStatus: calibrationSnapshot.status, ...head, responseInputEulerDegrees: headResponse?.inputEulerDegrees ?? null, responseOutputEulerDegrees: headResponse?.outputEulerDegrees ?? null, responseOutput: headResponse?.output ?? null, responseInputClamped: headResponse?.inputClamped ?? false, temporal: headTemporal, loss: headLoss, distribution: headDistribution } };
+        calibration: torsoCalibration, observationMode: torsoOrientation.mode, pitchObservable: torsoOrientation.pitchObservable, raw: torsoOrientation.raw, neutralRelative: torsoOrientation.neutralRelative, inputEulerDegrees: torsoOrientation.inputEulerDegrees, outputEulerDegrees: torsoLoss.output, responseOutput: torsoDistribution?.total ?? torsoOrientation.output, temporal: torsoTemporal, loss: torsoLoss, distribution: torsoDistribution }, arms: armDiagnostics, handTwist: handTwistDiagnostics, armStability: armStabilityDiagnostics, head: { semantic: "neutral-relative-verified", matrixStorage: "column-major-4x4", conversionOwner: "coordinateAdapter", calibrationStatus: calibrationSnapshot.status, ...head, responseInputEulerDegrees: headResponse?.inputEulerDegrees ?? null, responseOutputEulerDegrees: headResponse?.outputEulerDegrees ?? null, responseOutput: headResponse?.output ?? null, responseInputClamped: headResponse?.inputClamped ?? false, temporal: headTemporal, loss: headLoss, distribution: headDistribution } };
     } else this.diagnostics = null;
     return { version: 1, sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze, headRotation, jointRotations, handMotion: handContext.diagnostics };
   }
@@ -706,8 +731,13 @@ export class AvatarMotionProcessor {
 
     const lowerName = side === "left" ? "leftLowerArm" : "rightLowerArm";
     const profileJoint = this.rigProfile?.joints[lowerName];
+    // Trục và mốc là một CẶP cố ý cùng frame accepted (cùng gán tại một chỗ khi accept geometry).
+    // Cả hai có thể trễ một frame khi geometry chưa được accept, và đó là lựa chọn có ý thức: cặp
+    // cũ-nhưng-nhất-quán cho góc đúng chỉ trễ, còn trục tươi ghép mốc cũ thì sai hẳn. Mốc KHÔNG
+    // còn lấy từ `previousSecondary.lower` (parallel transport theo lịch sử, tích luỹ holonomy) —
+    // xem `computeTwistReference` và docs/P4_T10_PHASE3B_TWIST_REFERENCE_FIX_PLAN.md.
     const forearmAxis = this.armState[side].previousPrimary.lower;
-    const referenceDirection = this.armState[side].previousSecondary.lower;
+    const referenceDirection = this.armState[side].previousTwistReference.lower;
     if (freshLowerGeometryValid === false) {
       if (state.lowerArmGeometryValid !== false) {
         state.lowerArmGeometryValid = false;
@@ -893,18 +923,19 @@ export class AvatarMotionProcessor {
       handTwistApplied,
       rejectionReason: rejectionReason ?? (!armChainOutputValid ? "arm-chain-recovery-pending" : temporal.rejectionReason === "none" ? null : temporal.rejectionReason),
       unwrapOwner: "handTwistStabilization",
+      twistReferenceSource: this.armState[side].previousTwistReference.lowerSource,
     };
     this.consumeMatchingResetMarker(state);
     return { output: composed ?? poseLowerDelta, diagnostic };
   }
 
   reset(): void {
-    this.headNeutralRotation = null; this.torsoCalibration.reset(); this.torsoTemporal.reset();
+    this.headNeutralRotation = null; this.torsoCalibration.reset(); this.torsoTemporal.reset(); this.torsoLossRecovery.reset();
     this.sequence = 0; this.faceCalibration.reset(); this.mouthTiming.reset(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.faceExpressionLoss.reset(); this.lastFaceProcessedSampledAtMs = null; this.resetArmState(); this.resetHandTrackingState("processor-reset"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
   dispose(): void {
     this.rigProfile = null;
-    this.headNeutralRotation = null; this.torsoCalibration.reset(); this.torsoTemporal.reset();
+    this.headNeutralRotation = null; this.torsoCalibration.reset(); this.torsoTemporal.reset(); this.torsoLossRecovery.reset();
     this.sequence = 0; this.faceCalibration.reset(); this.mouthTiming.dispose(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.faceExpressionLoss.reset(); this.lastFaceProcessedSampledAtMs = null; this.resetArmState(); this.resetHandTrackingState("dispose"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
 
@@ -937,7 +968,7 @@ export class AvatarMotionProcessor {
   private poleFilter(side: ArmSide): OneEuroVectorFilter {
     let filter = this.poleFilters.get(side); if (!filter) { filter = new OneEuroVectorFilter(this.config.filter.pole, this.config.filter.maxTimestampGapMs); this.poleFilters.set(side, filter); } return filter;
   }
-  private resetFilters(): void { this.expressionFilters.clear(); this.directionFilters.clear(); this.poleFilters.clear(); this.headTemporal.reset(); this.headLossRecovery.reset(); this.torsoTemporal.reset(); }
+  private resetFilters(): void { this.expressionFilters.clear(); this.directionFilters.clear(); this.poleFilters.clear(); this.headTemporal.reset(); this.headLossRecovery.reset(); this.torsoTemporal.reset(); this.torsoLossRecovery.reset(); }
   private resetFaceTemporalAfterLongLoss(): void { this.mouthTiming.reset(); this.mouthShape.reset(); this.eyeExpression.reset(); this.gaze.reset(); this.browCheekExpression.reset(); this.expressionFilters.clear(); }
   private resetArmState(): void {
     for (const side of ["left", "right"] as const) {

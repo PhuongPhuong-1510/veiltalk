@@ -69,7 +69,10 @@ export function inspectModel(root: Object3D, profile: AvatarModelRigProfile | un
     loaded: true, format, vrmVersion: vrm?.meta.metaVersion ?? null, fileSizeBytes, loadTimeMs,
     humanoidRig: Object.values(requiredBones).every(Boolean), restPose: profile?.restPose ?? inferredRestPose,
     forwardAxis: profile?.forwardAxis ?? (vrm ? "-Z" : "unknown"), forwardAxisReason: profile ? "rig profile" : vrm ? "three-vrm normalized humanoid convention after VRM0 rotation" : "No VRM metadata or rig profile; cannot infer safely.", requiredBones, optionalBones,
-    torsoShoulder: { bones: torsoBones, parents, hierarchy, shoulderStatus: { left: shoulderStatus("left"), right: shoulderStatus("right") }, upperArmParentMode: { left: "fixed-rest", right: "fixed-rest" } },
+    torsoShoulder: { bones: torsoBones, parents, hierarchy, shoulderStatus: { left: shoulderStatus("left"), right: shoulderStatus("right") }, upperArmParentMode: {
+      left: shoulderStatus("left") === "available" && hierarchy !== "unsupported" ? "current-frame-parent" : "fixed-rest",
+      right: shoulderStatus("right") === "available" && hierarchy !== "unsupported" ? "current-frame-parent" : "fixed-rest",
+    } },
     expressions: expressionNames, faceExpressions, gaze, mtoonMaterial: mtoon || Boolean(vrm?.materials?.some((material) => material.type.toLowerCase().includes("mtoon"))), materialCount: materials.size,
     textureCount: textures.size, triangleCount: Math.round(triangles), drawCallsEstimate: drawCalls,
     licenseStatus, unsupportedFeatures: unsupported, normalizedArmRestDirections,

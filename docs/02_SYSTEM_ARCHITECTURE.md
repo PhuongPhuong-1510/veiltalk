@@ -191,6 +191,14 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
   từ torso + arm geometry và đổi arm chain sang current-frame parent targets để giữ tay đúng khi parent
   torso/shoulder chuyển động. Nguồn: `docs/P4_T10_PHASE3E_TORSO_SHOULDER_RETARGETING_PLAN.md`.
 
+- Phase 3H Camera Framing & Tracking Readiness được thực hiện sau Phase 3E. 3H-01/02 đã implement với
+  automated gate PASS, manual webcam/UI gate còn pending: evidence extractor local-only và
+  `bodyVisiblePercent` weighted theo face/shoulder/elbow/wrist đã được nối vào DEV harness. Phase này tạo ba chỉ số
+  local-only `bodyVisiblePercent`, `frameOccupancyPercent`, `trackingQualityPercent` và phân loại tương đối
+  `too-close`/`good`/`slightly-far`/`too-far`/`hands-out-of-frame`/`insufficient-light`. Kết quả không đi vào
+  `AvatarPosePacketV1`; framing không được mô tả như khoảng cách vật lý và ánh sáng không được mô tả như
+  phép đo lux. Nguồn: `docs/P4_T10_PHASE3H_CAMERA_FRAMING_AND_TRACKING_READINESS_PLAN.md`.
+
 - Hai chế độ nguồn dữ liệu: theo dõi cục bộ (cho chính nhân vật của người dùng) và dữ liệu nhận qua RTCDataChannel (cho nhân vật của người đối thoại) — cùng một Renderer, khác nguồn input. Về model 3D phía nhận: khi thiết lập cuộc gọi, phía nhận tải model GLB của người gọi từ Backend API (không truyền trực tiếp qua WebRTC DataChannel vì file model có thể lớn). Backend lưu sẵn URL/reference tới model đã chọn của từng user trong hồ sơ tài khoản (FR-04); phía nhận dùng URL này để tải model đúng trước khi bắt đầu nhận skeleton data. Nhờ đó, người dùng B thấy đúng nhân vật ảo (màu tóc, trang phục) mà người dùng A đã tùy chỉnh.
 
 - Bảng giới hạn góc khớp giải phẫu (khuỷu tay, cổ tay, vai) được định nghĩa tĩnh trong cấu hình, dùng chung cho cả theo dõi cục bộ và dữ liệu nhận từ xa, đảm bảo FR-08 áp dụng nhất quán cho cả hai chế độ.

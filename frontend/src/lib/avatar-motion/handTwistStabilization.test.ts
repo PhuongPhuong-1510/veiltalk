@@ -83,4 +83,24 @@ describe("Hand twist stabilization", () => {
     expect(result.neutralTwistRadians).toBeCloseTo(40 * DEG);
     expect(result.correctedTwistRadians).toBeCloseTo(0);
   });
+
+  it("U7: đổi định nghĩa reference (lệch một hằng số) không đổi output — neutral tự triệt tiêu", () => {
+    // Đây là lý do Phase 3B fix KHÔNG cần sửa module này: đổi mốc twist làm raw lệch một hằng
+    // Δ, nhưng `corrected = rawUnwrapped - neutral` khử đúng hằng đó. Nếu sau này ai làm
+    // stabilization "biết" về reference, test này sẽ đỏ.
+    const OFFSET = 1.34;
+    const sequence = [10 * DEG, 25 * DEG, 40 * DEG, 12 * DEG, -18 * DEG, -35 * DEG, 5 * DEG];
+    const run = (offset: number) => {
+      let state = INITIAL_HAND_TWIST_STABILIZATION_STATE;
+      return sequence.map((angle, index) => {
+        const result = updateHandTwistStabilization(state, input(angle + offset, index * 33), config)!;
+        state = result.state;
+        return result.clampedTwistRadians;
+      });
+    };
+    const base = run(0), shifted = run(OFFSET);
+    base.forEach((value, index) => expect(shifted[index]).toBeCloseTo(value, 12));
+    // Assert âm: chuỗi phải thật sự có biên độ, không phải toàn 0 làm test pass rỗng.
+    expect(Math.max(...base.map(Math.abs))).toBeGreaterThan(10 * DEG);
+  });
 });

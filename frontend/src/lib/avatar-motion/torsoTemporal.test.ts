@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { TorsoTemporalProcessor } from "./torsoTemporal";
+import { TorsoLossRecoveryProcessor, TorsoTemporalProcessor } from "./torsoTemporal";
 
-describe("3E-04 torso temporal stabilization", () => {
-  it("filters only new Pose timestamps and converges without losing amplitude", () => {
-    const value = new TorsoTemporalProcessor(); value.process({ yaw: 0, pitch: 0, roll: 0 }, 0, true);
-    const first = value.process({ yaw: 45, pitch: 0, roll: 0 }, 16, true); expect(first.output.yaw).toBeGreaterThan(0); expect(first.output.yaw).toBeLessThan(45);
-    expect(value.process({ yaw: -45, pitch: 0, roll: 0 }, 16, true)).toMatchObject({ sampleAdvanced: false, output: first.output });
-    let last = first; for (let timestamp = 32; timestamp <= 1_500; timestamp += 16) last = value.process({ yaw: 45, pitch: 0, roll: 0 }, timestamp, true);
-    expect(last.output.yaw).toBeGreaterThan(44.5);
+describe("torso temporal and loss recovery", () => {
+  it("does not advance a duplicate pose timestamp", () => {
+    const value = new TorsoTemporalProcessor();
+    const first = value.process({ yaw: 10, pitch: 2, roll: 1 }, 100, false);
+    const duplicate = value.process({ yaw: 30, pitch: 8, roll: 4 }, 100, false);
+    expect(duplicate.sampleAdvanced).toBe(false); expect(duplicate.output).toEqual(first.output);
   });
-  it("resets without carrying a stale direction", () => {
-    const value = new TorsoTemporalProcessor(); value.process({ yaw: 50, pitch: 0, roll: 0 }, 0, true); value.reset();
-    expect(value.process({ yaw: -30, pitch: 0, roll: 0 }, 10, true).output.yaw).toBe(-30);
+  it("holds, returns to neutral, then reacquires without snapping", () => {
+    const value = new TorsoLossRecoveryProcessor({ holdMs: 100, returnMs: 200, recoveryMs: 100, confirmationSamples: 2 });
+    expect(value.process({ yaw: 30, pitch: 0, roll: 0 }, "tracked", 1, 0).state).toBe("active");
+    expect(value.process(null, "lost", null, 50).output.yaw).toBe(30);
+    const returning = value.process(null, "lost", null, 200); expect(returning.state).toBe("returning"); expect(returning.output.yaw).toBeGreaterThan(0); expect(returning.output.yaw).toBeLessThan(30);
+    value.process(null, "lost", null, 400);
+    expect(value.process({ yaw: -20, pitch: 0, roll: 0 }, "tracked", 2, 410).state).toBe("confirming");
+    const recovering = value.process({ yaw: -20, pitch: 0, roll: 0 }, "tracked", 3, 420); expect(recovering.state).toBe("recovering"); expect(recovering.output.yaw).toBeCloseTo(0);
+    const blended = value.process({ yaw: -20, pitch: 0, roll: 0 }, "tracked", 4, 470); expect(blended.output.yaw).toBeGreaterThan(-20); expect(blended.output.yaw).toBeLessThan(0);
   });
 });

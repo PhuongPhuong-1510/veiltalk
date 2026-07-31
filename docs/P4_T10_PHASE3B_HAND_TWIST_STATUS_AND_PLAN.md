@@ -1,7 +1,10 @@
 # P4-T10 — Phase 3B: Hand Forearm Twist
 
-> Trạng thái ngày 2026-07-29: **IN PROGRESS — PARTIAL-OCCLUSION FIX ĐÃ CÓ, CHỜ WEBCAM RE-TEST**.
-> Automated gate gần nhất: **386/386 test PASS**, TypeScript, lint và Vite build sạch.
+> Trạng thái ngày 2026-07-30: **IN PROGRESS — TWIST REFERENCE FIX ĐÃ CÓ, CHỜ WEBCAM RE-TEST**.
+> Automated gate gần nhất: **518 test PASS**, TypeScript, lint và Vite build sạch. Còn **4 test
+> FAIL trong `handTwistRootCauseValidation.test.ts`** (`capability.gaze` undefined ở
+> `avatarRenderer.ts:167`) — lỗi này **có trước** twist reference fix và đã xác minh bằng cách
+> stash toàn bộ thay đổi rồi chạy lại; thuộc đường renderer/model capability, chưa được sửa.
 > Không được đánh dấu Phase 3B hoàn thành trước khi webcam gate trái/phải và nhiều avatar cùng PASS.
 
 ## 1. Phase 3B làm gì?
@@ -36,7 +39,7 @@ Pose arm swing + Pose temporal output
 → palm basis từ world landmarks
 → đổi raw Hand frame (x,y,z) sang motion frame (x,-y,-z)
 → chirality normalization
-→ forearm twist geometry
+→ forearm twist geometry (mốc twist=0 = minimal-twist rest transport, HISTORY-FREE)
 → confidence/trust
 → unwrap quanh ±π
 → neutral-relative correction
@@ -51,6 +54,8 @@ Pose arm swing + Pose temporal output
 Các contract đã có trong code và automated test:
 
 - Runtime flag `handTwistEnabled`, mặc định `false`, có setter và checkbox DEV.
+  - **Lịch sử (2026-07-30):** checkbox + nút neo neutral từng tồn tại ở commit `53ca9b1` (Phase 3C) nhưng **bị xoá ở `dada8a3`** (Phase 3D head/neck). Từ đó tới trước ngày 2026-07-30, harness gọi `new AvatarMotionProcessor()` không truyền option nào ⇒ `handTwistEnabled` giữ mặc định `false` ⇒ **twist tắt hoàn toàn ở DEV** dù code motion vẫn nguyên. Đây là lý do "tay không xoay được nữa" — mất công tắc, không mất chức năng.
+  - Đã phục hồi ngày 2026-07-30, kèm panel số liệu mới `3B hand twist (độ)` hiển thị `twistReferenceSource`, raw/corrected/applied (đơn vị **độ**), clamp, temporal, observation, neutral và rejection cho từng bên.
 - DEV harness có lệnh neo neutral riêng tay trái/tay phải/hai tay; frame Hand trusted kế tiếp trở thành zero mà không mở tracking epoch mới.
 - State Hand twist độc lập left/right, không trộn với Pose `ArmTemporalState`.
 - Chỉ lowerArm tương ứng được sửa; upperArm, elbow, pole và Pose swing giữ nguyên.
@@ -83,6 +88,7 @@ Các contract đã có trong code và automated test:
 | Stabilization | `handTwistStabilization.ts` | Unwrap, neutral, dead zone, filter và clamp |
 | Temporal | `handTwistTemporal.ts` | Acquire/track/hold/fade/reset theo thời gian |
 | Analysis | `handCalibrationAnalysis.ts`, `handTwistRootCauseValidation.test.ts` | Calibration snapshot và synthetic/rig-only evidence |
+| Twist reference | `armFrameSolver.ts` (`computeTwistReference`) | Dựng mốc twist=0 history-free cho lowerArm mỗi frame; trả qua `SideArmGeometryResult.twistReference` |
 | Rig source | `normalizedRigProfile.ts`, `avatar-renderer/modelLoader.ts` | Cung cấp model-generation và anatomical rest basis của lowerArm |
 | DEV UI | `components/dev/AvatarRendererDevHarness.tsx` | Checkbox, freeze/replay, calibration và diagnostic snapshot |
 
@@ -107,7 +113,24 @@ Mỗi module trên có file `*.test.ts` tương ứng khi tồn tại logic thu�
 - Neutral của lần đo được neo trước chuỗi tại raw `2.009 rad`, khiến edge bị tính thành khoảng `+95°`; đây là bằng chứng first-trusted auto-neutral không đủ cho manual acceptance.
 - Production candidate fix: `rigApplicationSign={left:+1,right:+1}`, clamp đối xứng `±90°`, trusted target amplitude bằng `1`, và API/nút DEV neo neutral chủ động theo từng side.
 - Automated regression đã khóa sign semantic hai bên, neutral re-anchor độc lập và full steady-state amplitude. Tuy nhiên đây chưa thay thế webcam acceptance.
-- Một lỗi độc lập ở Phase 3A đã được tái tạo qua hai regression: initial pole đối dấu tạo roll 180°, còn pole lệch 90° vẫn lọt qua hemisphere-only fix. Bản sửa hiện tại không cho fresh pole điều khiển axial upperArm; upperArm dùng minimal-twist swing, pole vẫn phục vụ bend/lower frame. Hai regression đã PASS nhưng sau khi re-test, webcam vẫn đôi lúc xuất hiện xoắn tay/vùng vai không tái hiện ổn định. Vì vậy hai lỗi đã khóa chỉ là nguyên nhân đóng góp đã biết; root cause runtime cuối cùng chưa được xác định.
+- Một lỗi độc lập ở Phase 3A đã được tái tạo qua hai regression: initial pole đối dấu tạo roll 180°, còn pole lệch 90° vẫn lọt qua hemisphere-only fix. Bản sửa hiện tại không cho fresh pole điều khiển axial upperArm; upperArm dùng minimal-twist swing, pole vẫn phục vụ bend/lower frame. Hai regression đã PASS nhưng sau khi re-test, webcam vẫn đôi lúc xuất hiện xoắn tay/vùng vai không tái hiện ổn định. Vì vậy hai lỗi đã khóa chỉ là nguyên nhân đóng góp đã biết.
+- **Root cause thứ ba (2026-07-30) — mốc twist=0 của cẳng tay bị trôi.** `referenceDirection` lấy từ `previousSecondary.lower`, là giá trị parallel-transport **tích luỹ theo lịch sử**. Đo được:
+
+  | Kiểm chứng | Kết quả |
+  |---|---|
+  | Reference xoay 30° quanh forearm axis, palm giữ nguyên | twist đổi **đúng 30°** (1:1) |
+  | Reference nghiêng dọc axis | twist **không đổi** (projection khử đúng) |
+  | Đổi nhánh transport → `projectToPrimary(upperSecondary, lower)` | reference nhảy **76.6°** |
+  | Cẳng tay đi vòng kín rồi **về đúng hướng ban đầu** | reference lệch **35.08°** (holonomy) |
+
+  Dòng 2 giải thích cơ chế: phép chiếu trong `handForearmTwist.ts` chỉ khử thành phần **dọc** trục, không khử roll **quanh** trục, nên mọi roll của mốc đi thẳng 1:1 vào góc twist. Dòng 4 là bằng chứng nặng nhất — tay về đúng chỗ cũ nhưng twist bị tiêm 35°, và holonomy **không bao giờ tự sửa**. Đây là cơ chế sinh lỗi ngẫu nhiên, không tái hiện ổn định.
+
+  Đã sửa: mốc dựng lại mỗi frame bằng minimal-twist rest transport (`computeTwistReference` trong `armFrameSolver.ts`), cùng kỹ thuật đã chữa xoắn vai cho upperArm. Regression đã khóa idempotence, branch-switch invariance và holonomy = 0; đã mutation-test (khôi phục hành vi cũ ⇒ 5/6 unit + 2/5 integration đỏ) nên biết test không pass rỗng. Chi tiết: `docs/P4_T10_PHASE3B_TWIST_REFERENCE_FIX_PLAN.md`. **Chưa thay thế webcam acceptance.**
+- **Kết quả ÂM đã xác minh — trục ÁP twist KHÔNG phải nguyên nhân.** `anatomicalRestBasis.primaryLocal` từng bị nghi là sai vì "đo góc quanh trục world rồi áp quanh trục local". Đã chứng minh bằng số là **đúng**: xoay quanh `primaryLocal` là axial twist thật quanh trục xương ở **mọi** tư thế (hướng xương đổi < 1e-6°, góc thu lại khớp chính xác), vì `primaryLocal` là hướng xương biểu diễn trong hệ của chính bone. Lưu kết quả này để không phải suy lại.
+- **Hai residual đã biết, CHƯA sửa (ngoài phạm vi lần này):**
+  - Twist dồn 100% vào `lowerArm`, cổ tay không bù ⇒ mesh cẳng tay xoắn tuỳ skinning weight từng VRM. Mục 3 đã ghi việc phân phối lowerArm/hand ngoài phạm vi Phase 3B. Không đo được bằng unit test, cần webcam.
+  - `geometryQuality` (`handPalmBasis.ts`) chỉ đo across/forward có gần song song không, **không** đo edge-on — mà `normal` (trục được chọn để đo twist) lại là trục có Z kém tin cậy nhất của MediaPipe khi bàn tay nhìn từ cạnh. Confidence gate vì thế bỏ qua đúng chế độ lỗi nguy hiểm nhất; comment trong code đã tự thừa nhận.
+  - Đổi *nguồn* torso (rest→previous→fresh) làm `torsoDelta` đổi ⇒ mốc twist roll. Đây là thay đổi thật của hệ quy chiếu thân, dùng chung với upperArm, có biên và **không tích luỹ** — khác holonomy.
 - Chuỗi ảnh mới đã xác định thêm một root cause có thể tái hiện: khi Pose wrist bị che, code cũ cho upperArm nhận nghiệm mới nhưng lowerArm giữ quaternion cũ (`{upper: active, lower: held}`), làm forearm bị kéo quét ngang mặt. Regression hai bên đã khóa invariant mới: upper/lower là một chain, cùng hold/return và chỉ cùng recovery sau 80 ms geometry hợp lệ liên tục.
 - Nếu chỉ Hand landmarks mất nhưng Pose chain còn hợp lệ, Pose arm vẫn chạy; twist cũ debounce 80 ms rồi fade hết trong 180 ms thay vì giữ lâu trên orientation không còn quan sát được.
 - Bug reload “face chạy nhưng tay không chạy” được xác định là stale model callback có thể ghi `rigProfile=null` sau khi renderer mới đã sẵn sàng. Reload DEV hiện tái dùng canvas/WebGL, giữ model cũ tới khi swap và chỉ request ID mới nhất của đúng renderer mới được commit rig profile; cleanup renderer cũ không còn quyền xóa profile hiện tại. Lần tải trang đầu của model 22.5 MB vẫn cần đo riêng và chưa được tuyên bố tối ưu xong.
@@ -123,6 +146,8 @@ Nếu lỗi ngẫu nhiên vẫn còn sau webcam re-test partial occlusion, cần
    - Refresh trang nhiều lần, ghi thời gian model visible/rig ready và đối chiếu `pose: tracked → active`; không được còn trường hợp pose active nhưng packet thiếu arm rotations vì profile bị stale callback xóa.
    - Giữ tay rõ → che/mất wrist một phần → di chuyển khuỷu → đưa wrist trở lại; xác nhận upper/lower cùng hold/return/recover và không quét ngang mặt.
    - Lặp lại cho hai bên với Hand twist OFF rồi ON để tách Pose chain khỏi twist fade.
+   - **Vòng kín (kiểm chứng twist reference fix):** giữ lòng bàn tay ở một orientation **cố định**, đưa cẳng tay đi một vòng (lên — sang — xuống — về) rồi trả về **đúng hướng ban đầu**. Twist trên avatar phải trở về giá trị ban đầu, không được tích luỹ. Đây là bản webcam của regression I3; trước khi sửa, vòng này tiêm ~35°.
+   - Đọc `twistReferenceSource` trong diagnostic snapshot: phải là `rest-transport` ở tư thế thường và chỉ chuyển `rest-projection` khi cẳng tay gần đối cực của rest. Thấy `unavailable` nghĩa là đã rơi Pose-only.
 2. **Nếu còn lỗi, thu anomaly capture local-only**
    - Triển khai ring buffer và trigger chẩn đoán, phân biệt quaternion upperArm thật sự xoắn với artifact do lowerArm/skinning của từng VRM.
 3. **Đóng băng baseline trước khi webcam re-test twist**

@@ -522,7 +522,7 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/src/lib/avatar-motion/headNeckDistribution.ts` / `headNeckDistribution.test.ts` | Phase 3D-04: smoothstep share riêng yaw/pitch/roll, head residual chống double rotation, capability/fallback head-neck |
 | `frontend/src/lib/avatar-motion/headTemporal.ts` / `headTemporal.test.ts` | Phase 3D-05: asymmetric semantic constraints, timestamp-based per-axis One Euro filter, duplicate hold và lifecycle reset |
 | `frontend/src/lib/avatar-motion/headLossRecovery.ts` / `headLossRecovery.test.ts` | Phase 3D-06: exact hold, return neutral, confirmation/recovery, interruption và timestamp discontinuity |
-| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | DEV-only retargeting harness; các panel điều khiển Phase 3C đã gỡ sau manual PASS, chỉ giữ nút Face Calibration tối thiểu vì Phase 3D còn dùng neutral profile |
+| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | DEV-only retargeting harness; các panel điều khiển Phase 3C đã gỡ sau manual PASS, chỉ giữ nút Face Calibration tối thiểu vì Phase 3D còn dùng neutral profile. **Phase 3B đã phục hồi (2026-07-30):** checkbox `Hand twist (2B-5)`, ba nút `Neo neutral tay trái/phải/hai tay` và panel `3B hand twist (độ)` — bị xoá nhầm ở commit `dada8a3` làm twist không bật được ở DEV |
 | `frontend/src/lib/avatar-motion/mouthTiming.ts` / `mouthTiming.test.ts` | Phase 3C-03 jaw attack/release, close/press suppression, strong-close hysteresis, audio hold và temporal lifecycle |
 | `frontend/src/lib/avatar-motion/mouthShapeComposer.ts` / `mouthShapeComposer.test.ts` | Phase 3C-04 mouth-shape conflict composition, closed-smile `happy` gate, left/right preservation và diagnostics |
 | `frontend/src/lib/avatar-motion/eyeExpression.ts` / `eyeExpression.test.ts` | Phase 3C-05 per-side blink hysteresis/pulse, blink-vs-wide và squint composition |
@@ -530,10 +530,10 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/src/lib/avatar-motion/browCheekExpression.ts` / `browCheekExpression.test.ts` | Phase 3C-06 giữ brow/frown bất đối xứng; cheek-puff dead-zone, hysteresis, speech suppression và diagnostics |
 | `frontend/src/lib/avatar-motion/faceExpressionLoss.ts` / `faceExpressionLoss.test.ts` | Phase 3C-07 exact hold → return neutral → idle; two-sample confirmation/recovery blend và one-shot reset diagnostics |
 | `frontend/src/lib/avatar-motion/audioActivity.ts` / `audioActivity.test.ts` | Caller-provided null/simulated/Web Audio activity; RMS/noise floor/envelope, không tự xin quyền microphone |
-| `frontend/src/lib/avatar-motion/torsoBasis.ts` / `armFrameSolver.ts` | Phase 3A: per-segment direction validity tách khỏi pole/twist confidence; parallel-transport secondary; two-bone inferred elbow từ Pose shoulder/wrist với calibrated human lengths, reachability/confidence/timeout gate |
+| `frontend/src/lib/avatar-motion/torsoBasis.ts` / `armFrameSolver.ts` | Phase 3A: per-segment direction validity tách khỏi pole/twist confidence; parallel-transport secondary; two-bone inferred elbow từ Pose shoulder/wrist với calibrated human lengths, reachability/confidence/timeout gate. Phase 3B fix: `computeTwistReference` cung cấp mốc twist=0 **history-free** cho lowerArm (`SideArmGeometryResult.twistReference`) — không dùng `secondary.lower` vì giá trị đó tích luỹ holonomy |
 | `frontend/src/lib/avatar-motion/torsoOrientation.ts` / `torsoOrientation.test.ts` | Phase 3E-03/04: full-torso vai+hông; shoulder-only yaw/body-roll khi thiếu hông, không đọc head landmarks; neutral calibration, corrected yaw sign/response và rejection contract |
-| `frontend/src/lib/avatar-motion/torsoDistribution.ts` / `torsoDistribution.test.ts` | Phase 3E-04: capability-aware hips/spine/chest/upperChest shares, continuous magnitude curve, exact residual recomposition và hierarchy-safe rest-local packet deltas |
-| `frontend/src/lib/avatar-motion/torsoTemporal.ts` / `torsoTemporal.test.ts` | Phase 3E-04 corrective stabilization: timestamp-aware One Euro yaw/pitch/roll, duplicate hold và lifecycle reset; loss/recovery đầy đủ vẫn thuộc 3E-07 |
+| `frontend/src/lib/avatar-motion/torsoDistribution.ts` / `torsoDistribution.test.ts` | Phase 3E-04: phân bổ yaw/pitch/roll qua torso chain theo capability, exact world recomposition và không dồn một bone khi có nhiều bone |
+| `frontend/src/lib/avatar-motion/torsoTemporal.ts` / `torsoTemporal.test.ts` | Phase 3E-04/07: One Euro theo Pose timestamp; hold, return neutral và confirmed reacquire không snap |
 | `frontend/src/lib/avatar-motion/armTemporalState.ts` | Phase 3A: temporal state riêng upper/lower trong shared arm state, phát rotation parent-local cho hold → return-to-identity → recovery |
 | `frontend/src/lib/avatar-motion/swingTwist.ts` / `motionMath.ts` | Phase 3A foundation: basis/quaternion math và swing–twist round-trip; production arm clamp là backlog chưa gán phase |
 | `frontend/src/lib/avatar-motion/avatarMotionDiagnostics.ts` | Diagnostic snapshot internal/DEV-only, tách khỏi `AvatarPosePacketV1`; chứa arm geometry/stability và toàn bộ chuỗi Hand twist theo side |
@@ -545,7 +545,7 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/src/lib/avatar-motion/handTwistRig.ts` | Phase 3B coordinate/rig boundary: đổi toàn bộ world palm basis sang motion frame trước solver và ghép `poseLowerDelta × handTwistDelta` quanh primaryLocal |
 | `frontend/src/lib/avatar-motion/handCalibrationAnalysis.ts` / `handTwistRootCauseValidation.test.ts` | Phase 3B calibration snapshot, synthetic geometry và rig-only regression cho dấu, ±π, primary direction, wrist inheritance |
 | `frontend/src/lib/avatar-renderer/modelLoader.ts` | P4-T10 Phase 2 + 3E-02: load GLTF/VRM, `rotateVRM0`, lấy normalized humanoid nodes gồm torso/shoulders, capture rig profile theo từng model generation, chống stale load và dispose tài nguyên |
-| `frontend/src/lib/avatar-renderer/modelCapability.ts` / `modelCapability.test.ts` | Phase 3E-01 local-only baseline: torso/shoulder bone availability, observed parent, hierarchy mode, per-side shoulder status và fixed-rest upper-arm parent evidence |
+| `frontend/src/lib/avatar-renderer/modelCapability.ts` / `modelCapability.test.ts` | Phase 3E capability: torso/shoulder bone availability, observed parent, hierarchy mode, per-side shoulder status và current-frame-parent/fixed-rest fallback của upper arm |
 | `frontend/src/lib/avatar-renderer/faceExpressionDiagnostics.ts` | Phase 3C-01 pure-data resolver và capability/render rows: declared mapping/fallback, unsupported reason, raw/processed/rendered separation |
 | `frontend/src/lib/avatar-renderer/faceExpressionDiagnostics.test.ts` | Regression Phase 3C-01 cho same-name mapping, declared fallback, missing explicit target và tách ba tầng giá trị |
 | `frontend/src/lib/avatar-renderer/faceExpressionApplyPlan.ts` / `faceExpressionApplyPlan.test.ts` | Face physical-target ownership: mapped-over-fallback, direct smile-over-happy, strongest shared synonym, VRM/raw deduplication, stale reset và bounded per-binding model gain |
@@ -568,6 +568,10 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `docs/P4_T10_PHASE3C_07_FACE_LOSS_RECOVERY_PLAN.md` | Contract/trạng thái 3C-07: Face loss/recovery timing, lifecycle, automated evidence và manual matrix |
 | `docs/P4_T10_PHASE3D_HEAD_NECK_RETARGETING_PLAN.md` | Nguồn chân lý Phase 3D: verified head/neck contract, calibration, distribution, constraints, temporal, loss/recovery và acceptance |
 | `docs/P4_T10_PHASE3E_TORSO_SHOULDER_RETARGETING_PLAN.md` | Kế hoạch Phase 3E: torso yaw/pitch/roll, phân bổ hips/spine/chest/upperChest, shoulder độc lập và hierarchy-safe torso→shoulder→arm integration |
+| `docs/P4_T10_PHASE3H_CAMERA_FRAMING_AND_TRACKING_READINESS_PLAN.md` | Kế hoạch Phase 3H sau Phase 3E: body visibility, frame occupancy, tracking quality, framing/hand/light states, temporal ổn định và SCR-09 acceptance |
+| `frontend/src/lib/tracking/camera-readiness/readinessTypes.ts` / `readinessEvidence.ts` | Phase 3H-01: semantic body-region evidence, freshness/bounds/reason snapshot local-only; không chứa raw arrays/pixel |
+| `frontend/src/lib/tracking/camera-readiness/readinessFixtures.ts` / `readinessEvidence.test.ts` | Phase 3H-01 deterministic fixtures và validity/freshness/privacy regressions |
+| `frontend/src/lib/tracking/camera-readiness/bodyVisibility.ts` / `bodyVisibility.test.ts` | Phase 3H-02 weighted body visibility scorer, null/zero semantics, per-side completeness và regression matrix |
 | `frontend/src/index.css` | Kokoro design system: Tailwind v4 theme, semantic CSS variables light/dark, typography, radius, shadow và reduced-motion baseline |
 | `frontend/tsconfig.app.json` | Cấu hình TypeScript và alias `@/*` → `src/*` |
 | `frontend/vite.config.ts` | Vite React plugin và alias `@` → `src` |
@@ -589,7 +593,7 @@ rendering, state, routing và design system thuộc các task Phase 4.
 | P4-T07 | Hoàn thành | `frontend/src/App.tsx`, auth helpers — Onboarding/Register |
 | P4-T08 | Hoàn thành | `frontend/src/lib/avatar/avatarSetup.ts`, Avatar Setup UI |
 | P4-T09 | Hoàn thành | `frontend/src/lib/tracking/`, `TrackingDevHarness.tsx` |
-| P4-T10 | IN PROGRESS | Phase 3A đã implement; Phase 3B còn manual acceptance; Phase 3C/3D COMPLETE; Phase 3E torso 3E-01/02/03/04 COMPLETE; shoulder 3E-05/06 DEFERRED và code đã revert về mốc sau 3E-04. |
+| P4-T10 | IN PROGRESS | Phase 3A đã implement; Phase 3B còn manual acceptance; Phase 3C/3D COMPLETE; Phase 3E torso runtime + hierarchy-safe head/neck/arm REIMPLEMENTED, automated 521/521 và build/lint PASS, manual webcam pending; shoulder độc lập 3E-05 DEFERRED. |
 
 ### Design system (P4-T04)
 
@@ -868,10 +872,17 @@ P4-T10 được chia thành các phase con để không trộn forensic diagnosi
    constraints/filter và loss/recovery. Automated 105/105 và manual PASS ngày 2026-07-30.
    Kế hoạch nguồn: `docs/P4_T10_PHASE3D_HEAD_NECK_RETARGETING_PLAN.md`.
 
-7. **Phase 3E — Torso & Shoulder Retargeting: PLANNED.** Bổ sung torso yaw/pitch/roll, phân bổ
-   `hips/spine/chest/upperChest`, hai shoulder độc lập và giải arm chain theo target hierarchy hiện tại
-   để tay giữ đúng khi torso/shoulder chuyển động. Không thêm thư viện và không thay đổi privacy boundary.
+7. **Phase 3E — Torso & Shoulder Retargeting: RUNTIME REIMPLEMENTED, MANUAL PENDING.** Torso yaw/pitch/roll được phân bổ
+   qua `hips/spine/chest/upperChest`; head/neck được bù tương đối với torso và upper arm dùng shoulder target
+   cùng frame để tránh double rotation. Temporal/loss giữ ngắn, return neutral và reacquire mềm. Shoulder
+   độc lập vẫn deferred. Không thêm thư viện và không thay đổi privacy boundary.
    Kế hoạch nguồn: `docs/P4_T10_PHASE3E_TORSO_SHOULDER_RETARGETING_PLAN.md`.
+
+8. **Phase 3H — Camera Framing & Tracking Readiness: 3H-01/02 IMPLEMENTED, MANUAL GATE PENDING.** Thực hiện sau Phase 3E, đánh giá
+   body visibility, mức chiếm khung hình và chất lượng tracking để đưa hướng dẫn preview ổn định.
+   Phase này chỉ phân loại gần/xa tương đối, không đo khoảng cách vật lý hoặc lux, không thêm thư viện
+   và không đưa frame/raw landmark/diagnostics vào packet hay network.
+   Kế hoạch nguồn: `docs/P4_T10_PHASE3H_CAMERA_FRAMING_AND_TRACKING_READINESS_PLAN.md`.
 
    **Sửa lỗi ổn định pole (trong phạm vi 3A, không lấn Phase 3B hoặc face Phase 3C).** Ba lỗi gây xoắn/rung tay đã
    được sửa trong `armFrameSolver.ts`, mỗi lỗi có regression test được kiểm chứng bằng cách

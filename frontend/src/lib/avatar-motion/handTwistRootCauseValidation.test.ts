@@ -66,6 +66,7 @@ function rendererProbe(lowerName: "leftLowerArm" | "rightLowerArm", handName: "l
     model: {
       bones: { [lowerName]: lower, [handName]: hand },
       restRotations: { [lowerName]: qData(new Quaternion()), [handName]: qData(handRest) },
+      capability: { gaze: { mode: "unsupported", reason: "rig-only-test" } },
       expressionMap: {}, faceExpressionMap: {}, faceExpressionBindings: [], morphTargets: new Map(), vrm: null,
     },
   });

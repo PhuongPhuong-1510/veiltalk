@@ -6,13 +6,19 @@ import type { HeadTemporalResult } from "./headTemporal";
 import type { HeadLossResult } from "./headLossRecovery";
 import type { TorsoCalibrationSnapshot, TorsoEulerDegrees, TorsoObservationMode } from "./torsoOrientation";
 import type { TorsoDistributionResult } from "./torsoDistribution";
-import type { TorsoTemporalResult } from "./torsoTemporal";
+import type { TorsoLossResult, TorsoTemporalResult } from "./torsoTemporal";
 
 export type ArmSide = "left" | "right";
 export type PoleSource = "fresh" | "hand" | "previous" | "rest" | "unavailable";
 export type MotionSampleDisposition = "new" | "duplicate-timestamp" | "not-sampled" | "lost";
 export type TorsoBasisSource = "fresh" | "previous" | "rest";
 export type ElbowSource = "observed" | "inferred-history" | "inferred-rest-prior" | "held" | "returning" | "unavailable";
+/**
+ * Nhánh nào đã sinh ra mốc twist=0 của cẳng tay (Phase 3B). Cả lớp lỗi holonomy trước đây vô
+ * hình trong diagnostic vì không cách nào biết mốc đang lấy từ đâu — enum này làm nó quan sát
+ * được trong JSON export khi thu bằng chứng webcam.
+ */
+export type TwistReferenceSource = "rest-transport" | "rest-projection" | "unavailable";
 export type HandSampleClassification = "unsampled" | "duplicate" | "new-sample";
 export type HandTrackingEpochResetReason =
   | "processor-initialization"
@@ -69,6 +75,8 @@ export interface HandTwistRigDiagnostic {
   handTwistApplied: boolean;
   rejectionReason: string | null;
   unwrapOwner: "handTwistStabilization";
+  /** Nhánh đã sinh ra mốc twist=0 đang dùng cho side này — xem `TwistReferenceSource`. */
+  twistReferenceSource: TwistReferenceSource;
 }
 
 /** 2B-5D: snapshot chẩn đoán, không tham gia quyết định motion và được dev harness poll 400 ms. */
@@ -173,7 +181,7 @@ export interface AvatarMotionDiagnosticSnapshot {
   torso: { right: Vector3Data; up: Vector3Data; forward: Vector3Data; worldRotation: QuaternionData; source: TorsoBasisSource;
     visibility: Record<"leftShoulder" | "rightShoulder" | "leftHip" | "rightHip", number | null>;
     rejectionReason: string | null; observationRejectionReason: string | null; calibration: TorsoCalibrationSnapshot;
-    observationMode: TorsoObservationMode; pitchObservable: boolean; raw: QuaternionData | null; neutralRelative: QuaternionData | null; inputEulerDegrees: TorsoEulerDegrees | null; outputEulerDegrees: TorsoEulerDegrees | null; responseOutput: QuaternionData | null; temporal: TorsoTemporalResult | null; distribution: TorsoDistributionResult | null };
+    observationMode: TorsoObservationMode; pitchObservable: boolean; raw: QuaternionData | null; neutralRelative: QuaternionData | null; inputEulerDegrees: TorsoEulerDegrees | null; outputEulerDegrees: TorsoEulerDegrees | null; responseOutput: QuaternionData | null; temporal: TorsoTemporalResult | null; loss: TorsoLossResult; distribution: TorsoDistributionResult | null };
   arms: Record<ArmSide, ArmFrameDiagnostic>;
   handTwist: Record<ArmSide, HandTwistRigDiagnostic>;
   armStability: Record<ArmSide, ArmStabilityDiagnostic>;

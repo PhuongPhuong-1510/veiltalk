@@ -33,7 +33,7 @@ export interface ModelCapabilityReport {
     parents: Record<"hips" | "spine" | "chest" | "upperChest" | "leftShoulder" | "rightShoulder", string | null>;
     hierarchy: "full" | "without-upper-chest" | "reduced-chain" | "unsupported";
     shoulderStatus: Record<"left" | "right", "available" | "missing" | "invalid-parent">;
-    upperArmParentMode: Record<"left" | "right", "fixed-rest">;
+    upperArmParentMode: Record<"left" | "right", "fixed-rest" | "current-frame-parent">;
   };
   expressions: string[];
   faceExpressions: FaceExpressionCapabilityRow[];

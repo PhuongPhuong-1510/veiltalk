@@ -1,5 +1,5 @@
 import type { QuaternionData } from "./avatarPoseTypes";
-import type { ArmSide, ElbowSource, PoleSource } from "./avatarMotionDiagnostics";
+import type { ArmSide, ElbowSource, PoleSource, TwistReferenceSource } from "./avatarMotionDiagnostics";
 import type { ControlledArmJoint } from "./normalizedRigProfile";
 import { IDENTITY_QUATERNION } from "./avatarPoseTypes";
 import { slerpQuaternionData } from "./motionMath";
@@ -43,6 +43,12 @@ export interface ArmTemporalState {
   segments: { upper: SegmentTemporalState; lower: SegmentTemporalState };
   previousPrimary: { upper: { x: number; y: number; z: number } | null; lower: { x: number; y: number; z: number } | null };
   previousSecondary: { upper: { x: number; y: number; z: number } | null; lower: { x: number; y: number; z: number } | null };
+  /**
+   * Mốc twist=0 của cẳng tay từ frame accepted gần nhất (Phase 3B). Lưu trên ĐÚNG biên accept
+   * với `previousPrimary` để trục và mốc luôn cùng một frame — cặp lệch frame còn tệ hơn cặp
+   * cùng cũ. KHÔNG lấy từ `previousSecondary.lower`, xem `computeTwistReference`.
+   */
+  previousTwistReference: { lower: { x: number; y: number; z: number } | null; lowerSource: TwistReferenceSource };
   lengthSamples: { upper: number[]; lower: number[] };
   calibratedLength: { upper: number | null; lower: number | null };
   previousObservedElbow: { x: number; y: number; z: number } | null;
@@ -59,6 +65,7 @@ export const createArmTemporalState = (): ArmTemporalState => ({
   invalidCandidateStartedAtMs: null, validCandidateStartedAtMs: null,
   segments: { upper: createSegmentTemporalState(), lower: createSegmentTemporalState() },
   previousPrimary: { upper: null, lower: null }, previousSecondary: { upper: null, lower: null },
+  previousTwistReference: { lower: null, lowerSource: "unavailable" },
   lengthSamples: { upper: [], lower: [] }, calibratedLength: { upper: null, lower: null }, previousObservedElbow: null, inferenceStartedAtMs: null,
   elbowSource: "unavailable", elbowWasVisible: false, wristWasVisible: false,
 });

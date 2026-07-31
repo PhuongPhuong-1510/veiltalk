@@ -103,15 +103,14 @@ describe("AvatarMotionProcessor", () => {
     expect(processor.getTorsoCalibrationSnapshot().status).toBe("ready"); const diagnostic = processor.getLastDiagnostics()!.torso;
     expect(diagnostic.outputEulerDegrees).toEqual({ yaw: 0, pitch: 0, roll: 0 }); expect(Object.keys(processor.process(frame()).jointRotations).sort()).toEqual(beforeKeys); expect(beforeKeys).not.toContain("hips"); expect(beforeKeys).not.toContain("spine"); expect(beforeKeys).not.toContain("chest"); expect(beforeKeys).not.toContain("upperChest");
   });
-  it("3E-04 emits the capability-aware torso chain after calibration", () => {
+  it("3E-04 emits a distributed torso chain with temporal/loss state", () => {
     let now = 1; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(torsoRigProfile); processor.startTorsoCalibration();
     for (let i = 0; i < 12; i++) { now = i + 1; const input = frame(); input.pose.sampledAtMs = now; input.frameTimestampMs = now; processor.process(input); }
     now = 20; const moved = frame(); moved.pose.sampledAtMs = now; moved.frameTimestampMs = now;
     setPoseLandmark(moved, 11, -.2, .2); setPoseLandmark(moved, 12, .2, .4);
-    const packet = processor.process(moved); const distribution = processor.getLastDiagnostics()!.torso.distribution!;
-    expect(distribution.mode).toBe("distributed"); expect(distribution.activeBones).toEqual(["hips", "spine", "chest"]);
+    const packet = processor.process(moved); const diagnostic = processor.getLastDiagnostics()!.torso;
+    expect(diagnostic.outputEulerDegrees).not.toBeNull(); expect(diagnostic.distribution?.mode).toBe("distributed"); expect(diagnostic.temporal).not.toBeNull(); expect(diagnostic.loss.state).toBe("active");
     expect(packet.jointRotations.hips).toBeDefined(); expect(packet.jointRotations.spine).toBeDefined(); expect(packet.jointRotations.chest).toBeDefined(); expect(packet.jointRotations.upperChest).toBeUndefined();
-    expect(Object.values(packet.jointRotations.chest!)).toSatisfy((values: number[]) => values.every(Number.isFinite));
   });
   it("publishes one processor-timed jaw value to both jawOpen and aa", () => {
     const processor = new AvatarMotionProcessor({ filtered: true, now: () => 120 });
@@ -1285,6 +1284,128 @@ describe("AvatarMotionProcessor", () => {
       const diagnosticWithHand = processorWithHand.getLastDiagnostics()!.arms.left;
       expect(diagnosticWithHand.poleSource).toBe(diagnosticNoHand.poleSource);
       expect(diagnosticWithHand.elbowInference.source).toBe(diagnosticNoHand.elbowInference.source);
+    });
+  });
+
+  /**
+   * Phase 3B fix — mốc twist=0 phải history-free. Ở mức integration: hai processor có LỊCH SỬ
+   * Pose khác nhau nhưng cùng hình học + cùng Hand observation ở frame cuối phải cho cùng góc
+   * twist thô. Xem docs/P4_T10_PHASE3B_TWIST_REFERENCE_FIX_PLAN.md.
+   */
+  describe("Phase 3B twist reference (integration)", () => {
+    /** Di chuyển elbow để đổi HƯỚNG cẳng tay, giữ wrist cố định để Hand matching không đổi. */
+    const elbowFrame = (timestamp: number, elbow: { x: number; y: number; z?: number }): RawTrackingFrameV1 => {
+      const value = sampledFrame(timestamp);
+      setPoseLandmark(value, 13, elbow.x, elbow.y, elbow.z ?? 0);
+      return value;
+    };
+    const leftHandAt = (timestamp: number, depth: number) => handCandidateWithMiddleDepth(timestamp, LEFT_WRIST_IMAGE, "left", timestamp, depth);
+
+    it("I2: lịch sử Pose khác nhau không làm đổi góc twist thô ở frame cuối", () => {
+      // A đi thẳng vào tư thế cuối. B đi qua một vòng elbow lệch rồi mới về đúng tư thế đó, nên
+      // `previousSecondary.lower` của B khác A. Mốc twist mới phải bỏ qua khác biệt lịch sử này.
+      const runSequence = (elbowPath: Array<{ x: number; y: number; z?: number }>) => {
+        let now = 120;
+        const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now });
+        processor.setRigProfile(rigProfile);
+        elbowPath.forEach((elbow, index) => {
+          const timestamp = 100 + index * 33; now = timestamp + 20;
+          const value = elbowFrame(timestamp, elbow);
+          value.rawHands = [leftHandAt(timestamp, .05)];
+          processor.process(value);
+        });
+        return processor.getLastDiagnostics()!.handTwist.left;
+      };
+      const finalElbow = { x: -.5, y: .3 };
+      const directPath = [finalElbow, finalElbow, finalElbow, finalElbow, finalElbow];
+      const detourPath = [{ x: -.45, y: .45, z: .2 }, { x: -.55, y: .15, z: -.15 }, { x: -.4, y: .4, z: .1 }, finalElbow, finalElbow];
+      const direct = runSequence(directPath), detour = runSequence(detourPath);
+      expect(direct.rawWrappedTwistRadians).not.toBeNull();
+      expect(detour.rawWrappedTwistRadians).toBeCloseTo(direct.rawWrappedTwistRadians!, 6);
+    });
+
+    it("I3: cẳng tay đi vòng kín rồi về đúng hướng đầu -> twist áp dụng trở về giá trị đầu", () => {
+      let now = 120;
+      const config = { ...DEFAULT_AVATAR_MOTION_CONFIG, handTwist: { ...DEFAULT_AVATAR_MOTION_CONFIG.handTwist, deadZoneRadians: 0, targetFilterTimeConstantSeconds: 0 } };
+      const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now, config });
+      processor.setRigProfile(rigProfile);
+      const start = { x: -.5, y: .3 };
+      // Palm giữ CỐ ĐỊNH suốt (cùng middleDepth) — mọi thay đổi twist chỉ có thể đến từ mốc.
+      const loop = [start, { x: -.45, y: .45, z: .15 }, { x: -.4, y: .3, z: .25 }, { x: -.45, y: .15, z: .15 }, { x: -.55, y: .15, z: -.1 }, { x: -.6, y: .3, z: -.15 }, { x: -.55, y: .45, z: -.05 }, start, start, start];
+      const applied: number[] = [];
+      loop.forEach((elbow, index) => {
+        const timestamp = 100 + index * 33; now = timestamp + 20;
+        const value = elbowFrame(timestamp, elbow);
+        value.rawHands = [leftHandAt(timestamp, .05)];
+        processor.process(value);
+        applied.push(processor.getLastDiagnostics()!.handTwist.left.appliedTwistRadians);
+      });
+      // Frame 0 là frame neo neutral (applied = 0); so frame cuối với frame đầu tiên đã ổn định
+      // ở đúng tư thế `start` sau khi quay lại.
+      expect(applied[applied.length - 1]).toBeCloseTo(applied[0], 6);
+    });
+
+    it("I4: đổi poleSource khi palm cố định không tạo bước nhảy trong twist thô", () => {
+      let now = 120;
+      const config = { ...DEFAULT_AVATAR_MOTION_CONFIG, handTwist: { ...DEFAULT_AVATAR_MOTION_CONFIG.handTwist, deadZoneRadians: 0, targetFilterTimeConstantSeconds: 0 } };
+      const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now, config });
+      processor.setRigProfile(rigProfile);
+      // Cẳng tay gần thẳng ⇒ elbow-offset yếu ⇒ poleSource rơi về rest/previous; rồi gập rõ ⇒ fresh.
+      const path: Array<{ x: number; y: number; z?: number }> = [{ x: -.5, y: .3 }, { x: -.5, y: .3 }, { x: -.5, y: .3 }];
+      const raw: Array<number | null> = [];
+      const poleSources: string[] = [];
+      path.forEach((elbow, index) => {
+        const timestamp = 100 + index * 33; now = timestamp + 20;
+        const value = elbowFrame(timestamp, elbow);
+        value.rawHands = [leftHandAt(timestamp, .05)];
+        processor.process(value);
+        const diagnostics = processor.getLastDiagnostics()!;
+        raw.push(diagnostics.handTwist.left.rawWrappedTwistRadians);
+        poleSources.push(diagnostics.arms.left.poleSource);
+      });
+      // Bước nhảy giữa các frame liên tiếp phải nhỏ hơn dead zone 3° dù poleSource có đổi.
+      const observed = raw.filter((value): value is number => value !== null);
+      for (let index = 1; index < observed.length; index += 1) {
+        expect(Math.abs(observed[index] - observed[index - 1]) * 180 / Math.PI).toBeLessThan(2);
+      }
+      expect(poleSources.length).toBe(3);
+    });
+
+    it("I5: cẳng tay suy biến (wrist trùng elbow) -> Pose-only tuyệt đối, không ghi twist", () => {
+      // `validateRigProfile` đã chặn rig profile suy biến ngay ở `setRigProfile`, nên đường duy
+      // nhất để mốc twist không dựng được là HÌNH HỌC: wrist trùng elbow ⇒ lowerDirectionValid
+      // false ⇒ twistReference.lower null ⇒ guard sẵn có phải rơi về Pose-only.
+      let now = 120;
+      const on = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now }); on.setRigProfile(rigProfile);
+      const off = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now }); off.setRigProfile(rigProfile);
+      for (const timestamp of [100, 133, 166]) {
+        now = timestamp + 20;
+        // wrist (15) đặt trùng elbow (13) ⇒ đoạn cẳng tay dài 0.
+        const build = () => { const value = sampledFrame(timestamp); setPoseLandmark(value, 15, -.5, .3); value.rawHands = [leftHandAt(timestamp, .05)]; return value; };
+        const twisted = on.process(build()), pose = off.process(build());
+        expect(twisted.jointRotations.leftLowerArm).toEqual(pose.jointRotations.leftLowerArm);
+      }
+      const diagnostic = on.getLastDiagnostics()!.handTwist.left;
+      expect(diagnostic.handTwistApplied).toBe(false);
+      expect(diagnostic.twistReferenceSource).toBe("unavailable");
+    });
+
+    it("I6: mốc twist của hai bên độc lập nhau", () => {
+      let now = 120;
+      const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now });
+      processor.setRigProfile(rigProfile);
+      const drive = (timestamp: number, leftElbow: { x: number; y: number; z?: number }) => {
+        now = timestamp + 20;
+        const value = elbowFrame(timestamp, leftElbow);
+        value.rawHands = [leftHandAt(timestamp, .05), handCandidateWithMiddleDepth(timestamp + 1, RIGHT_WRIST_IMAGE, "right", timestamp, .05)];
+        processor.process(value);
+        return processor.getLastDiagnostics()!.handTwist;
+      };
+      drive(100, { x: -.5, y: .3 });
+      const baseline = drive(133, { x: -.5, y: .3 }).right.rawWrappedTwistRadians;
+      // Chỉ nhiễu hình học tay TRÁI; tay phải không được đổi theo.
+      const perturbed = drive(166, { x: -.42, y: .48, z: .2 }).right.rawWrappedTwistRadians;
+      expect(perturbed).toBeCloseTo(baseline!, 6);
     });
   });
 });

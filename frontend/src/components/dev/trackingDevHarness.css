@@ -18,6 +18,8 @@
 .tracking-dev dt, .tracking-dev dd { margin: 0; }
 .tracking-dev dd { text-align: right; font-weight: 700; }
 .tracking-dev table { width: 100%; border-collapse: collapse; }
+.tracking-readiness-diagnostics { overflow-x: auto; }
+.tracking-readiness-diagnostics td:last-child { min-width: 180px; overflow-wrap: anywhere; }
 .tracking-dev th, .tracking-dev td { padding: 8px; border-bottom: 1px solid #27324a; text-align: left; }
 .tracking-dev-error { max-width: 1200px; margin: 0 auto 20px; padding: 12px; border: 1px solid #ff6b81; border-radius: 8px; color: #ffb5c0; }
 @media (max-width: 760px) { .tracking-dev header, .tracking-dev-grid { display: grid; grid-template-columns: 1fr; } .tracking-dev { padding: 14px; } .tracking-dev table { font-size: 12px; } }
