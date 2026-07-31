@@ -62,7 +62,7 @@ export interface AvatarMotionConfig {
     elbowInferenceTimeoutMs: number;
     elbowInferenceReachSlackRatio: number;
     /**
-     * Phase 3E — Việc 4. Khi khuỷu bị che, `inferElbow` chọn phía gập bằng prior pole. Nếu
+     * Phase 3B partial-arm. Khi khuỷu bị che, `inferElbow` chọn phía gập bằng prior pole. Nếu
      * prior đảo dấu giữa hai frame, nghiệm nhảy sang phía đối diện và cẳng tay quằn qua thân
      * người — đo được trên tay gần duỗi thẳng (bendPlaneQuality ≈ 0.04), nơi pole gần như
      * không xác định nên rất dễ đổi dấu. Dưới ngưỡng này, pole suy biến tới mức không được
@@ -70,7 +70,7 @@ export interface AvatarMotionConfig {
      */
     elbowInferenceMinimumBendQuality: number;
     /**
-     * Phase 3E. `elbowInferenceTimeoutMs` tồn tại để chặn sai số tích luỹ khi suy đoán phải
+     * Phase 3B partial-arm. `elbowInferenceTimeoutMs` tồn tại để chặn sai số tích luỹ khi suy đoán phải
      * dựa vào dữ liệu CŨ (pole lịch sử, chiều dài chưa chắc chắn). Nhưng khi vai và cổ tay đều
      * được quan sát tươi ngay frame này và chiều dài xương đã calibrate từ quan sát thật, khuỷu
      * là nghiệm hình học đầy đủ — không có gì tích luỹ để mà hết hạn.
@@ -81,7 +81,7 @@ export interface AvatarMotionConfig {
      */
     elbowInferenceUnboundedWhenFullyObserved: boolean;
     /**
-     * Phase 3E. `inferElbow` giải ra khuỷu trên một ĐƯỜNG TRÒN nghiệm — vô số vị trí đều thoả
+     * Phase 3B partial-arm. `inferElbow` giải ra khuỷu trên một ĐƯỜNG TRÒN nghiệm — vô số vị trí đều thoả
      * đúng hai chiều dài xương. Prior pole chọn một điểm trên đó, và khi khuỷu ra ngoài khung
      * hình lâu, prior có thể trỏ vào phía TRONG thân người: nghiệm vẫn đúng toán học nhưng
      * cẳng tay xuyên qua ngực/bụng — đo được trên webcam khi giơ tay chào.
@@ -92,7 +92,7 @@ export interface AvatarMotionConfig {
      */
     elbowInferenceMinimumLateralBias: number;
     /**
-     * Phase 3E — Việc 4. Tuổi tối đa của prior pole dùng cho elbow inference. `inferElbow`
+     * Phase 3B partial-arm. Tuổi tối đa của prior pole dùng cho elbow inference. `inferElbow`
      * trước đây đọc `previousPole` không kiểm tra tuổi, trong khi tầng chọn pole của khung
      * xương đã bỏ nó sau `poleFallbackTimeoutMs` — hai bên dùng hai pole khác nhau. Cho phép
      * dài hơn `poleFallbackTimeoutMs` (pole cũ vẫn tốt hơn rest-pose để giữ phía gập) nhưng

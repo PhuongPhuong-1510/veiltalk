@@ -357,7 +357,7 @@ export class AvatarMotionProcessor {
         const state = this.armState[side]; const geometry = solved?.sides[side] ?? null;
         const stabilityState = this.armStabilityState[side];
         const names = side === "left" ? { upper: "leftUpperArm" as const, lower: "leftLowerArm" as const } : { upper: "rightUpperArm" as const, lower: "rightLowerArm" as const };
-        // Phase 3E — Partial arm tracking: hai đoạn xương được nghiệm thu ĐỘC LẬP.
+        // Phase 3B (bổ sung) — Partial arm tracking: hai đoạn xương được nghiệm thu ĐỘC LẬP.
         //
         // Trước đây một cánh tay chỉ dùng được khi cả upper và lower cùng hợp lệ, vì lo rằng
         // nhận upper mới trong khi lower giữ giá trị cũ sẽ ghép hai thời điểm khác nhau và
@@ -421,7 +421,7 @@ export class AvatarMotionProcessor {
           if (elbowSourceChanged || poleSourceUpgraded || chainTrackingReacquired) { trackingReacquired = true; for (const segment of ["upper", "lower"] as const) { state.segments[segment].lossState = "recovering"; state.segments[segment].recoveryStartedAtMs = null; } }
           state.elbowSource = acceptedGeometry.elbowSource;
           state.previousPrimary = acceptedGeometry.primary; state.previousSecondary = acceptedGeometry.secondary;
-          // Phase 3E: mỏ neo phía gập chỉ được cập nhật khi frame này còn xác định được mặt
+          // Phase 3B partial-arm: mỏ neo phía gập chỉ được cập nhật khi frame này còn xác định được mặt
           // phẳng gập (solver trả null khi tay gần duỗi thẳng). Giữ mỏ neo cũ trong các frame
           // suy biến — đó chính là lúc cần nó nhất để elbow inference không lật phía.
           if (acceptedGeometry.elbowDirection) state.previousElbowDirection = acceptedGeometry.elbowDirection;
@@ -472,7 +472,7 @@ export class AvatarMotionProcessor {
           poleSourceChanged: Boolean(acceptedGeometry) && acceptedGeometry!.poleSource !== previousPoleSourceForDiagnostic,
           trackingReacquired,
           elbowInference: { ...base.elbowInference,
-            // Phase 3E: frame duplicate (không phải sample mới) không có `geometry`, nhưng cánh
+            // Phase 3B partial-arm: frame duplicate (không phải sample mới) không có `geometry`, nhưng cánh
             // tay vẫn đang chạy trên nghiệm của sample gần nhất. Lùi về `state.elbowSource` thay
             // vì báo "unavailable" — nếu không, ở FPS thấp phần lớn frame hiển thị sai trạng
             // thái và che mất nguồn lỗi thật khi chẩn đoán.

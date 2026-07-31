@@ -4,8 +4,8 @@
 > Trạng thái: **IMPLEMENTED — MANUAL BROWSER GATE CHƯA ĐẠT ỔN ĐỊNH, ROOT CAUSE CÒN MỞ**
 >
 > ⚠️ **Tài liệu lịch sử.** Phần partial-segment occlusion (mục "Implementation" và mục 71) mô tả
-> hành vi "upper/lower cùng hold/return" đã **bị thay thế** bởi Phase 3E — hai đoạn nay nghiệm
-> thu độc lập. Hành vi hiện hành: `docs/P4_T10_PHASE3E_PARTIAL_ARM_ACCEPTANCE_REPORT.md`.
+> hành vi "upper/lower cùng hold/return" đã **bị thay thế** bởi bản sửa occlusion Phase 3B — hai đoạn nay nghiệm
+> thu độc lập. Hành vi hiện hành: `docs/P4_T10_PHASE3B_PARTIAL_ARM_ACCEPTANCE_REPORT.md`.
 
 ## Contract
 

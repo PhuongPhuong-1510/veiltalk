@@ -1,4 +1,4 @@
-# P4-T10 — Phase 3E Acceptance Report
+# P4-T10 — Phase 3B (bổ sung) — Partial Arm Acceptance Report
 
 > Phạm vi: partial arm tracking — ổn định cánh tay khi Pose chỉ quan sát được 2 trong 3 khớp
 > (shoulder / elbow / wrist)
@@ -91,7 +91,7 @@ elbowInferenceUnboundedWhenFullyObserved: true
 (không phải sample mới). Ở ~14 FPS phần lớn frame là duplicate → panel báo `unavailable` dù cánh
 tay đang chạy bình thường, che mất trạng thái thật khi chẩn đoán. Nay lùi về `state.elbowSource`.
 
-DEV harness thêm panel **Phase 3E partial-arm**: loss state từng đoạn, nguồn khuỷu, nguồn pole,
+DEV harness thêm panel **Phase 3B partial-arm**: loss state từng đoạn, nguồn khuỷu, nguồn pole,
 các flag lật phía, lý do reject.
 
 ## Automated evidence

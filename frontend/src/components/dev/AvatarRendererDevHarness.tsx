@@ -135,7 +135,7 @@ export default function AvatarRendererDevHarness() {
         <p>Pose inference: {number(trackingMetrics?.inferenceTimeMs.pose.average)}ms trung bình · p95 {number(trackingMetrics?.inferenceTimeMs.pose.p95)}ms · max {number(trackingMetrics?.inferenceTimeMs.pose.max)}ms</p></article>
       <article><h2>Capability</h2>{modelLoading && <p>Đang tải model mới; model hiện tại vẫn được giữ cho tới khi swap thành công.</p>}{capability ? <pre>{JSON.stringify(capability, null, 2)}</pre> : !modelLoading && <p>Chưa có model sẵn sàng.</p>}</article>
       <article><h2>Tracking state</h2>{packet && Object.entries(packet.tracking).map(([name, state]) => <p key={name}>{name}: {state.sourceState} → {state.outputState}</p>)}</article>
-      <article><h2>Phase 3E partial-arm</h2>
+      <article><h2>Phase 3B partial-arm</h2>
         {(["left", "right"] as const).map((side) => {
           const arm = motionDiagnostics?.arms[side];
           if (!arm) return <p key={side}>{side}: —</p>;

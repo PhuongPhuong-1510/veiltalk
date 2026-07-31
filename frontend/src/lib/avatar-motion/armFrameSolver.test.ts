@@ -221,7 +221,7 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(solved.segmentValidity).toEqual({ upper: true, lower: true });
     expect(Number.isFinite(solved.elbowPosition.x)).toBe(true);
   });
-  // Phase 3E — Việc 4: chống lật phía khuỷu khi suy đoán.
+  // Phase 3B (bổ sung) — chống lật phía khuỷu khi suy đoán.
   it("keeps the inferred elbow on the anchored bend side even when the prior pole flips sign", () => {
     // Tay gần duỗi thẳng: vai(0,0) khuỷu(1,.02) cổ tay(2,0) → bendPlaneQuality ≈ 0.04, mặt
     // phẳng gập gần như không xác định nên pole cực dễ đảo dấu. Trước khi có mỏ neo phía gập,
@@ -260,7 +260,7 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(withPoleAge(stale).elbowSource).toBe("inferred-rest-prior");
   });
 
-  // Phase 3E: giơ tay chào làm khuỷu ra ngoài khung hình vĩnh viễn. Đo trên webcam thấy tay
+  // Phase 3B partial-arm: giơ tay chào làm khuỷu ra ngoài khung hình vĩnh viễn. Đo trên webcam thấy tay
   // avatar rơi xuống sau 1.2 giây (elbow-inference-timeout) giữa lúc người dùng vẫn đang giơ.
   it("keeps inferring the elbow past the timeout while shoulder and wrist stay observed", () => {
     const world = frame(), image = imageFrame(world); image[13].visibility = 0;
@@ -295,7 +295,7 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(result.diagnostics.left.hardRejectionReason).toBe("elbow-inference-timeout");
   });
 
-  // Phase 3E: đo trên webcam — giơ tay chào, khuỷu ra ngoài khung, suy đoán chạy vô thời hạn
+  // Phase 3B partial-arm: đo trên webcam — giơ tay chào, khuỷu ra ngoài khung, suy đoán chạy vô thời hạn
   // và prior pole trỏ vào trong thân → cẳng tay xuyên qua ngực. Nghiệm "đúng toán học" nhưng
   // sai giải phẫu. Khuỷu người thật luôn lệch ra phía ngoài thân.
   it("pushes an inferred elbow out of the torso even when the prior points inward", () => {
@@ -387,7 +387,7 @@ describe("three-point anatomical arm-frame solver", () => {
     const history: ArmGeometryHistory = { previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0, calibratedLength: { upper: 1, lower: 1 }, inferenceStartedAtMs: 0 };
     const unreachable = solveAnatomicalArmFrames(world, image, profile, { left: history, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false);
     expect(unreachable.sides.left).toBeNull(); expect(unreachable.diagnostics.left.hardRejectionReason).toBe("elbow-inference-unreachable");
-    // Phase 3E: timeout chỉ áp dụng khi chiều dài xương CHƯA đến từ quan sát thật (sai số có
+    // Phase 3B partial-arm: timeout chỉ áp dụng khi chiều dài xương CHƯA đến từ quan sát thật (sai số có
     // tích luỹ) — xem test "still times out an inference that never had observed bone lengths".
     // Với calibration quan sát + cổ tay tươi, suy đoán được phép chạy tiếp; ở đây `frame()` có
     // hai vai trùng điểm nên không dựng nổi prior giải phẫu và bị chặn từ bước sớm hơn.
