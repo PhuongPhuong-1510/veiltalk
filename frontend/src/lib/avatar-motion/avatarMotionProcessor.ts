@@ -23,7 +23,7 @@ import { DEFAULT_HAND_TWIST_TEMPORAL_CONFIG, INITIAL_HAND_TWIST_TEMPORAL_STATE, 
 import { composePoseLowerArmWithHandTwist, HAND_TWIST_RIG_CONVENTION_V1, normalizePalmBasisForTwist } from "./handTwistRig";
 import { DEFAULT_HAND_MATCH_CONFIG } from "./handPoseMatching";
 import type { HandTwistRigDiagnostic } from "./avatarMotionDiagnostics";
-import { INITIAL_HAND_TWIST_STABILIZATION_STATE, updateHandTwistStabilization, type HandTwistStabilizationResult, type HandTwistStabilizationState } from "./handTwistStabilization";
+import { INITIAL_HAND_TWIST_STABILIZATION_STATE, resetHandTwistStabilizationKeepingNeutral, updateHandTwistStabilization, type HandTwistStabilizationResult, type HandTwistStabilizationState } from "./handTwistStabilization";
 
 export interface AvatarMotionProcessorOptions { filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; now?: () => number; config?: AvatarMotionConfig }
 
@@ -50,6 +50,7 @@ interface HandTwistProcessorState {
   matchingStateReset: boolean;
   matchingStateResetReason: HandTrackingEpochResetReason | null;
   neutralAnchoredForEpochId: number | null;
+  neutralPreservedAcrossEpoch: boolean;
   lowerArmGeometryValid: boolean | null;
   lowerArmGeometryInvalidSinceMs: number | null;
   lowerArmGeometryInvalidConfirmed: boolean;
@@ -118,6 +119,7 @@ function createHandTwistProcessorState(
     matchingStateReset: false,
     matchingStateResetReason: null,
     neutralAnchoredForEpochId: null,
+    neutralPreservedAcrossEpoch: false,
     lowerArmGeometryValid: null,
     lowerArmGeometryInvalidSinceMs: null,
     lowerArmGeometryInvalidConfirmed: false,
@@ -150,8 +152,9 @@ function inactiveHandTwistDiagnostic(
     observationWasNew: false, duplicateTimestampIgnored: false,
     missingSinceMs: null, missingDurationMs: 0, temporalAdvancedWithoutNewObservation: false,
     rawWrappedTwistRadians: null, rawUnwrappedTwistRadians: null,
-    neutralTwistRadians: null, neutralInitialized: false, neutralReanchored: false,
-    neutralReanchorReason: null, neutralPreservedOnReacquire: false,
+    neutralTwistRadians: state.stabilization.neutralInitialized ? state.stabilization.neutralUnwrappedRadians : null,
+    neutralInitialized: state.stabilization.neutralInitialized, neutralReanchored: false,
+    neutralReanchorReason: null, neutralPreservedAcrossEpoch: state.neutralPreservedAcrossEpoch, neutralPreservedOnReacquire: false,
     correctedTwistRadians: null, deadZoneOutputRadians: null, filteredTargetTwistRadians: null,
     clampedTwistRadians: null, clampApplied: false,
     clampMinRadians: limits.minRadians, clampMaxRadians: limits.maxRadians,
@@ -267,6 +270,7 @@ export class AvatarMotionProcessor {
       state.lastStabilizationResult = null;
       state.pendingNeutralReanchorReason = "manual-neutral-calibration";
       state.neutralAnchoredForEpochId = null;
+      state.neutralPreservedAcrossEpoch = false;
       this.armStabilityState[currentSide].previousHandRawTwistRadians = null;
       this.armStabilityState[currentSide].previousHandAppliedTwistRadians = null;
     }
@@ -308,7 +312,12 @@ export class AvatarMotionProcessor {
           frame.pose.sampledAtMs - previous > this.config.armFrame.longGapDiscontinuityMs
         );
         // Matching phải được reset trước khi sample Hand mới của frame này được gán.
-        if (poseDiscontinuity[side]) this.resetHandTrackingSide(side, "tracking-discontinuity", processedTimestampMs);
+        if (poseDiscontinuity[side]) {
+          // Timestamp discontinuity làm matching/raw unwrap cũ không còn đáng tin, nhưng không
+          // đổi rig hoặc mốc neutral của session. Giữ calibration để re-entry không
+          // âm thầm lấy tư thế đang chuyển động làm zero mới.
+          this.resetHandTrackingSide(side, "tracking-discontinuity", processedTimestampMs, { preserveNeutralCalibration: true });
+        }
       }
     }
     const handSampleClassification = this.classifyHandSample(frame);
@@ -316,7 +325,7 @@ export class AvatarMotionProcessor {
       for (const side of ["left", "right"] as const) {
         const previousHandSample = this.handTwistState[side].lastAcceptedHandSampledAtMs;
         if (previousHandSample !== null && frame.handSampledAtMs <= previousHandSample) {
-          this.resetHandTrackingSide(side, "tracking-discontinuity", processedTimestampMs);
+          this.resetHandTrackingSide(side, "tracking-discontinuity", processedTimestampMs, { preserveNeutralCalibration: true });
         }
       }
     }
@@ -653,9 +662,11 @@ export class AvatarMotionProcessor {
       state.lowerArmGeometryInvalidSinceMs = null;
       state.lowerArmGeometryInvalidConfirmed = false;
       if (recoveredFromConfirmedInvalid) {
-        // Epoch boundary nằm ở recovery đã xác nhận. Frame recovery chỉ fallback Pose-only; sample
-        // Hand mới kế tiếp sẽ chạy matching từ state sạch và anchor neutral đúng một lần.
-        this.resetHandTrackingSide(side, "invalid-lower-arm-profile-or-geometry", nowMs);
+        // Epoch boundary nằm ở recovery đã xác nhận. Chỉ reset matching/temporal/raw unwrap;
+        // mốc neutral calibration của cùng rig phải được giữ, nếu không frame vừa re-entry sẽ
+        // biến thành zero mới và làm cùng một tư thế vật lý lệch dần qua các lần hạ/nâng tay.
+        this.resetLowerArmTransportHistory(side);
+        this.resetHandTrackingSide(side, "invalid-lower-arm-profile-or-geometry", nowMs, { preserveNeutralCalibration: true });
         state.lowerArmGeometryValid = true;
         const diagnostic = inactiveHandTwistDiagnostic(side, this.config, frame.handSampledThisFrame, hand.sampleClassification, state, "invalid-lower-arm-profile-or-geometry");
         this.consumeMatchingResetMarker(state);
@@ -728,7 +739,10 @@ export class AvatarMotionProcessor {
             state.lastAcceptedObservationAtMs = nowMs;
             state.lastAcceptedHandSampledAtMs = frame.handSampledAtMs;
             state.pendingNeutralReanchorReason = "none";
-            if (nextStabilization.neutralReanchored) state.neutralAnchoredForEpochId = state.trackingEpochId;
+            if (nextStabilization.neutralReanchored) {
+              state.neutralAnchoredForEpochId = state.trackingEpochId;
+              state.neutralPreservedAcrossEpoch = false;
+            }
             state.missingSinceMs = null;
             observationMode = "valid";
             neutralPreservedOnReacquire = match.continuity === "reacquired" && !nextStabilization.neutralReanchored;
@@ -764,7 +778,7 @@ export class AvatarMotionProcessor {
     });
     state.temporal = temporal.state;
     if (temporal.resetOccurred) {
-      this.resetHandTrackingSide(side, "long-loss-temporal-reset", nowMs);
+      this.resetHandTrackingSide(side, "long-loss-temporal-reset", nowMs, { preserveNeutralCalibration: true });
       stabilizationResult = null;
     }
     const effectiveTemporal = temporal.resetOccurred
@@ -803,6 +817,7 @@ export class AvatarMotionProcessor {
       neutralInitialized: state.stabilization.neutralInitialized,
       neutralReanchored: observationMode === "valid" && Boolean(stabilizationResult?.neutralReanchored),
       neutralReanchorReason: observationMode === "valid" ? stabilizationResult?.neutralReanchorReason ?? null : null,
+      neutralPreservedAcrossEpoch: state.neutralPreservedAcrossEpoch,
       neutralPreservedOnReacquire,
       correctedTwistRadians: stabilizationResult?.correctedTwistRadians ?? null,
       deadZoneOutputRadians: stabilizationResult?.deadZoneOutputRadians ?? null,
@@ -877,9 +892,23 @@ export class AvatarMotionProcessor {
     this.handMatchPrevious[side].wristPosition = null;
     this.handMatchPrevious[side].lastMatchedAtMs = null;
   }
-  private resetHandTrackingSide(side: ArmSide, reason: HandTrackingEpochResetReason, nowMs: number | null = null): void {
-    const previousEpochId = this.handTwistState[side].trackingEpochId;
+  private resetHandTrackingSide(
+    side: ArmSide,
+    reason: HandTrackingEpochResetReason,
+    nowMs: number | null = null,
+    options: { preserveNeutralCalibration?: boolean } = {},
+  ): void {
+    const previous = this.handTwistState[side];
+    const previousEpochId = previous.trackingEpochId;
     const fresh = createHandTwistProcessorState(previousEpochId + 1, reason);
+    if (options.preserveNeutralCalibration && previous.stabilization.neutralInitialized) {
+      fresh.stabilization = resetHandTwistStabilizationKeepingNeutral(previous.stabilization);
+      // `neutralAnchoredForEpochId` giữ epoch gốc của calibration; diagnostic riêng cho biết
+      // nó được carry sang epoch mới, tránh hiểu nhầm đây là một re-anchor từ frame re-entry.
+      fresh.neutralAnchoredForEpochId = previous.neutralAnchoredForEpochId;
+      fresh.neutralPreservedAcrossEpoch = fresh.stabilization.neutralInitialized;
+      fresh.pendingNeutralReanchorReason = "none";
+    }
     fresh.trackingEpochStartedAtMs = nowMs;
     fresh.matchingStateReset = true;
     fresh.matchingStateResetReason = reason;
@@ -889,6 +918,11 @@ export class AvatarMotionProcessor {
   private resetHandTrackingState(reason: HandTrackingEpochResetReason): void {
     this.resetHandTrackingSide("left", reason);
     this.resetHandTrackingSide("right", reason);
+  }
+  /** Chỉ gọi sau confirmed lower-arm geometry loss, không áp vào Hand-only loss để tránh Pose snap. */
+  private resetLowerArmTransportHistory(side: ArmSide): void {
+    this.armState[side].previousPrimary.lower = null;
+    this.armState[side].previousSecondary.lower = null;
   }
   private resetHandSampleClassification(): void { this.lastClassifiedHandSampledAtMs = null; }
   private consumeMatchingResetMarker(state: HandTwistProcessorState): void {

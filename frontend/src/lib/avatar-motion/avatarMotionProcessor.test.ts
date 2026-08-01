@@ -209,6 +209,7 @@ describe("AvatarMotionProcessor", () => {
       expect(afterPacket.handMotion?.left.matchingContinuity).toBe("new");
       expect(after.neutralReanchored).toBe(true);
       expect(after.neutralAnchoredForEpochId).toBe(after.trackingEpochId);
+      expect(after.neutralPreservedAcrossEpoch).toBe(false);
 
       now = 186;
       const next = sampledFrame(166); next.rawHands = [handCandidateWithMiddleDepth(43, LEFT_WRIST_IMAGE, "left", 166, .09)];
@@ -241,12 +242,13 @@ describe("AvatarMotionProcessor", () => {
       expect(after.neutralReanchored).toBe(false);
     });
 
-    it("2B-6: long loss resets matching/epoch and the next trusted observation anchors exactly once", () => {
+    it("2B-6 regression: long Hand loss resets volatile state but preserves calibrated neutral", () => {
       let now = 120;
       const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now });
       processor.setRigProfile(rigProfile);
       const first = frame(); first.rawHands = [handCandidateWithMiddleDepth(0, LEFT_WRIST_IMAGE, "left", 100, .01)]; processor.process(first);
       const epoch = processor.getLastDiagnostics()!.handTwist.left.trackingEpochId;
+      const initialNeutral = processor.getLastDiagnostics()!.handTwist.left.neutralTwistRadians;
 
       now = 153; const missing = sampledFrame(133); missing.rawHands = []; processor.process(missing);
       now = 2_500; const unsampled = frame("not-sampled"); unsampled.frameTimestampMs = 2_500; processor.process(unsampled);
@@ -255,15 +257,17 @@ describe("AvatarMotionProcessor", () => {
       expect(reset.trackingEpochResetReason).toBe("long-loss-temporal-reset");
       expect(reset.matchingStateReset).toBe(true);
       expect(reset.lastAppliedTwistRadians).toBe(0);
+      expect(reset.neutralPreservedAcrossEpoch).toBe(true);
 
       now = 2_533;
       const reacquired = sampledFrame(2_533); reacquired.rawHands = [handCandidateWithMiddleDepth(10, LEFT_WRIST_IMAGE, "left", 2_533, .08)];
       const packet = processor.process(reacquired);
       const anchored = processor.getLastDiagnostics()!.handTwist.left;
       expect(packet.handMotion?.left.matchingContinuity).toBe("new");
-      expect(anchored.neutralReanchored).toBe(true);
-      expect(anchored.neutralAnchoredForEpochId).toBe(anchored.trackingEpochId);
-      expect(anchored.appliedTwistRadians).toBe(0);
+      expect(anchored.neutralReanchored).toBe(false);
+      expect(anchored.neutralPreservedAcrossEpoch).toBe(true);
+      expect(anchored.neutralTwistRadians).toBe(initialNeutral);
+      expect(Math.abs(anchored.appliedTwistRadians)).toBeGreaterThan(1e-6);
 
       now = 2_566;
       const next = sampledFrame(2_566); next.rawHands = [handCandidateWithMiddleDepth(11, LEFT_WRIST_IMAGE, "left", 2_566, .09)]; processor.process(next);
@@ -283,6 +287,7 @@ describe("AvatarMotionProcessor", () => {
       expect(resetDiagnostic.trackingEpochId).toBe(initialEpoch + 1);
       expect(resetDiagnostic.appliedTwistRadians).toBe(0);
       expect(resetDiagnostic.neutralReanchored).toBe(true);
+      expect(resetDiagnostic.neutralPreservedAcrossEpoch).toBe(false);
 
       processor.dispose(); processor.setRigProfile(rigProfile); now = 186;
       const afterDispose = sampledFrame(166); afterDispose.rawHands = [handCandidateWithMiddleDepth(2, LEFT_WRIST_IMAGE, "left", 166, -.08)]; processor.process(afterDispose);
@@ -290,9 +295,10 @@ describe("AvatarMotionProcessor", () => {
       expect(disposeDiagnostic.trackingEpochId).toBe(resetDiagnostic.trackingEpochId + 2);
       expect(disposeDiagnostic.appliedTwistRadians).toBe(0);
       expect(disposeDiagnostic.neutralReanchored).toBe(true);
+      expect(disposeDiagnostic.neutralPreservedAcrossEpoch).toBe(false);
     });
 
-    it("2B-6: a side-specific Hand timestamp discontinuity resets only that side", () => {
+    it("2B-6 regression: a side-specific timestamp discontinuity preserves only that side's neutral", () => {
       let now = 120;
       const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now });
       processor.setRigProfile(rigProfile);
@@ -306,6 +312,7 @@ describe("AvatarMotionProcessor", () => {
       const leftAhead = sampledFrame(133); leftAhead.rawHands = [handCandidateWithMiddleDepth(2, LEFT_WRIST_IMAGE, "left", 133, .08)];
       processor.process(leftAhead);
       const before = processor.getLastDiagnostics()!.handTwist;
+      const leftNeutralBeforeReset = before.left.neutralTwistRadians;
 
       now = 186;
       const rollbackForLeft = sampledFrame(166); rollbackForLeft.handSampledAtMs = 120; rollbackForLeft.rawHands = [
@@ -316,6 +323,7 @@ describe("AvatarMotionProcessor", () => {
       const after = processor.getLastDiagnostics()!.handTwist;
       expect(after.left.trackingEpochId).toBe(before.left.trackingEpochId + 1);
       expect(after.left.trackingEpochResetReason).toBe("tracking-discontinuity");
+      expect(after.left.neutralPreservedAcrossEpoch).toBe(true);
       expect(after.right.trackingEpochId).toBe(before.right.trackingEpochId);
       expect(after.right.neutralReanchored).toBe(false);
 
@@ -324,8 +332,9 @@ describe("AvatarMotionProcessor", () => {
       firstTrustedAfterReset.rawHands = [handCandidateWithMiddleDepth(5, LEFT_WRIST_IMAGE, "left", 199, .08)];
       processor.process(firstTrustedAfterReset);
       const anchored = processor.getLastDiagnostics()!.handTwist.left;
-      expect(anchored.neutralReanchored).toBe(true);
-      expect(anchored.neutralAnchoredForEpochId).toBe(anchored.trackingEpochId);
+      expect(anchored.neutralReanchored).toBe(false);
+      expect(anchored.neutralPreservedAcrossEpoch).toBe(true);
+      expect(anchored.neutralTwistRadians).toBe(leftNeutralBeforeReset);
     });
 
     it("2B-6: right-only and both-hands samples modify exactly their lowerArm outputs", () => {
@@ -445,11 +454,12 @@ describe("AvatarMotionProcessor", () => {
       expect(Math.abs(recovery.correctedTwistRadians!)).toBeGreaterThan(.01);
     });
 
-    it("2B-6 regression: confirmed geometry loss opens exactly one epoch on recovery and anchors on the next trusted sample", () => {
+    it("2B-6 regression: confirmed geometry loss opens one epoch but keeps calibrated neutral", () => {
       let now = 120;
       const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now }); processor.setRigProfile(rigProfile);
       const neutral = frame(); neutral.rawHands = [handCandidateWithMiddleDepth(0, LEFT_WRIST_IMAGE, "left", 100, .01)]; processor.process(neutral);
       const initialEpoch = processor.getLastDiagnostics()!.handTwist.left.trackingEpochId;
+      const initialNeutral = processor.getLastDiagnostics()!.handTwist.left.neutralTwistRadians;
 
       const invalidAt = (timestamp: number) => {
         const value = sampledFrame(timestamp); setPoseLandmark(value, 15, -.5, .3); value.rawHands = [];
@@ -467,16 +477,53 @@ describe("AvatarMotionProcessor", () => {
       expect(recovery.trackingEpochResetReason).toBe("invalid-lower-arm-profile-or-geometry");
       expect(recovery.matchingStateReset).toBe(true);
       expect(recovery.appliedTwistRadians).toBe(0);
-      expect(recovery.neutralAnchoredForEpochId).toBeNull();
+      expect(recovery.neutralPreservedAcrossEpoch).toBe(true);
+      expect(recovery.neutralTwistRadians).toBe(initialNeutral);
 
       now = 319;
       const firstTrusted = sampledFrame(299); firstTrusted.rawHands = [handCandidateWithMiddleDepth(2, LEFT_WRIST_IMAGE, "left", 299, -.08)];
       processor.process(firstTrusted);
       const anchored = processor.getLastDiagnostics()!.handTwist.left;
       expect(anchored.trackingEpochId).toBe(initialEpoch + 1);
-      expect(anchored.neutralReanchored).toBe(true);
-      expect(anchored.neutralAnchoredForEpochId).toBe(anchored.trackingEpochId);
-      expect(anchored.appliedTwistRadians).toBe(0);
+      expect(anchored.neutralReanchored).toBe(false);
+      expect(anchored.neutralPreservedAcrossEpoch).toBe(true);
+      expect(Math.abs(anchored.appliedTwistRadians)).toBeGreaterThan(1e-6);
+    });
+
+    it("2B-6 regression: repeated lower-arm loss/recovery keeps one physical Hand orientation on one calibration", () => {
+      let now = 120;
+      const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now }); processor.setRigProfile(rigProfile);
+      const neutral = sampledFrame(100); neutral.rawHands = [handCandidateWithMiddleDepth(0, LEFT_WRIST_IMAGE, "left", 100, .01)]; processor.process(neutral);
+      const initialNeutral = processor.getLastDiagnostics()!.handTwist.left.neutralTwistRadians;
+      let expectedCorrection: number | null = null;
+      let timestamp = 133;
+
+      for (let cycle = 0; cycle < 4; cycle += 1) {
+        const invalid = sampledFrame(timestamp); setPoseLandmark(invalid, 15, -.5, .3); invalid.rawHands = [];
+        now = timestamp + 20; processor.process(invalid);
+
+        timestamp += 100;
+        const confirmedInvalid = sampledFrame(timestamp); setPoseLandmark(confirmedInvalid, 15, -.5, .3); confirmedInvalid.rawHands = [];
+        now = timestamp + 20; processor.process(confirmedInvalid);
+
+        timestamp += 33;
+        const recovery = sampledFrame(timestamp); recovery.rawHands = [handCandidateWithMiddleDepth(cycle + 1, LEFT_WRIST_IMAGE, "left", timestamp, .08)];
+        now = timestamp + 20; processor.process(recovery);
+
+        timestamp += 33;
+        const returned = sampledFrame(timestamp); returned.rawHands = [handCandidateWithMiddleDepth(cycle + 10, LEFT_WRIST_IMAGE, "left", timestamp, .08)];
+        now = timestamp + 20; processor.process(returned);
+        const diagnostic = processor.getLastDiagnostics()!.handTwist.left;
+
+        expect(diagnostic.neutralReanchored).toBe(false);
+        expect(diagnostic.neutralPreservedAcrossEpoch).toBe(true);
+        expect(diagnostic.neutralTwistRadians).toBe(initialNeutral);
+        expect(Math.abs(diagnostic.appliedTwistRadians)).toBeGreaterThan(1e-6);
+        if (expectedCorrection === null) expectedCorrection = diagnostic.correctedTwistRadians;
+        else expect(diagnostic.correctedTwistRadians).toBeCloseTo(expectedCorrection, 7);
+
+        timestamp += 33;
+      }
     });
 
     it("2B-6 regression: alternating one-frame geometry dropouts never pump epoch or re-anchor neutral", () => {
@@ -554,6 +601,35 @@ describe("AvatarMotionProcessor", () => {
       expect(after.right.trackingEpochId).toBe(before.right.trackingEpochId);
       expect(after.left.neutralTwistRadians).toBe(before.left.neutralTwistRadians);
       expect(after.left.neutralReanchored).toBe(false);
+    });
+
+    it("manual neutral calibration survives a later long Hand loss on the same rig", () => {
+      let now = 120;
+      const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now });
+      processor.setRigProfile(rigProfile);
+      const initial = frame(); initial.rawHands = [handCandidateWithMiddleDepth(1, RIGHT_WRIST_IMAGE, "right", 100, .01)]; processor.process(initial);
+
+      now = 153;
+      const moved = sampledFrame(133); moved.rawHands = [handCandidateWithMiddleDepth(1, RIGHT_WRIST_IMAGE, "right", 133, .08)]; processor.process(moved);
+      processor.calibrateHandTwistNeutral("right");
+
+      now = 186;
+      const calibration = sampledFrame(166); calibration.rawHands = [handCandidateWithMiddleDepth(1, RIGHT_WRIST_IMAGE, "right", 166, .08)]; processor.process(calibration);
+      const manualNeutral = processor.getLastDiagnostics()!.handTwist.right.neutralTwistRadians;
+
+      now = 219;
+      const missing = sampledFrame(199); missing.rawHands = []; processor.process(missing);
+      now = 2_500;
+      const resetTick = frame("not-sampled"); resetTick.frameTimestampMs = 2_500; processor.process(resetTick);
+      expect(processor.getLastDiagnostics()!.handTwist.right.neutralPreservedAcrossEpoch).toBe(true);
+
+      now = 2_533;
+      const returned = sampledFrame(2_533); returned.rawHands = [handCandidateWithMiddleDepth(1, RIGHT_WRIST_IMAGE, "right", 2_533, .09)]; processor.process(returned);
+      const diagnostic = processor.getLastDiagnostics()!.handTwist.right;
+      expect(diagnostic.neutralReanchored).toBe(false);
+      expect(diagnostic.neutralPreservedAcrossEpoch).toBe(true);
+      expect(diagnostic.neutralTwistRadians).toBe(manualNeutral);
+      expect(Math.abs(diagnostic.appliedTwistRadians)).toBeGreaterThan(1e-6);
     });
 
     it("trusted observations acquire full steady-state amplitude for both sides", () => {

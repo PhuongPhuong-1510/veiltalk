@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyContinuousDeadZone, INITIAL_HAND_TWIST_STABILIZATION_STATE, updateHandTwistStabilization, type HandTwistStabilizationConfig, type HandTwistStabilizationInput } from "./handTwistStabilization";
+import { applyContinuousDeadZone, INITIAL_HAND_TWIST_STABILIZATION_STATE, resetHandTwistStabilizationKeepingNeutral, updateHandTwistStabilization, type HandTwistStabilizationConfig, type HandTwistStabilizationInput } from "./handTwistStabilization";
 
 const DEG = Math.PI / 180;
 const config: HandTwistStabilizationConfig = {
@@ -82,5 +82,15 @@ describe("Hand twist stabilization", () => {
     expect(result.neutralReanchorReason).toBe("tracking-discontinuity");
     expect(result.neutralTwistRadians).toBeCloseTo(40 * DEG);
     expect(result.correctedTwistRadians).toBeCloseTo(0);
+  });
+
+  it("keeps calibration neutral across tracking reset and unwraps the new wrapped sample near it", () => {
+    const anchored = updateHandTwistStabilization(INITIAL_HAND_TWIST_STABILIZATION_STATE, input(170 * DEG, 0), config)!;
+    const restarted = resetHandTwistStabilizationKeepingNeutral(anchored.state);
+    const result = updateHandTwistStabilization(restarted, input(-170 * DEG, 33), config)!;
+
+    expect(result.neutralReanchored).toBe(false);
+    expect(result.neutralTwistRadians).toBeCloseTo(170 * DEG);
+    expect(result.correctedTwistRadians).toBeCloseTo(20 * DEG);
   });
 });

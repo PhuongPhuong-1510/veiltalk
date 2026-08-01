@@ -395,20 +395,25 @@ Processor phải phân loại Hand sample trước matching/palm: `unsampled`, `
 Duplicate không được chạy matching, dựng palm, cập nhật wrist continuity hay tạo observation mới;
 temporal vẫn tiến theo `dt` về target cuối hoặc tiếp tục hold/fade đã bắt đầu.
 
-Mỗi side có tracking epoch riêng. Trusted observation đầu tiên của epoch mới anchor neutral đúng một
-lần. Short loss/reacquired và source-index reorder không đổi epoch. Reset/dispose, rig/model change,
-tracking discontinuity, recovery sau confirmed lower-arm geometry loss và long-loss reset phải xóa
-matching cùng state twist tương ứng; long loss chỉ reset sau khi temporal đạt điều kiện reset, không
+Mỗi side có tracking epoch riêng. Trusted observation đầu tiên của calibration mới anchor neutral đúng
+một lần. Short loss/reacquired và source-index reorder không đổi epoch. Reset/dispose, rig/model
+change và neo neutral thủ công tạo calibration mới; tracking discontinuity, recovery sau confirmed
+lower-arm geometry loss và long-loss reset chỉ xóa matching/temporal/filter/raw unwrap, rồi giữ
+neutral của cùng rig qua epoch mới. Long loss chỉ reset sau khi temporal đạt điều kiện reset, không
 reset lúc vừa missing.
 Lower-arm geometry invalid một frame phải fallback Pose-only nhưng giữ epoch/neutral. Loss chỉ được
 xác nhận bởi observation invalid tiếp theo sau `invalidGraceMs`; recovery sau confirmed loss mở đúng
 một epoch, còn chuỗi invalid/valid từng frame không được pumping epoch hoặc re-anchor neutral.
+Ở recovery có preserve calibration, raw Hand sample đầu tiên phải unwrap gần neutral cũ và diagnostic
+phải có `neutralPreservedAcrossEpoch=true`, không được coi sample vừa quay lại là neutral mới.
 
 Automated regression bắt buộc chứng minh: flag-off/Pose fallback tuyệt đối; duplicate gating trước
 matching/palm nhưng vẫn temporal tick; right-only/both-hands độc lập; chỉ lowerArm đổi; upperArm/elbow
 output và lowerArm primary không đổi do pure twist; short reacquire giữ neutral; long loss/rig/reset/
 dispose mở epoch mới và không rò quaternion; malformed profile fail-fast; runtime geometry invalid
 fallback Pose-only; chuỗi neutral → +twist → neutral → -twist đổi dấu đúng và không tăng epoch.
+Thêm regression hạ–nâng: sau bốn lần confirmed lower-arm geometry loss/recovery liên tiếp với cùng
+hướng Hand, neutral và corrected twist phải giữ nguyên; `neutralReanchored=false` ở mỗi lần quay lại.
 Right-hand webcam regression phải ghi đồng thời `configuredPositiveSign`, `rigApplicationSign`,
 `filteredTargetTwistRadians`, `appliedTwistRadians` và world orientation thật sau renderer. Không
 được kết luận chiều đúng chỉ vì scalar diagnostic đổi dấu. Thử nghiệm `rigApplicationSign=-1` hiện
