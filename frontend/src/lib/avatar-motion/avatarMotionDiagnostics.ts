@@ -43,6 +43,8 @@ export interface HandTwistRigDiagnostic {
   neutralInitialized: boolean;
   neutralReanchored: boolean;
   neutralReanchorReason: string | null;
+  /** Neutral của epoch này được giữ lại từ tracking epoch trước, không phải lấy từ frame re-entry. */
+  neutralPreservedAcrossEpoch: boolean;
   neutralPreservedOnReacquire: boolean;
   correctedTwistRadians: number | null;
   deadZoneOutputRadians: number | null;

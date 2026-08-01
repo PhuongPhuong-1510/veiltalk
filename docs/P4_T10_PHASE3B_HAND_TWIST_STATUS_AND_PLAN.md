@@ -1,7 +1,7 @@
 # P4-T10 — Phase 3B: Hand Forearm Twist
 
 > Trạng thái ngày 2026-08-01: **HOÀN THÀNH — người thực hiện đã xác nhận nghiệm thu webcam và duyệt bật mặc định**.
-> Automated gate gần nhất: **386/386 test PASS**, TypeScript, lint và Vite build sạch.
+> Automated gate gần nhất: **410/410 test PASS**, TypeScript, lint và Vite build sạch.
 > Runtime vẫn giữ setter để regression test có thể kiểm tra Pose-only, nhưng production và DEV harness bật Hand Twist mặc định.
 >
 > ⚠️ **Đã bị thay thế một phần bởi bản sửa occlusion trong chính Phase 3B.** Invariant "upper/lower là một chain, cùng
@@ -64,6 +64,23 @@ Các contract đã có trong code và automated test:
 - Reset/dispose/rig generation/tracking discontinuity/long loss không được rò twist cũ.
 - Renderer tiếp tục nhận rest-relative parent-local delta và áp `restLocal × deltaLocal`.
 - Confidence chỉ gate observation; observation trusted có target amplitude `1`. Temporal influence chỉ ramp khi acquire và hold/fade khi mất tracking, không co biên độ steady-state theo quality.
+
+### 2.1. Regression hạ–nâng tay (2026-08-01)
+
+`tracking-discontinuity`, `long-loss-temporal-reset` và recovery sau confirmed lower-arm geometry
+loss vẫn mở tracking epoch mới để bỏ matching, temporal, filter và raw unwrap cũ; nhưng với **cùng
+rig/model**, chúng không còn tự neo lại neutral từ Hand sample đầu tiên khi tay quay lại. Calibration
+neutral trước loss được giữ lại; raw sample đầu tiên được unwrap vào nhánh gần neutral đó, nên cùng
+một hướng lòng bàn tay không tự biến thành zero mới qua các lần hạ–nâng tay.
+
+Chỉ ở recovery sau **confirmed lower-arm geometry loss**, history `previousPrimary.lower` và
+`previousSecondary.lower` của parallel transport mới bị xóa để reference axial cũ không đi qua lần
+recovery. Không xóa history Pose này chỉ vì Hand-only loss/timestamp reset, vì việc đó có thể làm
+lowerArm snap khi Pose vẫn liên tục. Reset/dispose, rig/model change và neo neutral thủ công vẫn là
+các đường đi chủ động xóa hoặc thay calibration. Diagnostic `neutralPreservedAcrossEpoch` phân biệt
+rõ carry calibration với một lần re-anchor mới. Regression tự động mô phỏng bốn chu kỳ lower-arm
+geometry loss/recovery liên tiếp với cùng Hand orientation; mỗi chu kỳ phải giữ cùng corrected twist
+và không re-anchor neutral.
 
 ## 3. Những gì chưa thuộc Phase 3B
 

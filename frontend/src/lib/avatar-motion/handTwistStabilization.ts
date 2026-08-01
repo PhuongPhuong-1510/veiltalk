@@ -32,6 +32,31 @@ export const INITIAL_HAND_TWIST_STABILIZATION_STATE: HandTwistStabilizationState
   filteredTargetRadians: 0,
 };
 
+/**
+ * Xóa lịch sử observation/unwrap/filter nhưng giữ mốc calibration của cùng rig/session.
+ *
+ * Mất Hand Landmarker không làm đổi hệ tọa độ của rig hay ý nghĩa giải phẫu của neutral. Nếu lấy
+ * frame đầu tiên lúc tay vừa quay lại làm neutral mới, cùng một tư thế vật lý sẽ ra góc khác nhau
+ * sau mỗi lần mất tracking. State trả về cố ý để `rawInitialized=false`: observation mới sẽ được
+ * unwrap vào nhánh gần neutral cũ nhất, thay vì nối với raw sample đã cũ.
+ */
+export function resetHandTwistStabilizationKeepingNeutral(
+  state: HandTwistStabilizationState,
+): HandTwistStabilizationState {
+  if (
+    !state.neutralInitialized ||
+    !Number.isFinite(state.neutralUnwrappedRadians) ||
+    (state.neutralInitializedAtMs !== null && !Number.isFinite(state.neutralInitializedAtMs))
+  ) return { ...INITIAL_HAND_TWIST_STABILIZATION_STATE };
+
+  return {
+    ...INITIAL_HAND_TWIST_STABILIZATION_STATE,
+    neutralInitialized: true,
+    neutralUnwrappedRadians: state.neutralUnwrappedRadians,
+    neutralInitializedAtMs: state.neutralInitializedAtMs,
+  };
+}
+
 export interface HandTwistStabilizationInput {
   rawWrappedTwistRadians: number;
   nowMs: number;
@@ -89,7 +114,12 @@ export function updateHandTwistStabilization(
   const rawWrapped = wrapAngle(input.rawWrappedTwistRadians);
   const rawUnwrapped = state.rawInitialized
     ? state.rawUnwrappedRadians + shortestAngleDelta(state.previousRawWrappedRadians, rawWrapped)
-    : rawWrapped;
+    // Sau tracking reset có thể giữ neutral nhưng không được giữ raw history. Chọn biểu diễn
+    // wrapped của sample mới gần neutral cũ nhất để `corrected` vẫn là góc ngắn nhất quanh mốc
+    // calibration, không nhảy thêm ±2π chỉ vì detector vừa bắt lại tay.
+    : state.neutralInitialized
+      ? state.neutralUnwrappedRadians + shortestAngleDelta(wrapAngle(state.neutralUnwrappedRadians), rawWrapped)
+      : rawWrapped;
   const shouldAnchor = !state.neutralInitialized || input.reanchorNeutral;
   const neutral = shouldAnchor ? rawUnwrapped : state.neutralUnwrappedRadians;
   const corrected = rawUnwrapped - neutral;
