@@ -23,6 +23,7 @@ project skeleton tương ứng.
 
 | File | Nội dung hiện tại |
 |---|---|
+| `README.md` | Giới thiệu dự án trên GitHub, nguyên tắc riêng tư, kiến trúc, trạng thái, hướng dẫn chạy/test và bản đồ tài liệu |
 | `.env.example` | Template biến môi trường, không chứa secret thật |
 | `.env` | Cấu hình môi trường cục bộ đã tạo; chứa secret, bị Git ignore và không được commit |
 | `docker-compose.yml` | 7 service; PostgreSQL/Redis publish cổng 5432/6379 cho Backend local, còn Backend trong Compose dùng hostname nội bộ |
