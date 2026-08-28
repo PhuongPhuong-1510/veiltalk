@@ -56,3 +56,7 @@ frontend/public/models/avatars/*.vrm
 *.tmp
 *.bak
 *~
+
+# ===== Hướng dẫn công cụ phát triển cục bộ =====
+AGENTS.md
+CLAUDE.md
