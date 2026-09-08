@@ -125,6 +125,9 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 - Pipeline xử lý hiện tại: raw frame → landmark extraction (MediaPipe) → phân loại Hand sample tại processor boundary (`unsampled`/`duplicate`/`new-sample`) → per-side image bounds/visibility gate → torso semantic basis → three-point anatomical arm-frame (primary direction + elbow-offset secondary reference) → direction/pole filters → parent-local/rest-relative delta → safety constraint → hold/return/recovery → Hand forearm axial-twist correction mặc định bật → hệ số blendshape + `AvatarPosePacketV1`. Duplicate bị chặn trước Hand matching/palm construction nhưng temporal vẫn tick theo `dt`. Hand world palm basis được đổi đồng bộ sang motion frame `(x,-y,-z)` trước chirality và trước phép đo twist. Convention đã nghiệm thu dùng `positiveSign=+1` và `rigApplicationSign=+1` cho cả hai side; tay phải bỏ lần đảo dấu thứ hai sau bằng chứng webcam định lượng. Clamp là `±90°` quanh neutral. Observation trusted giữ full target amplitude; temporal influence chỉ ramp acquire và hold/fade khi mất tracking. Khi chỉ mất Hand landmarks, Pose arm vẫn chạy nhưng twist cũ chỉ debounce 80 ms rồi fade hết trong 180 ms. Phase 3B partial arm: khi Pose wrist/lower segment không hợp lệ, upper và lower được nghiệm thu **độc lập** — upper tiếp tục solve từ shoulder→elbow, lower giữ parent-local rest-relative delta nên xoay theo upper như một khối cứng và giữ nguyên góc gập (an toàn vì hold lưu local delta chứ không phải world rotation). Chain chỉ được coi là mất khi chính đoạn vai→khuỷu không hợp lệ. Elbow inference khóa phía gập bằng mỏ neo hướng khuỷu, cộng ràng buộc giải phẫu theo `torso.right` để nghiệm không lấn vào trong thân, và bỏ timeout khi vai+cổ tay quan sát tươi với bone length đã calibrate từ quan sát thật. Neutral chỉ neo theo first-trusted ở calibration đầu tiên, hoặc sau reset/dispose/rig change/neo neutral thủ công. Neutral/matching/temporal dùng tracking epoch độc lập từng side. Tracking discontinuity, long Hand loss, hoặc recovery sau geometry loss đã vượt `invalidGraceMs` vẫn tạo epoch mới nhưng giữ neutral của cùng rig; raw sample đầu khi re-entry được unwrap gần neutral đã giữ và không tự neo zero mới. Chỉ recovery sau confirmed lower-arm geometry loss xóa history lower-arm parallel transport để reference axial cũ không đi qua lần recovery; Hand-only loss/timestamp reset giữ history Pose để tránh snap. Diagnostic `neutralPreservedAcrossEpoch` phân biệt carry này với re-anchor. Depth-degenerate dùng previous/rest pole fallback. Trạng thái Phase 3B nằm tại `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md`; bổ sung partial arm tại `docs/P4_T10_PHASE3B_PARTIAL_ARM_ACCEPTANCE_REPORT.md`.
 
+- Corrective patch Phase 3B.4 sau manual W3: khi giải two-bone IK, hai nhánh khuỷu được chấm thêm bằng hướng Hand image-space `wrist→middle-MCP` đã match và còn mới. Đây là prior mềm có quality gate; Pose elbow có visibility cao nhưng làm cẳng tay ngược mạnh palm-forward bị hạ cấp sang inference. Chỉ vector hướng được so sánh, không trộn origin Pose-world với Hand-world. Cơ chế này độc lập toggle Hand twist.
+- Corrective spatial patch sau manual W9: solver quét 24 pole trên toàn đường tròn nghiệm thay vì chỉ `prior/-prior`. Face landmarks tạo ellipse image-space local-only; Hand landmarks quyết định khi nào contact với mặt là có chủ ý. Model loader chụp head sphere, torso capsule, arm length/radius từ normalized VRM rest pose. Candidate được chấm thêm face-clearance và head/torso penetration; Pose elbow nhìn thấy nhưng ánh xạ thành forearm xuyên head cũng bị hạ cấp sang inference. Finger rig đồng thời cung cấp rest palm normal để Hand twist căn tuyệt đối theo model; model thiếu bằng chứng rig dùng session-relative fallback. Tất cả dữ liệu này chỉ tồn tại trong client processor/diagnostic, không đi vào packet.
+
 - Output: `AvatarPosePacketV1` plain-data nhỏ gọn. `jointRotations` chứa quaternion delta trong normalized-humanoid parent-local, rest-relative space; packet không chứa raw face/hand/pose landmarks hoặc facial transform matrix. RTCDataChannel transport thuộc P4-T15, chưa nằm trong P4-T10.
 
 - Xử lý edge case: mất theo dõi do che khuất/ánh sáng yếu — áp dụng đúng FR-09 (giữ tư thế hợp lệ gần nhất).
@@ -179,12 +182,12 @@ local-only quanh sự kiện trước khi đổi thêm motion math. Upper-arm ax
 Phase 3C. Swing–twist utility mới phục vụ test/diagnostics; palm twist và anatomical calibration thuộc
 Phase 3B/3C.
 
-Partial occlusion có thêm invariant theo toàn chain: một Pose sample chỉ được phép cập nhật arm output
-khi cả upper và lower segment cùng hợp lệ. Trước sửa, wrist mất có thể tạo trạng thái
-`{upper: active, lower: held}`, tức upper mới kéo lower quaternion cũ và làm tay quắn/quét ngang mặt.
-Sau sửa, hai segment luôn cùng `active/held/returning/recovering`; history chỉ cập nhật từ nghiệm chain
-đầy đủ và reacquire cần 80 ms geometry liên tục. Đây là root cause đã tái hiện bằng regression riêng,
-nhưng vẫn cần webcam re-test để xác nhận không còn nguyên nhân runtime khác.
+Partial occlusion được xử lý độc lập theo từng segment. Trước sửa, khi wrist mất, upper cũng bị ép
+`null` dù vai→khuỷu vẫn quan sát được; ngược lại việc giữ một world rotation cũ cho lower có thể làm
+forearm quét ngang mặt. Hiện upper tiếp tục solve từ vai→khuỷu, còn lower giữ parent-local rest-relative
+delta nên xoay theo upper như một khối cứng và giữ nguyên góc gập. Mỗi segment có hold/return riêng;
+chỉ recovery của chính lower-arm geometry mới xóa history parallel-transport liên quan. Invariant này
+đã được khóa bằng regression và acceptance report của Phase 3B.
 
 #### 4.1.3. Communication Module
 
@@ -296,8 +299,8 @@ Trình bày dạng bảng bước-theo-bước thay vì sơ đồ UML, để đ�
 |----------|-----------------------------|-----------------------------------------------------------------------------------------------|
 | **1**    | Webcam                      | Sinh khung hình mới, đưa vào Tracking Module qua getUserMedia().                              |
 | **2**    | MediaPipe                   | Trích xuất landmark khuôn mặt/tay/thân từ khung hình.                                         |
-| **3**    | Motion Processor            | Cập nhật tracking-loss state; lọc segment direction khi có sample mới.                        |
-| **4**    | Arm Retargeting Solver      | Tính target world, parent-local target và rest-relative delta theo parent → child; optional constraint trên delta. |
+| **3**    | Motion Processor            | Cập nhật tracking-loss state; lọc segment direction khi có sample mới; chọn nguồn wrist theo confidence/freshness/hysteresis. Pose wrist hợp lệ được ưu tiên; khi Pose wrist mất nhưng Hand wrist đã match và còn mới, dựng wrist 3D cục bộ từ image-space + chiều dài xương + depth prior. Raw frame gốc không bị sửa. |
+| **4**    | Arm Retargeting Solver      | Tính target world, parent-local target và rest-relative delta theo parent → child. Mất elbow nhưng còn shoulder+wrist dùng two-bone IK. Quét 24 điểm trên toàn vòng nghiệm, chấm continuity, Hand palm-forward, face-clearance và head/torso capsule của đúng VRM thay vì luật “luôn ở ngoài”. Reconstruction không đủ bằng chứng bị reject về hold/return, không kéo giãn xương. |
 | **5**    | Communication Module        | — GỬI — Đóng gói `AvatarPosePacketV1`, gửi qua RTCDataChannel; không gửi raw landmarks.       |
 | **6**    | Avatar Renderer (phía nhận) | — NHẬN — Tái tạo `restLocal × deltaLocal`, áp normalized bone/morph target và render canvas. |
 

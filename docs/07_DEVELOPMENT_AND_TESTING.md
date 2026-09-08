@@ -282,6 +282,21 @@ acceptance — Phase 3B partial-arm là ví dụ trực tiếp: 390/390 automate
 | Giơ tay chào — kiểm tra xuyên thân | Cẳng tay nằm ngoài thân; có thể thấy flag `elbow-anatomy-flip` |
 | Buông tay ra ngoài khung (mất cả khuỷu lẫn cổ tay) | Reject `missing-elbow-and-wrist` và giữ tư thế — đây là hành vi đúng, không phải lỗi |
 
+Corrective gate Phase 3B.4: khi giơ tay chào mà khuỷu rời khung, tắt `Hand twist` vẫn phải giữ
+đúng bend-plane. Panel có thể hiện `palm chọn nhánh`; nếu Pose vẫn báo elbow giả nhưng cẳng tay ngược
+`wrist→middle-MCP`, panel phải hiện `Pose elbow bị Hand bác bỏ`. Không được đánh manual PASS nếu
+khuỷu avatar lật lên trên vai/cổ tay.
+
+Corrective gate W9/W10 sau ảnh manual 2026-09-07:
+
+- Tay thật đứng cạnh mặt nhưng không chạm: panel phải có `search 24`, face `clearance`; forearm avatar
+  không được cắt ngang mặt. Có thể xuất hiện `face-clearance đổi mặt phẳng`,
+  `collision rig đổi mặt phẳng` hoặc `Pose elbow xuyên head bị bác bỏ`.
+- Chủ động chạm má/trán: face phải thành `contact`; solver không được đẩy tay ra xa giả tạo.
+- Với model đủ finger rig, palm phải là `rig-absolute`; quay lòng rồi mu bàn tay về camera không được
+  lật ngược 180°. `session-relative` chỉ là fallback cho model thiếu rest palm reference.
+- Chạy hai tay và ít nhất ba VRM. Automated PASS không thay thế manual webcam gate.
+
 Đọc trạng thái tại panel **Phase 3B partial-arm** trong DEV harness `/dev/avatar-renderer`.
 
 ### 6.1. Automated gates

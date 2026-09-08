@@ -1,8 +1,14 @@
 import type { RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
-import type { AvatarPartTrackingInfo, AvatarPosePacketV1, QuaternionData } from "./avatarPoseTypes";
+import { IDENTITY_QUATERNION, type AvatarFingerJointName, type AvatarPartTrackingInfo, type AvatarPosePacketV1, type QuaternionData } from "./avatarPoseTypes";
+import type { FingerRigProfile } from "./fingerRig";
+import { computeHandFingerFeatures } from "./fingerFeatures";
+import { classifyGesture, type GestureClassification, type GesturePoseLabel } from "./gestureClassifier";
+import { INITIAL_GESTURE_TEMPORAL_STATE, updateGestureTemporal, type GestureTemporalState } from "./gestureTemporal";
+import { planFingerPose } from "./fingerPosePlanner";
+import { createFingerPoseTemporalState, updateFingerPoseTemporal, type FingerPoseTemporalState } from "./fingerPoseTemporal";
 import { quaternionFromRotationMatrix } from "./coordinateAdapter";
 import { mapMediaPipeExpressions } from "./expressionMapper";
-import { solveAnatomicalArmFrames, type GeometryDiagnostic } from "./armFrameSolver";
+import { solveAnatomicalArmFrames, type ArmSpatialEvidence, type GeometryDiagnostic, type HandElbowBranchEvidence } from "./armFrameSolver";
 import { validateRigProfile, type NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import { DEFAULT_AVATAR_MOTION_CONFIG, type AvatarMotionConfig } from "./motionConfig";
 import { OneEuroScalarFilter, OneEuroVectorFilter } from "./oneEuroFilter";
@@ -20,18 +26,28 @@ import type { RawHandCandidateV1 } from "../tracking/rawTrackingTypes";
 import { computeHandForearmTwist } from "./handForearmTwist";
 import { computeHandTwistConfidence } from "./handTwistConfidence";
 import { DEFAULT_HAND_TWIST_TEMPORAL_CONFIG, INITIAL_HAND_TWIST_TEMPORAL_STATE, updateHandTwistTemporal, type HandTwistTemporalState } from "./handTwistTemporal";
-import { composePoseLowerArmWithHandTwist, HAND_TWIST_RIG_CONVENTION_V1, normalizePalmBasisForTwist } from "./handTwistRig";
+import { composePoseLowerArmWithHandTwist, computeAbsoluteRigPalmTwist, HAND_TWIST_RIG_CONVENTION_V1, normalizePalmBasisForTwist } from "./handTwistRig";
 import { DEFAULT_HAND_MATCH_CONFIG } from "./handPoseMatching";
 import type { HandTwistRigDiagnostic } from "./avatarMotionDiagnostics";
 import { INITIAL_HAND_TWIST_STABILIZATION_STATE, resetHandTwistStabilizationKeepingNeutral, updateHandTwistStabilization, type HandTwistStabilizationResult, type HandTwistStabilizationState } from "./handTwistStabilization";
+import { createWristEvidenceState, updateWristEvidence, type WristEvidenceOutput, type WristEvidenceState } from "./wristEvidence";
+import { estimateShoulderImageToWorldScale, reconstructPointOnSphereFromImage, type WristReconstructionResult } from "./wristReconstruction";
+import type { RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
+import { buildFaceArmSpatialEvidence } from "./faceArmSpatialEvidence";
 
-export interface AvatarMotionProcessorOptions { filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; now?: () => number; config?: AvatarMotionConfig }
+export interface AvatarMotionProcessorOptions { filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; gestureEnabled?: boolean; now?: () => number; config?: AvatarMotionConfig }
 
 interface HandMotionContext {
   diagnostics: HandMotionDiagnosticsSnapshot;
   matchResult: HandPoseMatchResult;
   palmBasisBySide: Record<ArmSide, HandPalmBasisOutput | null>;
   sampleClassification: HandSampleClassification;
+}
+
+interface CachedHandElbowBranchEvidence {
+  evidence: HandElbowBranchEvidence;
+  imageLandmarks: RawNormalizedLandmarkV1[];
+  sampledAtMs: number;
 }
 
 interface HandTwistProcessorState {
@@ -64,6 +80,13 @@ interface ArmStabilityProcessorState {
   previousHandRawTwistRadians: number | null;
   previousHandAppliedTwistRadians: number | null;
   previousFrameAtMs: number | null;
+}
+
+interface PreparedArmPoseEvidence {
+  worldLandmarks: RawNormalizedLandmarkV1[];
+  imageLandmarks: RawNormalizedLandmarkV1[];
+  wrist: Record<ArmSide, WristEvidenceOutput>;
+  reconstruction: Record<ArmSide, WristReconstructionResult | null>;
 }
 
 function createArmStabilityProcessorState(): ArmStabilityProcessorState {
@@ -206,8 +229,25 @@ export class AvatarMotionProcessor {
   private filtered: boolean;
   private constraints: boolean;
   private handTwistEnabled: boolean;
+  private gestureEnabled: boolean;
   private rigProfile: NormalizedAvatarRigProfile | null = null;
+  private fingerRig: FingerRigProfile | null = null;
+  /**
+   * Phase 3B.3: những joint ngón đã TỪNG được ghi rotation. Khi tắt gesture hoặc về `rest`, không
+   * thể chỉ bỏ key khỏi packet — renderer giữ nguyên rotation cũ của bone khi key biến mất, nên
+   * ngón sẽ đóng băng ở tư thế cuối. Phải phát identity một lần cho đúng những joint này.
+   */
+  private ownedFingerJoints = new Set<AvatarFingerJointName>();
+  private pendingFingerClear = false;
+  private readonly gestureState: Record<ArmSide, GestureTemporalState> = {
+    left: { ...INITIAL_GESTURE_TEMPORAL_STATE }, right: { ...INITIAL_GESTURE_TEMPORAL_STATE },
+  };
+  private readonly fingerPoseState: Record<ArmSide, FingerPoseTemporalState> = {
+    left: createFingerPoseTemporalState(), right: createFingerPoseTemporalState(),
+  };
+  private readonly lastGesturePose: Record<ArmSide, GesturePoseLabel> = { left: "rest", right: "rest" };
   private readonly armState: Record<ArmSide, ArmTemporalState> = { left: createArmTemporalState(), right: createArmTemporalState() };
+  private readonly wristEvidenceState: Record<ArmSide, WristEvidenceState> = { left: createWristEvidenceState(), right: createWristEvidenceState() };
   private readonly lastGeometryDiagnostics: Partial<Record<ArmSide, GeometryDiagnostic>> = {};
   private lastTorso: TorsoBasis | null = null;
   private diagnostics: AvatarMotionDiagnosticSnapshot | null = null;
@@ -220,6 +260,7 @@ export class AvatarMotionProcessor {
    * frame, xem handPoseMatching.ts). Không có gì ở đây ảnh hưởng `jointRotations`.
    */
   private readonly handMatchPrevious: Record<ArmSide, HandMatchPreviousState> = { left: { wristPosition: null, lastMatchedAtMs: null }, right: { wristPosition: null, lastMatchedAtMs: null } };
+  private readonly handElbowBranchEvidence: Record<ArmSide, CachedHandElbowBranchEvidence | null> = { left: null, right: null };
   private readonly handTwistState: Record<ArmSide, HandTwistProcessorState> = { left: createHandTwistProcessorState(), right: createHandTwistProcessorState() };
   private readonly armStabilityState: Record<ArmSide, ArmStabilityProcessorState> = { left: createArmStabilityProcessorState(), right: createArmStabilityProcessorState() };
   private lastClassifiedHandSampledAtMs: number | null = null;
@@ -230,6 +271,9 @@ export class AvatarMotionProcessor {
     this.filtered = options.filtered ?? true;
     this.constraints = options.constraints ?? true;
     this.handTwistEnabled = options.handTwistEnabled ?? true;
+    // Mặc định TẮT: 3B.3 là tính năng đang nghiệm thu, không được đổi hành vi mặc định của
+    // Phase 3B cho tới khi bốn cử chỉ đã qua manual webcam gate.
+    this.gestureEnabled = options.gestureEnabled ?? false;
   }
 
   setFiltered(enabled: boolean): void { if (this.filtered !== enabled) this.resetFilters(); this.filtered = enabled; }
@@ -275,6 +319,23 @@ export class AvatarMotionProcessor {
       this.armStabilityState[currentSide].previousHandAppliedTwistRadians = null;
     }
   }
+  /**
+   * Bật/tắt toàn bộ pipeline cử chỉ ngón. Tắt phải trả avatar về đúng hành vi Phase 3B: một lần
+   * phát identity cho các joint đã sở hữu để nhả ngón, sau đó không ghi khoá ngón nào nữa.
+   */
+  setGestureEnabled(enabled: boolean): void {
+    if (this.gestureEnabled === enabled) return;
+    this.gestureEnabled = enabled;
+    if (!enabled && this.ownedFingerJoints.size > 0) this.pendingFingerClear = true;
+  }
+  isGestureEnabled(): boolean { return this.gestureEnabled; }
+  /** Rig ngón đến từ model đang tải; đổi model thì phải nhả pose cũ vì chuỗi xương có thể khác. */
+  setFingerRig(rig: FingerRigProfile | null): void {
+    if (this.fingerRig === rig) return;
+    this.fingerRig = rig;
+    if (this.ownedFingerJoints.size > 0) this.pendingFingerClear = true;
+  }
+  getFingerRig(): FingerRigProfile | null { return this.fingerRig; }
   setRigProfile(profile: NormalizedAvatarRigProfile | null): void {
     if (profile && !validateRigProfile(profile)) throw new Error("Normalized avatar rig profile không hợp lệ.");
     if (this.rigProfile === profile) return;
@@ -348,13 +409,18 @@ export class AvatarMotionProcessor {
           Object.assign(this.armState[side], createArmTemporalState());
         }
       }
-      const solved = isNewSample && frame.pose.worldLandmarks && frame.pose.landmarks ? solveAnatomicalArmFrames(frame.pose.worldLandmarks, frame.pose.landmarks, this.rigProfile, {
+      const preparedEvidence = frame.pose.worldLandmarks && frame.pose.landmarks
+        ? this.prepareArmPoseEvidence(frame, handContext, isNewSample, processedTimestampMs)
+        : null;
+      const handElbowEvidence = this.currentHandElbowBranchEvidence(frame, processedTimestampMs);
+      const solved = isNewSample && preparedEvidence ? solveAnatomicalArmFrames(preparedEvidence.worldLandmarks, preparedEvidence.imageLandmarks, this.rigProfile, {
         left: { previousPole: this.armState.left.previousPole, previousPoleWasFresh: this.armState.left.poleSource === "fresh", previousDepthDegenerate: this.armState.left.depthDegenerate, lastValidPoleAtMs: this.armState.left.lastValidPoleAtMs, previousPrimary: this.armState.left.previousPrimary, previousSecondary: this.armState.left.previousSecondary, calibratedLength: this.armState.left.calibratedLength, previousObservedElbow: this.armState.left.previousObservedElbow, inferenceStartedAtMs: this.armState.left.inferenceStartedAtMs, elbowWasVisible: this.armState.left.elbowWasVisible, wristWasVisible: this.armState.left.wristWasVisible, previousElbowDirection: this.armState.left.previousElbowDirection },
         right: { previousPole: this.armState.right.previousPole, previousPoleWasFresh: this.armState.right.poleSource === "fresh", previousDepthDegenerate: this.armState.right.depthDegenerate, lastValidPoleAtMs: this.armState.right.lastValidPoleAtMs, previousPrimary: this.armState.right.previousPrimary, previousSecondary: this.armState.right.previousSecondary, calibratedLength: this.armState.right.calibratedLength, previousObservedElbow: this.armState.right.previousObservedElbow, inferenceStartedAtMs: this.armState.right.inferenceStartedAtMs, elbowWasVisible: this.armState.right.elbowWasVisible, wristWasVisible: this.armState.right.wristWasVisible, previousElbowDirection: this.armState.right.previousElbowDirection },
       }, processedTimestampMs, this.config.armFrame, this.constraints, this.filtered
         ? (name, direction) => this.directionFilter(name).filter(direction, sampledAtMs!) : undefined,
       this.filtered ? (side, pole) => this.poleFilter(side).filter(pole, sampledAtMs!) : undefined,
-      this.lastTorso ?? undefined) : null;
+      this.lastTorso ?? undefined,
+      handElbowEvidence) : null;
       if (solved?.torsoWasObserved) this.lastTorso = solved.torso;
       const torso = solved?.torso ?? this.lastTorso ?? {
         right: this.rigProfile.torsoReference.rightWorld, up: this.rigProfile.torsoReference.upWorld,
@@ -364,6 +430,11 @@ export class AvatarMotionProcessor {
       const armDiagnostics = {} as AvatarMotionDiagnosticSnapshot["arms"];
       for (const side of ["left", "right"] as const) {
         const state = this.armState[side]; const geometry = solved?.sides[side] ?? null;
+        const wristEvidence = preparedEvidence?.wrist[side] ?? updateWristEvidence(this.wristEvidenceState[side], {
+          nowMs: processedTimestampMs, poseSampledAtMs: frame.pose.sampledAtMs, poseObservationIsNew: false, poseValid: false,
+          poseWorld: null, poseImage: null, handObservationIsNew: false, handMatched: false,
+          handSampledAtMs: frame.handSampledAtMs, handImage: null,
+        }, this.config.wristEvidence);
         const stabilityState = this.armStabilityState[side];
         const names = side === "left" ? { upper: "leftUpperArm" as const, lower: "leftLowerArm" as const } : { upper: "rightUpperArm" as const, lower: "rightLowerArm" as const };
         // Phase 3B (bổ sung) — Partial arm tracking: hai đoạn xương được nghiệm thu ĐỘC LẬP.
@@ -427,7 +498,7 @@ export class AvatarMotionProcessor {
         if (acceptedGeometry) state.poleSource = acceptedGeometry.poleSource;
         if (acceptedGeometry) {
           const elbowSourceChanged = state.elbowSource !== "unavailable" && state.elbowSource !== acceptedGeometry.elbowSource;
-          if (elbowSourceChanged || poleSourceUpgraded || chainTrackingReacquired) { trackingReacquired = true; for (const segment of ["upper", "lower"] as const) { state.segments[segment].lossState = "recovering"; state.segments[segment].recoveryStartedAtMs = null; } }
+          if (elbowSourceChanged || poleSourceUpgraded || chainTrackingReacquired || wristEvidence.requiresReacquireBlend) { trackingReacquired = true; for (const segment of ["upper", "lower"] as const) { state.segments[segment].lossState = "recovering"; state.segments[segment].recoveryStartedAtMs = null; } }
           state.elbowSource = acceptedGeometry.elbowSource;
           state.previousPrimary = acceptedGeometry.primary; state.previousSecondary = acceptedGeometry.secondary;
           // Phase 3B partial-arm: mỏ neo phía gập chỉ được cập nhật khi frame này còn xác định được mặt
@@ -447,7 +518,7 @@ export class AvatarMotionProcessor {
           const solvedDelta = segmentGeometryValid ? acceptedGeometry?.deltas[name] ?? null : null;
           segmentTemporal[segment] = isTrackedDuplicate
             ? { output: state.segments[segment].currentOutputDelta, state: state.segments[segment].lossState, progress: this.diagnostics?.arms[side].transitionProgress ?? 1 }
-            : updateSegmentTemporalOutput(state.segments[segment], solvedDelta, Boolean(solvedDelta && isNewSample), processedTimestampMs, this.config.loss.holdMs, this.config.loss.returnMs, this.config.loss.recoveryMs, this.config.armFrame.invalidGraceMs, this.idlePose?.[side][segment]);
+            : updateSegmentTemporalOutput(state.segments[segment], solvedDelta, Boolean(solvedDelta && isNewSample), processedTimestampMs, this.config.loss.holdMs, this.config.loss.returnMs, this.config.loss.recoveryMs, wristEvidence.effectiveGraceMs, this.idlePose?.[side][segment], trackingReacquired);
           jointRotations[name] = segmentTemporal[segment].output;
         }
         const lowerName = names.lower;
@@ -459,7 +530,7 @@ export class AvatarMotionProcessor {
           ? lowerGeometryValid
           : null;
         const armChainOutputValid = state.invalidCandidateStartedAtMs === null;
-        const twistResult = this.applyHandTwist(side, poseLowerDelta, handContext, frame, processedTimestampMs, freshLowerGeometryValid, armChainOutputValid);
+        const twistResult = this.applyHandTwist(side, poseLowerDelta, geometry?.targetWorldRotations[names.lower] ?? this.lastGeometryDiagnostics[side]?.lowerTargetWorld ?? null, handContext, frame, processedTimestampMs, freshLowerGeometryValid, armChainOutputValid, wristEvidence.effectiveGraceMs);
         handTwistDiagnostics[side] = twistResult.diagnostic;
         if (twistResult.output !== poseLowerDelta) jointRotations[lowerName] = twistResult.output;
         const temporalState = segmentTemporal.lower.state === "active" ? segmentTemporal.upper.state : segmentTemporal.lower.state;
@@ -487,7 +558,14 @@ export class AvatarMotionProcessor {
             // thái và che mất nguồn lỗi thật khi chẩn đoán.
             source: geometry?.elbowSource ?? (temporalState === "held" ? "held" : temporalState === "returning" ? "returning" : state.elbowSource),
             durationMs: state.inferenceStartedAtMs === null ? 0 : processedTimestampMs - state.inferenceStartedAtMs,
-            calibratedUpperLength: state.calibratedLength.upper, calibratedLowerLength: state.calibratedLength.lower } };
+            calibratedUpperLength: state.calibratedLength.upper, calibratedLowerLength: state.calibratedLength.lower },
+          wristEvidence: {
+            source: wristEvidence.source,
+            sourceChanged: wristEvidence.sourceChanged,
+            effectiveGraceMs: wristEvidence.effectiveGraceMs,
+            reconstructionConfidence: preparedEvidence?.reconstruction[side]?.accepted ? preparedEvidence.reconstruction[side]!.confidence : null,
+            reconstructionRejectionReason: preparedEvidence?.reconstruction[side]?.rejectionReason ?? null,
+          } };
         const currentElbowSource = armDiagnostics[side].elbowInference.source;
         const currentPoleSource = armDiagnostics[side].poleSource;
         const rawTwist = twistResult.diagnostic.observationWasNew ? twistResult.diagnostic.rawWrappedTwistRadians : null;
@@ -528,14 +606,18 @@ export class AvatarMotionProcessor {
       }
       this.diagnostics = { version: 1, processedAtMs: processedTimestampMs, torso: { right: torso.right, up: torso.up, forward: torso.forward, source: torsoSource }, arms: armDiagnostics, handTwist: handTwistDiagnostics, armStability: armStabilityDiagnostics, headRotationSemantic: "legacy-unverified" };
     } else this.diagnostics = null;
+    // Phase 3B.3: chạy SAU nhánh arm và chỉ GHI THÊM khoá xương ngón. Không đọc, không sửa, không
+    // ghi đè bất kỳ khoá arm nào ở trên — kể cả `leftHand`/`rightHand` (wrist thuộc Phase 3B).
+    this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
     return { version: 1, sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, headRotation, jointRotations, handMotion: handContext.diagnostics };
   }
 
   /**
    * Mức 2A — Việc 4: rawHands → Hand↔Pose matching → palm basis (candidate đã match) →
    * diagnostic. Đọc `frame.pose.landmarks` CHỈ để lấy wrist image-space làm mục tiêu matching
-   * (index 15/16 — cùng convention với `armFrameSolver.ts`); không đọc/ghi `armState`, không
-   * đụng pole, không tạo hay sửa `jointRotations`.
+   * (index 15/16 — cùng convention với `armFrameSolver.ts`). Phase 3B.4 cache thêm palm-forward
+   * image-space ngắn hạn cho bước chọn nhánh khuỷu phía sau; hàm này vẫn không trực tiếp tạo hay
+   * sửa `jointRotations`.
    */
   private classifyHandSample(frame: RawTrackingFrameV1): HandSampleClassification {
     if (!frame.handSampledThisFrame || frame.handSampledAtMs === null) return "unsampled";
@@ -562,9 +644,18 @@ export class AvatarMotionProcessor {
   private computeHandMotion(frame: RawTrackingFrameV1, sampleClassification: "new-sample"): HandMotionContext {
     const videoWidth = frame.videoWidth ?? 0;
     const videoHeight = frame.videoHeight ?? 0;
+    const matchablePoseWrist = (side: ArmSide, index: number): RawNormalizedLandmarkV1 | null => {
+      const point = frame.pose.landmarks?.[index];
+      if (!point || point.visibility === null) return null;
+      const threshold = this.armState[side].wristWasVisible ? this.config.armFrame.visibilityExit : this.config.armFrame.visibilityEnter;
+      const margin = this.config.armFrame.wristOuterBoundsMargin;
+      return point.visibility >= threshold && point.x >= -margin && point.x <= 1 + margin && point.y >= -margin && point.y <= 1 + margin
+        ? point
+        : null;
+    };
     const poseWristImage = {
-      left: frame.pose.landmarks?.[15] ?? null,
-      right: frame.pose.landmarks?.[16] ?? null,
+      left: matchablePoseWrist("left", 15),
+      right: matchablePoseWrist("right", 16),
     };
 
     const matchResult = matchHandsToPose({
@@ -606,7 +697,15 @@ export class AvatarMotionProcessor {
       if (!match.matched || match.candidateArrayIndex === null) continue;
       const candidate: RawHandCandidateV1 | undefined = frame.rawHands[match.candidateArrayIndex];
       if (!candidate) continue;
-      palmBasisBySide[side] = computeHandPalmBasis(candidate.landmarks, candidate.worldLandmarks, candidate.handedness, videoWidth, videoHeight);
+      const palm = computeHandPalmBasis(candidate.landmarks, candidate.worldLandmarks, candidate.handedness, videoWidth, videoHeight);
+      palmBasisBySide[side] = palm;
+      if (palm.imageBasis && frame.handSampledAtMs !== null) {
+        this.handElbowBranchEvidence[side] = {
+          evidence: { forwardImage: palm.imageBasis.forward, geometryQuality: palm.imageGeometryQuality },
+          imageLandmarks: candidate.landmarks.map((point) => ({ ...point })),
+          sampledAtMs: frame.handSampledAtMs,
+        };
+      }
     }
 
     const diagnostics = buildHandMotionDiagnostics({
@@ -621,14 +720,144 @@ export class AvatarMotionProcessor {
     return { diagnostics, matchResult, palmBasisBySide, sampleClassification };
   }
 
+  private currentHandElbowBranchEvidence(
+    frame: RawTrackingFrameV1,
+    nowMs: number,
+  ): Partial<Record<ArmSide, ArmSpatialEvidence | null>> {
+    const output: Partial<Record<ArmSide, ArmSpatialEvidence | null>> = {};
+    const width = frame.videoWidth ?? 0, height = frame.videoHeight ?? 0;
+    const scale = frame.pose.worldLandmarks && frame.pose.landmarks ? estimateShoulderImageToWorldScale({
+      leftShoulderWorld: frame.pose.worldLandmarks[11], rightShoulderWorld: frame.pose.worldLandmarks[12],
+      leftShoulderImage: frame.pose.landmarks[11], rightShoulderImage: frame.pose.landmarks[12],
+      videoWidth: width, videoHeight: height,
+    }) : null;
+    const faceFresh = frame.face.state === "tracked" && frame.face.sampledAtMs !== null
+      && nowMs - frame.face.sampledAtMs >= 0 && nowMs - frame.face.sampledAtMs <= this.config.freshnessMs.face;
+    for (const side of ["left", "right"] as const) {
+      const cached = this.handElbowBranchEvidence[side];
+      if (!cached) continue;
+      const ageMs = nowMs - cached.sampledAtMs;
+      const poseDeltaMs = frame.pose.sampledAtMs === null ? Number.POSITIVE_INFINITY : Math.abs(frame.pose.sampledAtMs - cached.sampledAtMs);
+      if (ageMs < 0 || ageMs > this.config.wristEvidence.handMaxAgeMs || poseDeltaMs > this.config.wristEvidence.poseHandMaxDeltaMs) continue;
+      output[side] = {
+        hand: cached.evidence,
+        face: faceFresh ? buildFaceArmSpatialEvidence(frame.face.landmarks, cached.imageLandmarks, width, height) : null,
+        imageToWorldScale: scale,
+        imageAspectRatio: width > 0 && height > 0 ? height / width : 1,
+      };
+    }
+    return output;
+  }
+
+  /**
+   * Phase 3B.4 — tạo bản sao Pose chỉ khi Hand wrist thật sự được chọn và reconstruct thành
+   * công. Raw frame gốc không bị sửa; nếu bất kỳ gate nào thất bại, arm solver nhận đúng Pose
+   * ban đầu và temporal layer thực hiện hold/return như trước.
+   */
+  private prepareArmPoseEvidence(
+    frame: RawTrackingFrameV1,
+    hand: HandMotionContext,
+    poseObservationIsNew: boolean,
+    nowMs: number,
+  ): PreparedArmPoseEvidence {
+    const originalWorld = frame.pose.worldLandmarks!;
+    const originalImage = frame.pose.landmarks!;
+    let worldLandmarks = originalWorld;
+    let imageLandmarks = originalImage;
+    const wrist = {} as Record<ArmSide, WristEvidenceOutput>;
+    const reconstruction: Record<ArmSide, WristReconstructionResult | null> = { left: null, right: null };
+    const videoWidth = frame.videoWidth ?? 0, videoHeight = frame.videoHeight ?? 0;
+    const scale = estimateShoulderImageToWorldScale({
+      leftShoulderWorld: originalWorld[11], rightShoulderWorld: originalWorld[12],
+      leftShoulderImage: originalImage[11], rightShoulderImage: originalImage[12],
+      videoWidth, videoHeight,
+    });
+    const semantic = (point: RawNormalizedLandmarkV1) => ({ x: point.x, y: -point.y, z: -point.z });
+    const visible = (point: RawNormalizedLandmarkV1 | undefined, wasVisible: boolean) => Boolean(point && point.visibility !== null && (
+      wasVisible ? point.visibility >= this.config.armFrame.visibilityExit : point.visibility >= this.config.armFrame.visibilityEnter
+    ));
+    const inBounds = (point: RawNormalizedLandmarkV1 | undefined, margin: number) => Boolean(point && point.x >= -margin && point.x <= 1 + margin && point.y >= -margin && point.y <= 1 + margin);
+    const shoulderWidthWorld = originalWorld[11] && originalWorld[12]
+      ? Math.hypot(originalWorld[11].x - originalWorld[12].x, originalWorld[11].y - originalWorld[12].y, originalWorld[11].z - originalWorld[12].z)
+      : 0;
+
+    for (const side of ["left", "right"] as const) {
+      const indices = side === "left" ? { shoulder: 11, elbow: 13, wrist: 15 } : { shoulder: 12, elbow: 14, wrist: 16 };
+      const poseWristImage = originalImage[indices.wrist] ?? null;
+      const poseWristWorld = originalWorld[indices.wrist] ?? null;
+      const poseValid = Boolean(
+        poseWristWorld && poseWristImage &&
+        visible(poseWristImage, this.armState[side].wristWasVisible) &&
+        inBounds(poseWristImage, this.config.armFrame.wristOuterBoundsMargin),
+      );
+      const match = hand.matchResult[side];
+      const candidate = hand.sampleClassification === "new-sample" && match.matched && match.candidateArrayIndex !== null
+        ? frame.rawHands[match.candidateArrayIndex] ?? null
+        : null;
+      const handImage = candidate?.landmarks[0] ?? null;
+      const selected = updateWristEvidence(this.wristEvidenceState[side], {
+        nowMs,
+        poseSampledAtMs: frame.pose.sampledAtMs,
+        poseObservationIsNew,
+        poseValid,
+        poseWorld: poseWristWorld,
+        poseImage: poseWristImage,
+        handObservationIsNew: hand.sampleClassification === "new-sample",
+        handMatched: Boolean(match.matched),
+        handSampledAtMs: frame.handSampledAtMs,
+        handImage,
+      }, this.config.wristEvidence);
+      wrist[side] = selected;
+      if (selected.source !== "hand-image" || !selected.handImage || scale === null || !(shoulderWidthWorld > 0)) continue;
+
+      const shoulderWorldRaw = originalWorld[indices.shoulder], shoulderImage = originalImage[indices.shoulder];
+      const elbowWorldRaw = originalWorld[indices.elbow], elbowImage = originalImage[indices.elbow];
+      if (!shoulderWorldRaw || !shoulderImage) continue;
+      const observedLowerLength = this.armState[side].calibratedLength.lower ?? shoulderWidthWorld * 0.65;
+      const observedUpperLength = this.armState[side].calibratedLength.upper ?? shoulderWidthWorld * 0.65;
+      const elbowValid = Boolean(elbowWorldRaw && elbowImage && visible(elbowImage, this.armState[side].elbowWasVisible) && inBounds(elbowImage, this.config.armFrame.elbowOuterBoundsMargin));
+      let result: WristReconstructionResult | null = null;
+      if (elbowValid && this.armState[side].previousPrimary.lower) {
+        result = reconstructPointOnSphereFromImage({
+          anchorWorld: semantic(elbowWorldRaw!), anchorImage: elbowImage!, targetImage: selected.handImage as RawNormalizedLandmarkV1,
+          targetDistance: observedLowerLength, imageToWorldScale: scale,
+          previousDirection: this.armState[side].previousPrimary.lower,
+          videoWidth, videoHeight, reachSlackRatio: this.config.armFrame.elbowInferenceReachSlackRatio,
+        });
+      } else if (this.armState[side].previousPrimary.upper && this.armState[side].previousPrimary.lower) {
+        const upper = this.armState[side].previousPrimary.upper, lower = this.armState[side].previousPrimary.lower;
+        const offset = {
+          x: upper.x * observedUpperLength + lower.x * observedLowerLength,
+          y: upper.y * observedUpperLength + lower.y * observedLowerLength,
+          z: upper.z * observedUpperLength + lower.z * observedLowerLength,
+        };
+        const distance = Math.hypot(offset.x, offset.y, offset.z);
+        result = reconstructPointOnSphereFromImage({
+          anchorWorld: semantic(shoulderWorldRaw), anchorImage: shoulderImage, targetImage: selected.handImage as RawNormalizedLandmarkV1,
+          targetDistance: distance, imageToWorldScale: scale, previousDirection: offset,
+          videoWidth, videoHeight, reachSlackRatio: this.config.armFrame.elbowInferenceReachSlackRatio,
+        });
+      }
+      reconstruction[side] = result;
+      if (!result?.accepted || !result.point) continue;
+      if (worldLandmarks === originalWorld) worldLandmarks = [...originalWorld];
+      if (imageLandmarks === originalImage) imageLandmarks = [...originalImage];
+      worldLandmarks[indices.wrist] = { x: result.point.x, y: -result.point.y, z: -result.point.z, visibility: 1 };
+      imageLandmarks[indices.wrist] = { x: selected.handImage.x, y: selected.handImage.y, z: selected.handImage.z, visibility: 1 };
+    }
+    return { worldLandmarks, imageLandmarks, wrist, reconstruction };
+  }
+
   private applyHandTwist(
     side: ArmSide,
     poseLowerDelta: QuaternionData,
+    lowerTargetWorldRotation: QuaternionData | null,
     hand: HandMotionContext,
     frame: RawTrackingFrameV1,
     nowMs: number,
     freshLowerGeometryValid: boolean | null,
     armChainOutputValid: boolean,
+    geometryGraceMs: number,
   ): { output: QuaternionData; diagnostic: HandTwistRigDiagnostic } {
     const state = this.handTwistState[side];
     state.trackingEpochStartedAtMs ??= nowMs;
@@ -642,6 +871,7 @@ export class AvatarMotionProcessor {
 
     const lowerName = side === "left" ? "leftLowerArm" : "rightLowerArm";
     const profileJoint = this.rigProfile?.joints[lowerName];
+    const restPalmNormalWorld = this.fingerRig?.[side].restPalmNormalWorld ?? null;
     const forearmAxis = this.armState[side].previousPrimary.lower;
     const referenceDirection = this.armState[side].previousSecondary.lower;
     if (freshLowerGeometryValid === false) {
@@ -651,7 +881,7 @@ export class AvatarMotionProcessor {
         state.lowerArmGeometryInvalidConfirmed = false;
       } else if (
         state.lowerArmGeometryInvalidSinceMs !== null &&
-        nowMs - state.lowerArmGeometryInvalidSinceMs >= this.config.armFrame.invalidGraceMs
+        nowMs - state.lowerArmGeometryInvalidSinceMs >= geometryGraceMs
       ) {
         // Chỉ observation invalid mới xác nhận loss; thời gian trôi qua trên frame unsampled không đủ.
         state.lowerArmGeometryInvalidConfirmed = true;
@@ -675,7 +905,8 @@ export class AvatarMotionProcessor {
     } else if (freshLowerGeometryValid === true) {
       state.lowerArmGeometryValid = true;
     }
-    if (!profileJoint || !forearmAxis || !referenceDirection || state.lowerArmGeometryValid === false) {
+    const absoluteRigAvailable = Boolean(profileJoint && forearmAxis && restPalmNormalWorld && lowerTargetWorldRotation);
+    if (!profileJoint || !forearmAxis || (!referenceDirection && !absoluteRigAvailable) || state.lowerArmGeometryValid === false) {
       state.trackingEpochStartedAtMs ??= nowMs;
       const diagnostic = inactiveHandTwistDiagnostic(side, this.config, frame.handSampledThisFrame, hand.sampleClassification, state, "invalid-lower-arm-profile-or-geometry");
       this.consumeMatchingResetMarker(state);
@@ -694,6 +925,7 @@ export class AvatarMotionProcessor {
     let chiralityCorrectionApplied = HAND_TWIST_RIG_CONVENTION_V1.chiralityNormalMultiplier[side] === -1;
     let stabilizationResult: HandTwistStabilizationResult | null = state.lastStabilizationResult;
     let neutralPreservedOnReacquire = false;
+    let alignmentMode: NonNullable<HandTwistRigDiagnostic["alignmentMode"]> = absoluteRigAvailable ? "rig-absolute" : "session-relative";
 
     if (isNewHandSample) {
       if (match.matched && palm?.worldBasis) {
@@ -702,11 +934,17 @@ export class AvatarMotionProcessor {
         const twist = computeHandForearmTwist({
           side, forearmAxis, palmBasis: normalized.basis, palmBasisQuality: palm.worldGeometryQuality,
           palmDirectionAxis: HAND_TWIST_RIG_CONVENTION_V1.selectedPalmAxis,
-          referenceDirection, positiveSign: HAND_TWIST_RIG_CONVENTION_V1.configuredPositiveSign[side],
+          referenceDirection: referenceDirection ?? normalized.basis.normal, positiveSign: HAND_TWIST_RIG_CONVENTION_V1.configuredPositiveSign[side],
         });
-        rawWrappedTwistRadians = twist.twistRadians;
+        const absoluteTwist = absoluteRigAvailable ? computeAbsoluteRigPalmTwist({
+          forearmAxisWorld: forearmAxis!, observedPalmNormalWorld: normalized.basis.normal,
+          restPalmNormalWorld: restPalmNormalWorld!, lowerRestWorldRotation: profileJoint.restWorldRotation,
+          lowerTargetWorldRotation: lowerTargetWorldRotation!,
+        }) : null;
+        alignmentMode = absoluteTwist?.accepted ? "rig-absolute" : "session-relative";
+        rawWrappedTwistRadians = absoluteTwist?.accepted ? absoluteTwist.twistRadians : twist.twistRadians;
         const confidence = computeHandTwistConfidence({
-          handMatched: match.matched, twistAccepted: twist.accepted,
+          handMatched: match.matched, twistAccepted: absoluteTwist?.accepted ?? twist.accepted,
           matchQuality: match.distance === null ? 0 : Math.max(0, 1 - match.distance / DEFAULT_HAND_MATCH_CONFIG.maxWristDistance),
           palmGeometryQuality: palm.worldGeometryQuality,
           palmProjectionRatio: twist.palmProjectionRatio, referenceProjectionRatio: twist.referenceProjectionRatio,
@@ -718,7 +956,7 @@ export class AvatarMotionProcessor {
         // Confidence là cổng tin cậy. Khi observation đã trusted, giữ đủ biên độ; temporal
         // influence chỉ phục vụ acquire/hold/fade, không co góc liên tục theo chất lượng landmark.
         targetInfluenceWeight = confidence.trusted ? 1 : 0;
-        rejectionReason = twist.rejectionReason ?? confidence.rejectionReason;
+        rejectionReason = (absoluteTwist && !absoluteTwist.accepted ? absoluteTwist.rejectionReason : twist.rejectionReason) ?? confidence.rejectionReason;
         if (trusted && rawWrappedTwistRadians !== null) {
           const observationDtSeconds = state.lastAcceptedObservationAtMs === null ? 1 / 60 : Math.max(1 / 240, (nowMs - state.lastAcceptedObservationAtMs) / 1000);
           const limits = this.config.handTwist.correctionLimits[side];
@@ -726,6 +964,7 @@ export class AvatarMotionProcessor {
             rawWrappedTwistRadians, nowMs, dtSeconds: observationDtSeconds,
             // Short reacquire giữ neutral cũ. Reset/discontinuity/model/profile đã xóa state trước khi tới đây.
             reanchorNeutral: false, reanchorReason: state.pendingNeutralReanchorReason,
+            ...(alignmentMode === "rig-absolute" ? { neutralOverrideRadians: 0 } : {}),
           }, {
             deadZoneRadians: this.config.handTwist.deadZoneRadians,
             targetFilterTimeConstantSeconds: this.config.handTwist.targetFilterTimeConstantSeconds,
@@ -792,6 +1031,7 @@ export class AvatarMotionProcessor {
     const finalApplied = handTwistApplied ? appliedTwistRadians : 0;
     const limits = this.config.handTwist.correctionLimits[side];
     const diagnostic: HandTwistRigDiagnostic = {
+      alignmentMode,
       selectedPalmAxis: HAND_TWIST_RIG_CONVENTION_V1.selectedPalmAxis,
       chiralityCorrectionApplied,
       configuredPositiveSign: HAND_TWIST_RIG_CONVENTION_V1.configuredPositiveSign[side],
@@ -884,6 +1124,7 @@ export class AvatarMotionProcessor {
       // Khởi tạo ngay ở tư thế buông tay để lúc chưa có sample nào avatar không đứng T-pose.
       for (const segment of ["upper", "lower"] as const) fresh.segments[segment].currentOutputDelta = this.idlePose?.[side][segment] ?? fresh.segments[segment].currentOutputDelta;
       Object.assign(this.armState[side], fresh); delete this.lastGeometryDiagnostics[side];
+      Object.assign(this.wristEvidenceState[side], createWristEvidenceState());
       Object.assign(this.armStabilityState[side], createArmStabilityProcessorState());
     }
     this.lastTorso = null; this.diagnostics = null;
@@ -891,6 +1132,7 @@ export class AvatarMotionProcessor {
   private resetMatchingSide(side: ArmSide): void {
     this.handMatchPrevious[side].wristPosition = null;
     this.handMatchPrevious[side].lastMatchedAtMs = null;
+    this.handElbowBranchEvidence[side] = null;
   }
   private resetHandTrackingSide(
     side: ArmSide,
@@ -924,6 +1166,100 @@ export class AvatarMotionProcessor {
     this.armState[side].previousPrimary.lower = null;
     this.armState[side].previousSecondary.lower = null;
   }
+  /**
+   * Phase 3B.3 — điểm nối duy nhất của pipeline cử chỉ vào packet.
+   *
+   * Bước 0 mới chỉ dựng đường ống và cơ chế nhả pose; classifier/preset được nối ở các bước sau.
+   * Bất biến phải giữ qua mọi bước tiếp theo: hàm này CHỈ được ghi khoá xương ngón, và khi tắt
+   * thì packet phải không còn khoá ngón nào (sau đúng một frame phát identity để nhả).
+   */
+  private applyFingerGesture(
+    jointRotations: AvatarPosePacketV1["jointRotations"],
+    frame: RawTrackingFrameV1,
+    hand: HandMotionContext,
+    nowMs: number,
+  ): void {
+    if (this.pendingFingerClear) {
+      for (const joint of this.ownedFingerJoints) jointRotations[joint] = IDENTITY_QUATERNION;
+      this.ownedFingerJoints.clear();
+      this.pendingFingerClear = false;
+      for (const side of ["left", "right"] as const) {
+        this.gestureState[side] = { ...INITIAL_GESTURE_TEMPORAL_STATE };
+        this.fingerPoseState[side] = createFingerPoseTemporalState();
+      }
+      return;
+    }
+    if (!this.gestureEnabled || !this.fingerRig) return;
+
+    for (const side of ["left", "right"] as const) {
+      const rig = side === "left" ? this.fingerRig.left : this.fingerRig.right;
+      if (rig.controllableSegmentCount === 0) continue;
+
+      // Chỉ sample MỚI mới sinh quan sát. Sample trùng đi vào nhánh classification=null để temporal
+      // không coi nó là bằng chứng mới — đây là điều kiện giữ bất biến FPS.
+      const match = hand.matchResult[side];
+      const palm = hand.palmBasisBySide[side];
+      const isNewSample = hand.sampleClassification === "new-sample";
+      const candidate = isNewSample && match.matched && match.candidateArrayIndex !== null
+        ? frame.rawHands[match.candidateArrayIndex] ?? null
+        : null;
+
+      let classification: GestureClassification | null = null;
+      if (candidate) {
+        // Truyền cả image landmark + kích thước video: hướng ngón cái của `thumbsUp` phải đo
+        // trong không gian ẢNH ("lên" theo người xem), không phải world/palm-local — xoay cổ tay
+        // 180° trong palm-local sẽ biến thumbsUp thành thumbsDown mà giá trị đo không đổi.
+        const features = computeHandFingerFeatures(candidate.worldLandmarks, undefined, {
+          landmarks: candidate.landmarks,
+          videoWidth: frame.videoWidth ?? 0,
+          videoHeight: frame.videoHeight ?? 0,
+        });
+        classification = classifyGesture({
+          features,
+          // Dùng chất lượng palm basis đã có sẵn từ Phase 3B làm cổng quan sát tối thiểu. Gate đa
+          // tiêu chí đầy đủ (§3.1) thuộc bước hoàn thiện; ở đây chỉ cần đủ để loại hình học hỏng.
+          observabilityQuality: palm?.worldGeometryQuality ?? 0,
+          // Hysteresis hướng ngón cái: nhãn đang phát quyết định dùng ngưỡng vào hay ngưỡng nhả.
+          activePose: this.gestureState[side].activePose,
+        }, this.config.gesture.classifier);
+      }
+
+      const temporal = updateGestureTemporal(this.gestureState[side], {
+        classification,
+        // `matched` phản ánh bàn tay có được gán cho side này không. Không match trong khi vẫn còn
+        // trong thời gian ân hạn thì temporal tự giữ nhãn; quá hạn mới về rest.
+        handPresent: match.matched,
+        observationAtMs: candidate ? candidate.sampledAtMs : null,
+        nowMs,
+      }, this.config.gesture.temporal);
+      this.gestureState[side] = temporal.state;
+      this.lastGesturePose[side] = temporal.pose;
+
+      // `rest` nghĩa là không điều khiển ngón: plan rỗng để temporal blend mọi joint về identity
+      // rồi nhả quyền sở hữu, thay vì giữ một tư thế "duỗi thẳng" cứng.
+      const plan = temporal.pose === "rest" ? {} : planFingerPose(rig, temporal.pose);
+      const blended = updateFingerPoseTemporal(this.fingerPoseState[side], plan, nowMs, this.config.gesture.pose);
+      this.fingerPoseState[side] = blended.state;
+
+      for (const [joint, rotation] of Object.entries(blended.output) as Array<[AvatarFingerJointName, QuaternionData]>) {
+        jointRotations[joint] = rotation;
+        this.ownedFingerJoints.add(joint);
+      }
+      // Joint đã blend xong về identity thì temporal đã nhả; bỏ khỏi tập sở hữu để lần tắt tính
+      // năng sau không phát identity thừa cho chúng.
+      //
+      // Chỉ xét joint CỦA CHÍNH SIDE NÀY. `ownedFingerJoints` chứa cả hai tay, còn
+      // `blended.state.current` chỉ có tay đang xử lý — quét toàn bộ tập sẽ xoá nhầm joint của
+      // tay kia ở mỗi lượt và cuối vòng lặp không còn joint nào để clear khi tắt tính năng.
+      const sidePrefix = side === "left" ? "left" : "right";
+      for (const joint of [...this.ownedFingerJoints]) {
+        if (!joint.startsWith(sidePrefix)) continue;
+        if (!blended.state.current.has(joint)) this.ownedFingerJoints.delete(joint);
+      }
+    }
+  }
+  /** Nhãn cử chỉ đang phát mỗi bên — DEV panel/diagnostic, không tham gia tính rotation. */
+  getGesturePoses(): Record<ArmSide, GesturePoseLabel> { return { ...this.lastGesturePose }; }
   private resetHandSampleClassification(): void { this.lastClassifiedHandSampledAtMs = null; }
   private consumeMatchingResetMarker(state: HandTwistProcessorState): void {
     state.matchingStateReset = false;

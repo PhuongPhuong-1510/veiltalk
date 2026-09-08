@@ -4,6 +4,8 @@ import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import { inspectModel } from "./modelCapability";
 import type { LoadedAvatarModel, ModelLoadOptions } from "./modelTypes";
 import { freezeRigProfile, validateRigProfile, type ControlledArmJoint, type NormalizedAvatarRigProfile } from "../avatar-motion/normalizedRigProfile";
+import { AVATAR_FINGER_JOINT_NAMES } from "../avatar-motion/avatarPoseTypes";
+import { buildFingerRigProfile } from "../avatar-motion/fingerRig";
 
 const quaternionData = (value: Quaternion) => ({ x: value.x, y: value.y, z: value.z, w: value.w });
 const vectorData = (value: Vector3) => ({ x: value.x, y: value.y, z: value.z });
@@ -53,7 +55,40 @@ export function createRigProfile(modelGeneration: number, fingerprint: string, b
       parentRestWorldRotation: quaternionData(bone.parent.getWorldQuaternion(new Quaternion()).normalize()), restWorldDirection: vectorData(restDirection),
       anatomicalRestBasis: { primaryLocal: vectorData(primaryLocal), secondaryLocal: vectorData(secondaryLocal), binormalLocal: vectorData(binormalLocal), primaryWorld: vectorData(restDirection), secondaryWorld: vectorData(secondaryWorld), binormalWorld: vectorData(binormalWorld), worldRotation: quaternionData(frameWorldRotation) } };
   }
-  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, joints };
+  let collisionReference: NormalizedAvatarRigProfile["collisionReference"];
+  const head = bones.head;
+  if (head) {
+    head.updateWorldMatrix(true, false);
+    bones.hips?.updateWorldMatrix(true, false);
+    const leftShoulderWorld = bones.leftUpperArm!.getWorldPosition(new Vector3());
+    const rightShoulderWorld = bones.rightUpperArm!.getWorldPosition(new Vector3());
+    const shoulderWidth = leftShoulderWorld.distanceTo(rightShoulderWorld);
+    const neckWorld = neck.getWorldPosition(new Vector3());
+    const headWorld = head.getWorldPosition(new Vector3());
+    const neckHeadLength = neckWorld.distanceTo(headWorld);
+    const chestWorld = chest.getWorldPosition(new Vector3());
+    const torsoEnd = bones.hips?.getWorldPosition(new Vector3())
+      ?? chestWorld.clone().addScaledVector(torsoUp, -Math.max(shoulderWidth * 0.9, neckHeadLength * 1.8));
+    const upperLength = (side: "left" | "right") => joints[`${side}UpperArm`].restWorldPosition;
+    const lowerLength = (side: "left" | "right") => joints[`${side}LowerArm`].restWorldPosition;
+    const handPosition = (side: "left" | "right") => bones[`${side}Hand`]!.getWorldPosition(new Vector3());
+    const distance = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+    if (shoulderWidth > 1e-6 && neckHeadLength > 1e-6 && chestWorld.distanceTo(torsoEnd) > 1e-6) {
+      const armRadius = shoulderWidth * 0.055;
+      collisionReference = {
+        head: {
+          centerWorld: vectorData(headWorld.clone().addScaledVector(torsoUp, Math.max(neckHeadLength * 0.25, shoulderWidth * 0.06))),
+          radius: Math.max(shoulderWidth * 0.22, neckHeadLength * 0.65),
+        },
+        torso: { startWorld: vectorData(chestWorld), endWorld: vectorData(torsoEnd), radius: shoulderWidth * 0.28 },
+        arms: {
+          left: { shoulderWorld: vectorData(leftShoulderWorld), upperLength: distance(upperLength("left"), lowerLength("left")), lowerLength: distance(lowerLength("left"), vectorData(handPosition("left"))), radius: armRadius },
+          right: { shoulderWorld: vectorData(rightShoulderWorld), upperLength: distance(upperLength("right"), lowerLength("right")), lowerLength: distance(lowerLength("right"), vectorData(handPosition("right"))), radius: armRadius },
+        },
+      };
+    }
+  }
+  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, joints, ...(collisionReference ? { collisionReference } : {}) };
   return validateRigProfile(profile) ? freezeRigProfile(profile) : null;
 }
 
@@ -97,12 +132,20 @@ export class AvatarModelLoader {
         restRotations[key] = { x: node.quaternion.x, y: node.quaternion.y, z: node.quaternion.z, w: node.quaternion.w };
       }
     }
-    const semanticBones = ["head", "neck", "chest", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand"] as const;
+    const semanticBones = ["head", "neck", "chest", "hips", "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand", "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand"] as const;
     if (vrm) for (const semantic of semanticBones) {
       const node = vrm.humanoid.getNormalizedBoneNode(semantic); if (!node) continue;
       bones[semantic] = node; restRotations[semantic] = { x: node.quaternion.x, y: node.quaternion.y, z: node.quaternion.z, w: node.quaternion.w };
     }
+    // Phase 3B.3: 30 xương ngón. Tất cả đều OPTIONAL trong VRM — `continue` khi thiếu để model
+    // không có ngón vẫn tải bình thường như trước. Danh sách arm ở trên không đổi.
+    if (vrm) for (const semantic of AVATAR_FINGER_JOINT_NAMES) {
+      const node = vrm.humanoid.getNormalizedBoneNode(semantic); if (!node) continue;
+      bones[semantic] = node; restRotations[semantic] = { x: node.quaternion.x, y: node.quaternion.y, z: node.quaternion.z, w: node.quaternion.w };
+    }
     const rigProfile = vrm ? createRigProfile(generation, `${url}#vrm:${vrm.meta.metaVersion}`, bones) : null;
+    // Dựng sau khi mọi xương đã vào `bones`: rig ngón đọc hình học rest pose của chính model này.
+    const fingerRig = vrm ? buildFingerRigProfile(generation, bones) : null;
     const morphTargets: LoadedAvatarModel["morphTargets"] = new Map();
     gltf.scene.traverse((node) => {
       if (!(node instanceof Mesh) || !node.morphTargetDictionary || !node.morphTargetInfluences) return;
@@ -113,7 +156,7 @@ export class AvatarModelLoader {
     });
     const capability = inspectModel(gltf.scene, profile, url, this.now() - startedAt, options.fileSizeBytes ?? null, options.licenseStatus ?? "unknown", vrm);
     let disposed = false;
-    return { gltf, vrm, root: gltf.scene, bones, restRotations, morphTargets, expressionMap: profile?.expressionMorphTargets ?? {}, capability, rigProfile, dispose: () => { if (!disposed) { disposed = true; disposeObject(gltf.scene); } } };
+    return { gltf, vrm, root: gltf.scene, bones, restRotations, morphTargets, expressionMap: profile?.expressionMorphTargets ?? {}, capability, rigProfile, fingerRig, dispose: () => { if (!disposed) { disposed = true; disposeObject(gltf.scene); } } };
   }
   invalidate(): void { this.generation += 1; }
 }

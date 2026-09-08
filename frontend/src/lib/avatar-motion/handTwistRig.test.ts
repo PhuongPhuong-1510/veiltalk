@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { computeHandForearmTwist } from "./handForearmTwist";
-import { composePoseLowerArmWithHandTwist, HAND_TWIST_RIG_CONVENTION_V1, handWorldBasisToMotionFrame, normalizePalmBasisForTwist } from "./handTwistRig";
+import { composePoseLowerArmWithHandTwist, computeAbsoluteRigPalmTwist, HAND_TWIST_RIG_CONVENTION_V1, handWorldBasisToMotionFrame, normalizePalmBasisForTwist } from "./handTwistRig";
 
 const basis = (normal: { x: number; y: number; z: number }) => ({
   across: { x: 0, y: 1, z: 0 }, forward: { x: 0, y: 0, z: 1 }, normal,
@@ -81,5 +81,17 @@ describe("Hand twist rig convention v1", () => {
   it("rejects non-finite angle instead of producing NaN/Infinity", () => {
     expect(composePoseLowerArmWithHandTwist({ x: 0, y: 0, z: 0, w: 1 }, { x: 1, y: 0, z: 0 }, NaN)).toBeNull();
     expect(composePoseLowerArmWithHandTwist({ x: 0, y: 0, z: 0, w: 1 }, { x: 1, y: 0, z: 0 }, Infinity)).toBeNull();
+  });
+
+  it("aligns the observed palm to the absolute rest palm of the loaded rig", () => {
+    const solved = computeAbsoluteRigPalmTwist({
+      forearmAxisWorld: { x: 1, y: 0, z: 0 },
+      observedPalmNormalWorld: { x: 0, y: 0, z: 1 },
+      restPalmNormalWorld: { x: 0, y: 1, z: 0 },
+      lowerRestWorldRotation: { x: 0, y: 0, z: 0, w: 1 },
+      lowerTargetWorldRotation: { x: 0, y: 0, z: 0, w: 1 },
+    });
+    expect(solved.accepted).toBe(true);
+    expect(solved.twistRadians).toBeCloseTo(Math.PI / 2, 7);
   });
 });

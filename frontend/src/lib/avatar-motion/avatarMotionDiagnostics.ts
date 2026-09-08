@@ -1,5 +1,6 @@
 import type { AvatarOutputMotionState, QuaternionData, Vector3Data } from "./avatarPoseTypes";
 import type { HandMatchContinuity } from "./handPoseMatching";
+import type { WristEvidenceSource } from "./wristEvidence";
 
 export type ArmSide = "left" | "right";
 export type PoleSource = "fresh" | "hand" | "previous" | "rest" | "unavailable";
@@ -18,6 +19,8 @@ export type HandTrackingEpochResetReason =
   | "matching-state-reset";
 
 export interface HandTwistRigDiagnostic {
+  /** rig-absolute khi có palm rest của VRM; session-relative là fallback tương thích model thiếu xương ngón. */
+  alignmentMode?: "rig-absolute" | "session-relative";
   selectedPalmAxis: "normal";
   chiralityCorrectionApplied: boolean;
   configuredPositiveSign: 1;
@@ -159,6 +162,24 @@ export interface ArmFrameDiagnostic {
     source: ElbowSource; confidence: number; durationMs: number; inferredPosition: Vector3Data | null;
     calibratedUpperLength: number | null; calibratedLowerLength: number | null;
     shoulderWristDistance: number | null; reachRatio: number | null; distanceFromPreviousElbow: number | null;
+  };
+  /** P4-T10 corrective: vì sao solver chọn mặt phẳng gập này và có dùng vùng mặt/collision rig hay không. */
+  spatial?: {
+    candidateCount: number;
+    selectedAngleRadians: number | null;
+    faceEvidenceUsed: boolean;
+    intentionalFaceContact: boolean;
+    facePenalty: number;
+    headCollisionPenalty: number;
+    torsoCollisionPenalty: number;
+  };
+  /** Phase 3B.4: nguồn wrist dùng cho arm solve; chỉ là diagnostic local, không vào packet. */
+  wristEvidence?: {
+    source: WristEvidenceSource;
+    sourceChanged: boolean;
+    effectiveGraceMs: number;
+    reconstructionConfidence: number | null;
+    reconstructionRejectionReason: string | null;
   };
 }
 

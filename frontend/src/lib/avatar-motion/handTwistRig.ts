@@ -74,3 +74,38 @@ export function composePoseLowerArmWithHandTwist(
   const output = pose.normalize().multiply(new Quaternion().setFromAxisAngle(axis.normalize(), appliedTwistRadians)).normalize();
   return { x: output.x, y: output.y, z: output.z, w: output.w };
 }
+
+export interface AbsoluteRigPalmTwistInput {
+  forearmAxisWorld: Vector3Data;
+  observedPalmNormalWorld: Vector3Data;
+  restPalmNormalWorld: Vector3Data;
+  lowerRestWorldRotation: QuaternionData;
+  lowerTargetWorldRotation: QuaternionData;
+}
+
+/**
+ * So sánh lòng bàn tay thật với hướng lòng bàn tay mà pose-only của đúng VRM sẽ tạo ra. Khác calibration
+ * tương đối theo phiên, góc 0 ở đây có nghĩa tuyệt đối: palm của avatar đã trùng palm quan sát.
+ */
+export function computeAbsoluteRigPalmTwist(input: AbsoluteRigPalmTwistInput): { accepted: boolean; twistRadians: number | null; rejectionReason: string | null } {
+  const axis = new Vector3(input.forearmAxisWorld.x, input.forearmAxisWorld.y, input.forearmAxisWorld.z);
+  const observed = new Vector3(input.observedPalmNormalWorld.x, input.observedPalmNormalWorld.y, input.observedPalmNormalWorld.z);
+  const restPalm = new Vector3(input.restPalmNormalWorld.x, input.restPalmNormalWorld.y, input.restPalmNormalWorld.z);
+  const restRotation = new Quaternion(input.lowerRestWorldRotation.x, input.lowerRestWorldRotation.y, input.lowerRestWorldRotation.z, input.lowerRestWorldRotation.w);
+  const targetRotation = new Quaternion(input.lowerTargetWorldRotation.x, input.lowerTargetWorldRotation.y, input.lowerTargetWorldRotation.z, input.lowerTargetWorldRotation.w);
+  if (![axis.x, axis.y, axis.z, observed.x, observed.y, observed.z, restPalm.x, restPalm.y, restPalm.z, restRotation.x, restRotation.y, restRotation.z, restRotation.w, targetRotation.x, targetRotation.y, targetRotation.z, targetRotation.w].every(Number.isFinite)
+    || axis.lengthSq() < 1e-8 || observed.lengthSq() < 1e-8 || restPalm.lengthSq() < 1e-8 || restRotation.lengthSq() < 1e-8 || targetRotation.lengthSq() < 1e-8) {
+    return { accepted: false, twistRadians: null, rejectionReason: "invalid-rig-palm-reference" };
+  }
+  axis.normalize(); observed.normalize(); restPalm.normalize(); restRotation.normalize(); targetRotation.normalize();
+  // Đưa pháp tuyến rest vào local lower-arm, rồi quay bằng target pose-only để biết palm avatar hiện tại.
+  const localPalm = restPalm.applyQuaternion(restRotation.clone().invert());
+  const posePalm = localPalm.applyQuaternion(targetRotation);
+  observed.addScaledVector(axis, -observed.dot(axis)); posePalm.addScaledVector(axis, -posePalm.dot(axis));
+  if (observed.lengthSq() < 1e-8 || posePalm.lengthSq() < 1e-8) return { accepted: false, twistRadians: null, rejectionReason: "degenerate-palm-projection" };
+  observed.normalize(); posePalm.normalize();
+  const twistRadians = Math.atan2(new Vector3().crossVectors(posePalm, observed).dot(axis), posePalm.dot(observed));
+  return Number.isFinite(twistRadians)
+    ? { accepted: true, twistRadians, rejectionReason: null }
+    : { accepted: false, twistRadians: null, rejectionReason: "non-finite-rig-palm-twist" };
+}

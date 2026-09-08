@@ -8,6 +8,7 @@ import type { AvatarMotionConfig } from "./motionConfig";
 import { constrainJointRotation } from "./jointConstraints";
 import { buildTorsoBasis, type TorsoBasis } from "./torsoBasis";
 import { inverseQuaternion, multiplyQuaternions, quaternionFromBasis, rotateVector, vector, vectorData } from "./motionMath";
+import type { FaceArmSpatialEvidence } from "./faceArmSpatialEvidence";
 
 export type GeometryDiagnostic = Omit<ArmFrameDiagnostic, "lossState" | "transitionProgress" | "invalidDurationMs" | "validRecoveryDurationMs" | "sampleDisposition" | "segmentLossState" | "upperArmAngularDeltaDeg" | "lowerArmAngularDeltaDeg" | "poleAngularDeltaDeg" | "poleSourceChanged" | "trackingReacquired">;
 export interface ArmGeometryHistory { previousPole: Vector3Data | null; previousPoleWasFresh: boolean; previousDepthDegenerate: boolean; lastValidPoleAtMs: number | null; previousPrimary?: { upper: Vector3Data | null; lower: Vector3Data | null }; previousSecondary?: { upper: Vector3Data | null; lower: Vector3Data | null }; calibratedLength?: { upper: number | null; lower: number | null }; previousObservedElbow?: Vector3Data | null; inferenceStartedAtMs?: number | null;
@@ -18,6 +19,19 @@ export interface ArmGeometryHistory { previousPole: Vector3Data | null; previous
    * góc trục). Dùng để khóa phía gập khi suy đoán khuỷu, chống nghiệm lật qua thân người.
    */
   previousElbowDirection?: Vector3Data | null }
+export interface HandElbowBranchEvidence {
+  /** Hướng wrist→middle-MCP trong image-space đã sửa aspect ratio; trục y của ảnh hướng xuống. */
+  forwardImage: Vector3Data;
+  /** Chất lượng hình học palm-basis trong [0, 1]. */
+  geometryQuality: number;
+}
+export interface ArmSpatialEvidence {
+  hand: HandElbowBranchEvidence | null;
+  face: FaceArmSpatialEvidence | null;
+  /** world-unit / image-aspect-unit, suy từ hai vai trong cùng Pose sample. */
+  imageToWorldScale: number | null;
+  imageAspectRatio: number;
+}
 export interface SideArmGeometryResult {
   deltas: ArmDeltaOutput; targetWorldRotations: Partial<Record<ControlledArmJoint, QuaternionData>>;
   acceptedPole: Vector3Data; poleSource: PoleSource; acceptedFreshPole: boolean; depthDegenerate: boolean; diagnostic: GeometryDiagnostic;
@@ -132,35 +146,231 @@ function handPalmPole(wrist: Vector3, index: RawNormalizedLandmarkV1 | undefined
  * đối diện, lật pole lại. Không có nó, prior đảo dấu một frame là khuỷu nhảy qua thân người —
  * đo được chính xác hiện tượng này trên tay gần duỗi thẳng.
  */
-function inferElbow(shoulder: Vector3, wrist: Vector3, upperLength: number, lowerLength: number, prior: Vector3Data, reachSlackRatio: number, previousElbowDirection: Vector3Data | null, lateralOutward: Vector3 | null, minimumLateralBias: number): { elbow: Vector3; reachRatio: number; confidence: number; elbowDirection: Vector3Data; sideFlipPrevented: boolean; anatomyFlipApplied: boolean } | null {
+function inferElbowLegacy(
+  shoulder: Vector3, wrist: Vector3, upperLength: number, lowerLength: number, prior: Vector3Data,
+  reachSlackRatio: number, previousElbowDirection: Vector3Data | null, lateralOutward: Vector3 | null,
+  minimumLateralBias: number, handEvidence: HandElbowBranchEvidence | null,
+  scoring: Pick<AvatarMotionConfig["armFrame"], "elbowInferencePriorWeight" | "elbowInferenceHistoryWeight" | "elbowInferencePalmWeight" | "elbowInferencePalmMinimumQuality" | "elbowInferenceOutsideWeight" | "elbowInferenceDeepInsideThreshold" | "elbowInferenceDeepInsideWeight">,
+): { elbow: Vector3; reachRatio: number; confidence: number; elbowDirection: Vector3Data; sideFlipPrevented: boolean; anatomyFlipApplied: boolean; palmBranchApplied: boolean } | null {
   const shoulderToWrist = wrist.clone().sub(shoulder), distance = shoulderToWrist.length(); if (!Number.isFinite(distance) || distance < 1e-6) return null;
   const minimumReach = Math.abs(upperLength - lowerLength), maximumReach = upperLength + lowerLength, slack = maximumReach * reachSlackRatio;
   if (distance < minimumReach - slack || distance > maximumReach + slack) return null;
   const clampedDistance = Math.min(maximumReach - 1e-6, Math.max(minimumReach + 1e-6, distance)); const axis = shoulderToWrist.normalize();
   const x = (upperLength * upperLength - lowerLength * lowerLength + clampedDistance * clampedDistance) / (2 * clampedDistance);
   const radiusSquared = upperLength * upperLength - x * x; if (radiusSquared < -1e-6) return null;
-  const pole = vector(prior).addScaledVector(axis, -vector(prior).dot(axis)); if (pole.lengthSq() < 1e-8) return null; pole.normalize();
-  // Khóa phía gập theo lần trước. Chiếu hướng cũ lên cùng mặt phẳng vuông góc trục hiện tại
-  // rồi so dấu; đối phía thì lật pole thay vì chấp nhận nghiệm nhảy ngang.
-  let sideFlipPrevented = false;
-  if (previousElbowDirection) {
-    const previous = vector(previousElbowDirection);
-    previous.addScaledVector(axis, -previous.dot(axis));
-    if (previous.lengthSq() > 1e-8 && pole.dot(previous.normalize()) < 0) { pole.negate(); sideFlipPrevented = true; }
-  }
-  // Ràng buộc giải phẫu — THẮNG mỏ neo lịch sử. Mỏ neo giữ nghiệm ổn định nhưng không biết
-  // phía nó khóa vào có hợp lý với cơ thể người hay không: mỏ neo ghi ở tư thế cũ, rồi người
-  // dùng giơ tay lên, nó trỏ thẳng vào trong thân. Khuỷu người thật luôn lệch ra ngoài, nên
-  // nghiệm lấn vào trong thân bị lật ra bất kể prior và mỏ neo nói gì.
-  let anatomyFlipApplied = false;
-  if (lateralOutward) {
-    const outward = lateralOutward.clone();
-    outward.addScaledVector(axis, -outward.dot(axis));
-    if (outward.lengthSq() > 1e-8 && pole.dot(outward.normalize()) < minimumLateralBias) { pole.negate(); anatomyFlipApplied = true; sideFlipPrevented = false; }
-  }
-  const center = shoulder.clone().addScaledVector(axis, x); const elbow = center.addScaledVector(pole, Math.sqrt(Math.max(0, radiusSquared)));
+  const priorPole = vector(prior).addScaledVector(axis, -vector(prior).dot(axis)); if (priorPole.lengthSq() < 1e-8) return null; priorPole.normalize();
+  const previous = previousElbowDirection ? vector(previousElbowDirection) : null;
+  if (previous) previous.addScaledVector(axis, -previous.dot(axis));
+  const previousUsable = Boolean(previous && previous.lengthSq() > 1e-8);
+  if (previousUsable) previous!.normalize();
+  const outward = lateralOutward?.clone() ?? null;
+  if (outward) outward.addScaledVector(axis, -outward.dot(axis));
+  const outwardUsable = Boolean(outward && outward.lengthSq() > 1e-8);
+  if (outwardUsable) outward!.normalize();
+  const palmForward = handEvidence && Number.isFinite(handEvidence.geometryQuality) && handEvidence.geometryQuality >= scoring.elbowInferencePalmMinimumQuality
+    ? vector(handEvidence.forwardImage).setZ(0)
+    : null;
+  const palmUsable = Boolean(palmForward && Number.isFinite(palmForward.x) && Number.isFinite(palmForward.y) && palmForward.lengthSq() > 1e-8);
+  if (palmUsable) palmForward!.normalize();
+  const center = shoulder.clone().addScaledVector(axis, x);
+  const radius = Math.sqrt(Math.max(0, radiusSquared));
+
+  // Two-bone IK chỉ có hai nhánh khi pole đã chọn mặt phẳng. Chấm cả hai ứng viên thay vì
+  // hard-flip mọi khuỷu đi vào phía trong: cross-body gesture được phép giữ history/palm,
+  // còn nghiệm xuyên sâu qua thân nhận penalty lớn. Đây vẫn là nghiệm giải tích O(1).
+  const score = (candidate: Vector3, includePalm: boolean, includeAnatomy: boolean): number => {
+    let value = scoring.elbowInferencePriorWeight * (1 - candidate.dot(priorPole));
+    if (previousUsable) value += scoring.elbowInferenceHistoryWeight * (1 - candidate.dot(previous!));
+    if (includePalm && palmUsable) {
+      const candidateElbow = center.clone().addScaledVector(candidate, radius);
+      // Candidate ở semantic world (y hướng lên), còn palm evidence ở image-space (y hướng xuống).
+      const lowerImage = new Vector3(wrist.x - candidateElbow.x, candidateElbow.y - wrist.y, 0);
+      if (lowerImage.lengthSq() > 1e-8) {
+        lowerImage.normalize();
+        value += scoring.elbowInferencePalmWeight * handEvidence!.geometryQuality * (1 - lowerImage.dot(palmForward!));
+      }
+    }
+    if (includeAnatomy && outwardUsable) {
+      const lateral = candidate.dot(outward!);
+      value += scoring.elbowInferenceOutsideWeight * Math.max(0, minimumLateralBias - lateral);
+      value += scoring.elbowInferenceDeepInsideWeight * Math.max(0, -lateral - scoring.elbowInferenceDeepInsideThreshold);
+    }
+    return value;
+  };
+  const oppositePole = priorPole.clone().negate();
+  const baseWithoutPalm = score(priorPole, false, true), oppositeWithoutPalm = score(oppositePole, false, true);
+  const baseWithoutAnatomy = score(priorPole, true, false), oppositeWithoutAnatomy = score(oppositePole, true, false);
+  const baseScore = score(priorPole, true, true), oppositeScore = score(oppositePole, true, true);
+  const pole = oppositeScore + 1e-9 < baseScore ? oppositePole : priorPole;
+  const poleWithoutPalm = oppositeWithoutPalm + 1e-9 < baseWithoutPalm ? oppositePole : priorPole;
+  const poleWithoutAnatomy = oppositeWithoutAnatomy + 1e-9 < baseWithoutAnatomy ? oppositePole : priorPole;
+  const sideFlipPrevented = previousUsable && pole.dot(previous!) >= 0 && priorPole.dot(previous!) < 0;
+  const anatomyFlipApplied = outwardUsable && pole !== poleWithoutAnatomy;
+  const palmBranchApplied = palmUsable && pole !== poleWithoutPalm;
+  const elbow = center.addScaledVector(pole, radius);
   const reachRatio = distance / maximumReach; const violation = distance < minimumReach ? minimumReach - distance : distance > maximumReach ? distance - maximumReach : 0;
-  return { elbow, reachRatio, confidence: Math.max(0, 1 - violation / Math.max(1e-6, slack)), elbowDirection: vectorData(pole), sideFlipPrevented, anatomyFlipApplied };
+  return { elbow, reachRatio, confidence: Math.max(0, 1 - violation / Math.max(1e-6, slack)), elbowDirection: vectorData(pole), sideFlipPrevented, anatomyFlipApplied, palmBranchApplied };
+}
+
+type ElbowSpatialDiagnostic = NonNullable<GeometryDiagnostic["spatial"]>;
+type ScoredPole = { pole: Vector3; angle: number; total: number; face: number; head: number; torso: number };
+
+function pointSegmentDistance(point: Vector3, start: Vector3, end: Vector3): number {
+  const segment = end.clone().sub(start); const lengthSq = segment.lengthSq();
+  if (lengthSq <= 1e-12) return point.distanceTo(start);
+  const t = Math.max(0, Math.min(1, point.clone().sub(start).dot(segment) / lengthSq));
+  return point.distanceTo(start.clone().addScaledVector(segment, t));
+}
+
+/** Khoảng cách ngắn nhất giữa hai đoạn 3D; dùng cho hai capsule forearm và torso. */
+function segmentDistance(p1: Vector3, q1: Vector3, p2: Vector3, q2: Vector3): number {
+  const d1 = q1.clone().sub(p1), d2 = q2.clone().sub(p2), r = p1.clone().sub(p2);
+  const a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r); let s = 0; let t = 0;
+  if (a <= 1e-12 && e <= 1e-12) return p1.distanceTo(p2);
+  if (a <= 1e-12) t = Math.max(0, Math.min(1, f / e));
+  else {
+    const c = d1.dot(r);
+    if (e <= 1e-12) s = Math.max(0, Math.min(1, -c / a));
+    else {
+      const b = d1.dot(d2), denominator = a * e - b * b;
+      if (Math.abs(denominator) > 1e-12) s = Math.max(0, Math.min(1, (b * f - c * e) / denominator));
+      t = (b * s + f) / e;
+      if (t < 0) { t = 0; s = Math.max(0, Math.min(1, -c / a)); }
+      else if (t > 1) { t = 1; s = Math.max(0, Math.min(1, (b - c) / a)); }
+    }
+  }
+  return p1.clone().addScaledVector(d1, s).distanceTo(p2.clone().addScaledVector(d2, t));
+}
+
+function rigArmCollisionPenetration(
+  profile: NormalizedAvatarRigProfile,
+  side: ArmSide,
+  shoulder: Vector3,
+  elbow: Vector3,
+  wrist: Vector3,
+): { head: number; torso: number } | null {
+  const collision = profile.collisionReference; if (!collision) return null;
+  const upper = elbow.clone().sub(shoulder), lower = wrist.clone().sub(elbow);
+  if (upper.lengthSq() < 1e-8 || lower.lengthSq() < 1e-8) return null;
+  const arm = collision.arms[side], rigShoulder = vector(arm.shoulderWorld);
+  const rigElbow = rigShoulder.clone().addScaledVector(upper.normalize(), arm.upperLength);
+  const rigHand = rigElbow.clone().addScaledVector(lower.normalize(), arm.lowerLength);
+  const headClearance = collision.head.radius + arm.radius;
+  const torsoClearance = collision.torso.radius + arm.radius;
+  return {
+    head: Math.max(0, headClearance - pointSegmentDistance(vector(collision.head.centerWorld), rigElbow, rigHand)) / headClearance,
+    torso: Math.max(0, torsoClearance - segmentDistance(rigElbow, rigHand, vector(collision.torso.startWorld), vector(collision.torso.endWorld))) / torsoClearance,
+  };
+}
+
+function ellipseSegmentDistance(start: Vector3, end: Vector3, face: FaceArmSpatialEvidence): number {
+  const ax = (start.x - face.centerImageAspect.x) / face.radiusX;
+  const ay = (start.y - face.centerImageAspect.y) / face.radiusY;
+  const bx = (end.x - face.centerImageAspect.x) / face.radiusX;
+  const by = (end.y - face.centerImageAspect.y) / face.radiusY;
+  const dx = bx - ax, dy = by - ay, denominator = dx * dx + dy * dy;
+  const t = denominator <= 1e-12 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / denominator));
+  return Math.hypot(ax + dx * t, ay + dy * t);
+}
+
+/**
+ * Quét toàn bộ đường tròn nghiệm two-bone IK. 24 ứng viên là chi phí cố định, nhưng cho phép solver thoát
+ * khỏi giả định sai “chỉ có prior và -prior” vốn làm khuỷu bị khóa vào mặt phẳng gập ngược.
+ */
+function inferElbow(
+  shoulder: Vector3, wrist: Vector3, upperLength: number, lowerLength: number, prior: Vector3Data,
+  reachSlackRatio: number, previousElbowDirection: Vector3Data | null, lateralOutward: Vector3 | null,
+  minimumLateralBias: number, spatial: ArmSpatialEvidence | null, side: ArmSide,
+  profile: NormalizedAvatarRigProfile, shoulderImage: RawNormalizedLandmarkV1, wristImage: RawNormalizedLandmarkV1,
+  scoring: AvatarMotionConfig["armFrame"],
+): { elbow: Vector3; reachRatio: number; confidence: number; elbowDirection: Vector3Data; sideFlipPrevented: boolean; anatomyFlipApplied: boolean; palmBranchApplied: boolean; faceBranchApplied: boolean; collisionBranchApplied: boolean; spatial: ElbowSpatialDiagnostic } | null {
+  if (scoring.elbowInferenceCandidateCount < 3) {
+    const legacy = inferElbowLegacy(shoulder, wrist, upperLength, lowerLength, prior, reachSlackRatio, previousElbowDirection, lateralOutward, minimumLateralBias, spatial?.hand ?? null, scoring);
+    return legacy ? { ...legacy, faceBranchApplied: false, collisionBranchApplied: false, spatial: { candidateCount: 2, selectedAngleRadians: null, faceEvidenceUsed: false, intentionalFaceContact: false, facePenalty: 0, headCollisionPenalty: 0, torsoCollisionPenalty: 0 } } : null;
+  }
+  const shoulderToWrist = wrist.clone().sub(shoulder), distance = shoulderToWrist.length();
+  if (!Number.isFinite(distance) || distance < 1e-6) return null;
+  const minimumReach = Math.abs(upperLength - lowerLength), maximumReach = upperLength + lowerLength, slack = maximumReach * reachSlackRatio;
+  if (distance < minimumReach - slack || distance > maximumReach + slack) return null;
+  const clampedDistance = Math.min(maximumReach - 1e-6, Math.max(minimumReach + 1e-6, distance));
+  const axis = shoulderToWrist.normalize();
+  const x = (upperLength * upperLength - lowerLength * lowerLength + clampedDistance * clampedDistance) / (2 * clampedDistance);
+  const radiusSquared = upperLength * upperLength - x * x; if (radiusSquared < -1e-6) return null;
+  const priorPole = vector(prior).addScaledVector(axis, -vector(prior).dot(axis));
+  if (priorPole.lengthSq() < 1e-8) return null; priorPole.normalize();
+  const perpendicular = axis.clone().cross(priorPole);
+  if (perpendicular.lengthSq() < 1e-8) return null; perpendicular.normalize();
+  const previous = previousElbowDirection ? vector(previousElbowDirection).addScaledVector(axis, -vector(previousElbowDirection).dot(axis)) : null;
+  const previousUsable = Boolean(previous && previous.lengthSq() > 1e-8); if (previousUsable) previous!.normalize();
+  const outward = lateralOutward?.clone().addScaledVector(axis, -(lateralOutward?.dot(axis) ?? 0)) ?? null;
+  const outwardUsable = Boolean(outward && outward.lengthSq() > 1e-8); if (outwardUsable) outward!.normalize();
+  const hand = spatial?.hand ?? null;
+  const palm = hand && hand.geometryQuality >= scoring.elbowInferencePalmMinimumQuality ? vector(hand.forwardImage).setZ(0) : null;
+  const palmUsable = Boolean(palm && palm.lengthSq() > 1e-8); if (palmUsable) palm!.normalize();
+  const face = spatial?.face ?? null;
+  const faceUsable = Boolean(face && spatial && Number.isFinite(spatial.imageToWorldScale) && spatial.imageToWorldScale! > 1e-8 && spatial.imageAspectRatio > 0);
+  const center = shoulder.clone().addScaledVector(axis, x), radius = Math.sqrt(Math.max(0, radiusSquared));
+  const count = Math.max(8, Math.min(64, Math.round(scoring.elbowInferenceCandidateCount)));
+  const candidates = Array.from({ length: count }, (_, index) => {
+    const angle = 2 * Math.PI * index / count;
+    return { pole: priorPole.clone().multiplyScalar(Math.cos(angle)).addScaledVector(perpendicular, Math.sin(angle)).normalize(), angle };
+  });
+  const evaluate = (candidate: { pole: Vector3; angle: number }, includePalm: boolean, includeAnatomy: boolean, includeFace: boolean, includeCollision: boolean): ScoredPole => {
+    let total = scoring.elbowInferencePriorWeight * (1 - candidate.pole.dot(priorPole));
+    if (previousUsable) total += scoring.elbowInferenceHistoryWeight * (1 - candidate.pole.dot(previous!));
+    const elbow = center.clone().addScaledVector(candidate.pole, radius);
+    if (includePalm && palmUsable) {
+      const lowerImage = new Vector3(wrist.x - elbow.x, elbow.y - wrist.y, 0);
+      if (lowerImage.lengthSq() > 1e-8) total += scoring.elbowInferencePalmWeight * hand!.geometryQuality * (1 - lowerImage.normalize().dot(palm!));
+    }
+    if (includeAnatomy && outwardUsable) {
+      const lateral = candidate.pole.dot(outward!);
+      total += scoring.elbowInferenceOutsideWeight * Math.max(0, minimumLateralBias - lateral);
+      total += scoring.elbowInferenceDeepInsideWeight * Math.max(0, -lateral - scoring.elbowInferenceDeepInsideThreshold);
+    }
+    let facePenalty = 0;
+    if (includeFace && faceUsable && face && spatial) {
+      const elbowImage = new Vector3(shoulderImage.x + (elbow.x - shoulder.x) / spatial.imageToWorldScale!, shoulderImage.y * spatial.imageAspectRatio - (elbow.y - shoulder.y) / spatial.imageToWorldScale!, 0);
+      const wristPoint = new Vector3(wristImage.x, wristImage.y * spatial.imageAspectRatio, 0);
+      if (!face.allowContact) {
+        const penetration = Math.max(0, 1.08 - ellipseSegmentDistance(elbowImage, wristPoint, face));
+        facePenalty += scoring.elbowInferenceFaceWeight * face.quality * penetration * penetration;
+      }
+      if (face.desiredSide !== null) facePenalty += scoring.elbowInferenceFaceSideWeight * face.quality * Math.max(0, -face.desiredSide * (elbowImage.x - face.centerImageAspect.x) / face.radiusX);
+      total += facePenalty;
+    }
+    let headPenalty = 0, torsoPenalty = 0;
+    const penetration = includeCollision ? rigArmCollisionPenetration(profile, side, shoulder, elbow, wrist) : null;
+    if (penetration) {
+      headPenalty = scoring.elbowInferenceHeadCollisionWeight * penetration.head * penetration.head * (face?.allowContact ? 0.15 : 1);
+      torsoPenalty = scoring.elbowInferenceTorsoCollisionWeight * penetration.torso * penetration.torso;
+      total += headPenalty + torsoPenalty;
+    }
+    return { ...candidate, total, face: facePenalty, head: headPenalty, torso: torsoPenalty };
+  };
+  const choose = (palmEnabled: boolean, anatomyEnabled: boolean, faceEnabled: boolean, collisionEnabled: boolean) => candidates.map((candidate) => evaluate(candidate, palmEnabled, anatomyEnabled, faceEnabled, collisionEnabled)).reduce((best, value) => value.total + 1e-9 < best.total ? value : best);
+  const chosen = choose(true, true, true, true), withoutPalm = choose(false, true, true, true), withoutAnatomy = choose(true, false, true, true), withoutFace = choose(true, true, false, true), withoutCollision = choose(true, true, true, false);
+  const elbow = center.clone().addScaledVector(chosen.pole, radius);
+  const violation = distance < minimumReach ? minimumReach - distance : distance > maximumReach ? distance - maximumReach : 0;
+  return {
+    elbow, reachRatio: distance / maximumReach, confidence: Math.max(0, 1 - violation / Math.max(1e-6, slack)), elbowDirection: vectorData(chosen.pole),
+    sideFlipPrevented: Boolean(previousUsable && chosen.pole.dot(previous!) >= 0 && priorPole.dot(previous!) < 0),
+    anatomyFlipApplied: Boolean(outwardUsable
+      && withoutAnatomy.pole.dot(outward!) < -scoring.elbowInferenceDeepInsideThreshold
+      && chosen.pole.dot(outward!) > withoutAnatomy.pole.dot(outward!)),
+    palmBranchApplied: Boolean(palmUsable && chosen.angle !== withoutPalm.angle),
+    faceBranchApplied: Boolean(faceUsable && chosen.angle !== withoutFace.angle), collisionBranchApplied: Boolean(profile.collisionReference && chosen.angle !== withoutCollision.angle),
+    spatial: { candidateCount: count, selectedAngleRadians: chosen.angle, faceEvidenceUsed: faceUsable, intentionalFaceContact: face?.allowContact ?? false, facePenalty: chosen.face, headCollisionPenalty: chosen.head, torsoCollisionPenalty: chosen.torso },
+  };
+}
+
+function forearmPalmImageAlignment(elbow: Vector3, wrist: Vector3, handEvidence: HandElbowBranchEvidence | null): number | null {
+  if (!handEvidence || !Number.isFinite(handEvidence.geometryQuality)) return null;
+  const palm = vector(handEvidence.forwardImage).setZ(0);
+  // Pose semantic y hướng lên, image y hướng xuống. Không trộn origin; chỉ so sánh vector hướng.
+  const forearm = new Vector3(wrist.x - elbow.x, elbow.y - wrist.y, 0);
+  if (![palm.x, palm.y, forearm.x, forearm.y].every(Number.isFinite) || palm.lengthSq() <= 1e-8 || forearm.lengthSq() <= 1e-8) return null;
+  return palm.normalize().dot(forearm.normalize());
 }
 
 function targetBoneWorld(primary: Vector3, pole: Vector3, rest: NormalizedAvatarRigProfile["joints"][ControlledArmJoint]): QuaternionData | null {
@@ -173,9 +383,11 @@ function targetBoneWorld(primary: Vector3, pole: Vector3, rest: NormalizedAvatar
 function solveSide(
   side: ArmSide, world: RawNormalizedLandmarkV1[], image: RawNormalizedLandmarkV1[], profile: NormalizedAvatarRigProfile, torso: TorsoBasis | null,
   history: ArmGeometryHistory, nowMs: number, config: AvatarMotionConfig["armFrame"], constraintsEnabled: boolean,
+  spatialEvidence: ArmSpatialEvidence | null,
   directionFilter?: (name: ControlledArmJoint, direction: Vector3Data) => Vector3Data,
   poleFilter?: (side: ArmSide, pole: Vector3Data) => Vector3Data,
 ): { result: SideArmGeometryResult | null; diagnostic: GeometryDiagnostic; visibilityState: { elbow: boolean; wrist: boolean } } {
+  const handEvidence = spatialEvidence?.hand ?? null;
   const i = INDICES[side]; const ws = world[i.shoulder], we = world[i.elbow], ww = world[i.wrist]; const is = image[i.shoulder], ie = image[i.elbow], iw = image[i.wrist];
   const elbowVisible = visibleWithHysteresis(ie, history.elbowWasVisible, config.visibilityEnter, config.visibilityExit);
   const wristVisible = visibleWithHysteresis(iw, history.wristWasVisible, config.visibilityEnter, config.visibilityExit);
@@ -184,12 +396,35 @@ function solveSide(
   if (!ws || !is) return reject("missing-shoulder");
   if (!visible(is, config.minimumPoseVisibility)) return reject("low-shoulder-visibility");
   if (!inOuterBounds(is, config.shoulderOuterBoundsMargin)) return reject("shoulder-outside-frame");
-  const elbowObserved = Boolean(we && ie && elbowVisible && inOuterBounds(ie, config.elbowOuterBoundsMargin));
+  let elbowObserved = Boolean(we && ie && elbowVisible && inOuterBounds(ie, config.elbowOuterBoundsMargin));
   const wristValid = Boolean(ww && iw && wristVisible && inOuterBounds(iw, config.wristOuterBoundsMargin));
   const lowerReason = !ww || !iw ? "missing-wrist" : !wristVisible ? "low-wrist-visibility" : !inOuterBounds(iw, config.wristOuterBoundsMargin) ? "wrist-outside-frame" : null;
   const flags: string[] = []; if ((elbowObserved && nearEdge(ie, config.edgeWarningMargin)) || (wristValid && nearEdge(iw, config.edgeWarningMargin))) flags.push("near-frame-edge");
   const shoulder = semanticPoint(ws), wrist = wristValid ? semanticPoint(ww!) : null;
+  if (elbowObserved && wrist && handEvidence && handEvidence.geometryQuality >= config.elbowInferencePalmMinimumQuality) {
+    const alignment = forearmPalmImageAlignment(semanticPoint(we!), wrist, handEvidence);
+    if (alignment !== null && alignment < config.elbowObservedPalmRejectAlignment) {
+      // MediaPipe có thể vẫn cho visibility cao khi elbow đã rời khung. Cẳng tay ngược mạnh
+      // wrist→middle-MCP bị hạ cấp, sau đó giải lại bằng cùng đường two-bone IK.
+      elbowObserved = false;
+      flags.push("observed-elbow-hand-conflict");
+    }
+  }
+  if (elbowObserved && wrist && !spatialEvidence?.face?.allowContact) {
+    const penetration = rigArmCollisionPenetration(profile, side, shoulder, semanticPoint(we!), wrist);
+    if (penetration && penetration.head > config.elbowObservedHeadCollisionRejectPenetration) {
+      // Visibility cao không đảm bảo depth đúng. Nếu mapping lên chính VRM làm cẳng tay xuyên đầu trong khi
+      // Hand thật đang tách khỏi mặt, hạ cấp elbow đó và giải lại trên vòng nghiệm có collision score.
+      elbowObserved = false;
+      flags.push("observed-elbow-head-collision");
+    }
+  }
   let elbowSource: ElbowSource = elbowObserved ? "observed" : "unavailable", inferenceConfidence = 0, reachRatio: number | null = null, inferredPosition: Vector3Data | null = null;
+  let spatialDiagnostic: GeometryDiagnostic["spatial"] = {
+    candidateCount: 0, selectedAngleRadians: null, faceEvidenceUsed: false,
+    intentionalFaceContact: spatialEvidence?.face?.allowContact ?? false,
+    facePenalty: 0, headCollisionPenalty: 0, torsoCollisionPenalty: 0,
+  };
   const inferenceDurationMs = elbowObserved ? 0 : history.inferenceStartedAtMs === null || history.inferenceStartedAtMs === undefined ? 0 : nowMs - history.inferenceStartedAtMs;
   let elbow: Vector3;
   if (elbowObserved) elbow = semanticPoint(we!);
@@ -227,11 +462,15 @@ function solveSide(
     // tay trái là +right, của tay phải là −right. Không có torso quan sát được thì bỏ qua ràng
     // buộc thay vì đoán bừa hướng.
     const lateralOutward = torso ? vector(torso.right).multiplyScalar(side === "left" ? 1 : -1) : null;
-    const inferred = inferElbow(shoulder, wrist, upperCalibration, lowerCalibration, prior, config.elbowInferenceReachSlackRatio, history.previousElbowDirection ?? null, lateralOutward, config.elbowInferenceMinimumLateralBias);
+    const inferred = inferElbow(shoulder, wrist, upperCalibration, lowerCalibration, prior, config.elbowInferenceReachSlackRatio, history.previousElbowDirection ?? null, lateralOutward, config.elbowInferenceMinimumLateralBias, spatialEvidence, side, profile, is, iw!, config);
     if (!inferred) return reject("elbow-inference-unreachable", flags);
     elbow = inferred.elbow; inferredPosition = vectorData(elbow); reachRatio = inferred.reachRatio;
     if (inferred.sideFlipPrevented) flags.push("elbow-side-flip-prevented");
     if (inferred.anatomyFlipApplied) flags.push("elbow-anatomy-flip");
+    if (inferred.palmBranchApplied) flags.push("elbow-hand-palm-branch");
+    if (inferred.faceBranchApplied) flags.push("elbow-face-clearance-branch");
+    if (inferred.collisionBranchApplied) flags.push("elbow-rig-collision-branch");
+    spatialDiagnostic = inferred.spatial;
     // Confidence chỉ suy giảm theo thời gian khi suy đoán đang phải dựa vào dữ liệu cũ. Ở chế
     // độ fully-observed, nghiệm tươi mỗi frame nên giữ nguyên confidence hình học.
     inferenceConfidence = fullyObservedInference
@@ -357,7 +596,8 @@ function solveSide(
     elbowInference: { source: elbowSource, confidence: elbowObserved ? 1 : inferenceConfidence, durationMs: inferenceDurationMs, inferredPosition,
       calibratedUpperLength: history.calibratedLength?.upper ?? null, calibratedLowerLength: history.calibratedLength?.lower ?? null,
       shoulderWristDistance: wrist ? shoulder.distanceTo(wrist) : null, reachRatio,
-      distanceFromPreviousElbow: history.previousObservedElbow ? elbow.distanceTo(vector(history.previousObservedElbow)) : null } };
+      distanceFromPreviousElbow: history.previousObservedElbow ? elbow.distanceTo(vector(history.previousObservedElbow)) : null },
+    spatial: spatialDiagnostic };
   // Phase 3B partial-arm: hướng khuỷu lệch trục vai–cổ tay, dùng làm mỏ neo phía gập cho frame sau. Chỉ
   // ghi khi mặt phẳng gập còn đủ xác định (tay chưa gần duỗi thẳng); dưới ngưỡng đó hướng này
   // là nhiễu và sẽ khóa nhầm phía. Giữ null để caller tiếp tục dùng mỏ neo cũ.
@@ -374,14 +614,19 @@ export function solveAnatomicalArmFrames(
   directionFilter?: (name: ControlledArmJoint, direction: Vector3Data) => Vector3Data,
   poleFilter?: (side: ArmSide, pole: Vector3Data) => Vector3Data,
   torsoFallback?: TorsoBasis,
+  evidence: Partial<Record<ArmSide, HandElbowBranchEvidence | ArmSpatialEvidence | null>> = {},
 ): AnatomicalArmSolveResult {
   const observedTorso = buildTorsoBasis(worldLandmarks, config.minimumPoseVisibility, config.minimumSegmentLength);
   const torso = observedTorso ?? torsoFallback ?? {
     right: profile.torsoReference.rightWorld, up: profile.torsoReference.upWorld, forward: profile.torsoReference.forwardWorld,
     worldRotation: profile.torsoReference.worldRotation,
   };
-  const left = solveSide("left", worldLandmarks, imageLandmarks, profile, torso, histories.left, nowMs, config, constraintsEnabled, directionFilter, poleFilter);
-  const right = solveSide("right", worldLandmarks, imageLandmarks, profile, torso, histories.right, nowMs, config, constraintsEnabled, directionFilter, poleFilter);
+  const normalizeEvidence = (value: HandElbowBranchEvidence | ArmSpatialEvidence | null | undefined): ArmSpatialEvidence | null => {
+    if (!value) return null;
+    return "hand" in value ? value : { hand: value, face: null, imageToWorldScale: null, imageAspectRatio: 1 };
+  };
+  const left = solveSide("left", worldLandmarks, imageLandmarks, profile, torso, histories.left, nowMs, config, constraintsEnabled, normalizeEvidence(evidence.left), directionFilter, poleFilter);
+  const right = solveSide("right", worldLandmarks, imageLandmarks, profile, torso, histories.right, nowMs, config, constraintsEnabled, normalizeEvidence(evidence.right), directionFilter, poleFilter);
   return { torso, torsoWasObserved: Boolean(observedTorso), sides: { left: left.result, right: right.result }, diagnostics: { left: left.diagnostic, right: right.diagnostic },
     visibilityStates: { left: left.visibilityState, right: right.visibilityState } };
 }

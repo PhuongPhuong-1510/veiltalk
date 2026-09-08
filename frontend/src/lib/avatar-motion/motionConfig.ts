@@ -1,3 +1,7 @@
+import { DEFAULT_GESTURE_CLASSIFIER_CONFIG, type GestureClassifierConfig } from "./gestureClassifier";
+import { DEFAULT_GESTURE_TEMPORAL_CONFIG, type GestureTemporalConfig } from "./gestureTemporal";
+import { DEFAULT_FINGER_POSE_TEMPORAL_CONFIG, type FingerPoseTemporalConfig } from "./fingerPoseTemporal";
+
 export interface OneEuroParameters { minCutoff: number; beta: number; derivativeCutoff: number }
 
 export interface AvatarMotionConfig {
@@ -86,11 +90,31 @@ export interface AvatarMotionConfig {
      * hình lâu, prior có thể trỏ vào phía TRONG thân người: nghiệm vẫn đúng toán học nhưng
      * cẳng tay xuyên qua ngực/bụng — đo được trên webcam khi giơ tay chào.
      *
-     * Khuỷu người thật luôn lệch ra phía ngoài thân (bên trái lệch trái, bên phải lệch phải).
-     * Đây là biên độ tối thiểu theo trục `torso.right` mà nghiệm phải nằm về đúng phía; dưới
-     * mức này coi như nghiệm đã lấn vào trong thân và pole bị lật ra ngoài.
+     * Phía ngoài thân là prior giải phẫu mềm, không phải luật tuyệt đối vì cử chỉ cross-body có
+     * thể đưa khuỷu hơi vào trong. Giá trị này là mốc bắt đầu tính outside penalty; nghiệm đi
+     * sâu hơn ngưỡng riêng mới nhận deep-inside penalty lớn.
      */
     elbowInferenceMinimumLateralBias: number;
+    /** Trọng số chấm hai nghiệm khuỷu giải tích; outside chỉ là prior mềm. */
+    elbowInferencePriorWeight: number;
+    elbowInferenceHistoryWeight: number;
+    /** Trọng số mềm wrist→middle-MCP khi chọn giữa hai nhánh khuỷu giải tích. */
+    elbowInferencePalmWeight: number;
+    /** Palm-basis dưới chất lượng hình học này không được phép tác động khuỷu. */
+    elbowInferencePalmMinimumQuality: number;
+    /** Hạ cấp elbow observed khi hướng cẳng tay ngược palm-forward mạnh hơn giá trị này. */
+    elbowObservedPalmRejectAlignment: number;
+    /** Số mẫu đều trên toàn đường tròn nghiệm IK; hằng số nhỏ nên thời gian mỗi frame vẫn bị chặn. */
+    elbowInferenceCandidateCount: number;
+    elbowInferenceFaceWeight: number;
+    elbowInferenceFaceSideWeight: number;
+    elbowInferenceHeadCollisionWeight: number;
+    elbowInferenceTorsoCollisionWeight: number;
+    /** Hạ cấp elbow Pose nếu forearm avatar xuyên sâu head capsule mà tay thật không chạm mặt. */
+    elbowObservedHeadCollisionRejectPenetration: number;
+    elbowInferenceOutsideWeight: number;
+    elbowInferenceDeepInsideThreshold: number;
+    elbowInferenceDeepInsideWeight: number;
     /**
      * Phase 3B partial-arm. Tuổi tối đa của prior pole dùng cho elbow inference. `inferElbow`
      * trước đây đọc `previousPole` không kiểm tra tuổi, trong khi tầng chọn pole của khung
@@ -100,6 +124,16 @@ export interface AvatarMotionConfig {
      */
     elbowInferencePoleMaxAgeMs: number;
   };
+  /** Phase 3B.4 — chọn nguồn wrist và debounce theo thời gian thật, không theo số render frame. */
+  wristEvidence: {
+    handEnterConfirmMs: number;
+    handMaxAgeMs: number;
+    poseHandMaxDeltaMs: number;
+    cadenceEwmaAlpha: number;
+    graceCadenceMultiplier: number;
+    minimumGraceMs: number;
+    maximumGraceMs: number;
+  };
   /** Mức 2B-5 POC webcam; mọi giá trị theo thời gian thực, không theo frame count. */
   handTwist: {
     missingHoldMs: number;
@@ -107,6 +141,15 @@ export interface AvatarMotionConfig {
     deadZoneRadians: number;
     targetFilterTimeConstantSeconds: number;
     correctionLimits: Record<"left" | "right", { minRadians: number; maxRadians: number }>;
+  };
+  /**
+   * Phase 3B.3 — cử chỉ ngón. Ngưỡng ban đầu đặt theo suy luận, chỉnh theo mô tả khi test webcam;
+   * chưa phải giá trị đã nghiệm thu.
+   */
+  gesture: {
+    classifier: GestureClassifierConfig;
+    temporal: GestureTemporalConfig;
+    pose: FingerPoseTemporalConfig;
   };
 }
 
@@ -154,7 +197,32 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     elbowInferenceMinimumBendQuality: 0.15,
     elbowInferenceUnboundedWhenFullyObserved: true,
     elbowInferenceMinimumLateralBias: 0.05,
+    elbowInferencePriorWeight: 0.2,
+    elbowInferenceHistoryWeight: 0.65,
+    elbowInferencePalmWeight: 1.1,
+    elbowInferencePalmMinimumQuality: 0.35,
+    elbowObservedPalmRejectAlignment: -0.35,
+    elbowInferenceCandidateCount: 24,
+    elbowInferenceFaceWeight: 4,
+    elbowInferenceFaceSideWeight: 0.75,
+    elbowInferenceHeadCollisionWeight: 8,
+    elbowInferenceTorsoCollisionWeight: 4,
+    elbowObservedHeadCollisionRejectPenetration: 0.12,
+    elbowInferenceOutsideWeight: 0.35,
+    elbowInferenceDeepInsideThreshold: 0.35,
+    elbowInferenceDeepInsideWeight: 3,
     elbowInferencePoleMaxAgeMs: 2_000,
+  },
+  wristEvidence: {
+    // Cần hai observation Hand liên tiếp ở pipeline 11–30 FPS trước khi Hand được quyền thay
+    // Pose wrist; trong lúc chờ, output cũ được giữ bởi temporal layer.
+    handEnterConfirmMs: 50,
+    handMaxAgeMs: 200,
+    poseHandMaxDeltaMs: 150,
+    cadenceEwmaAlpha: 0.2,
+    graceCadenceMultiplier: 1.5,
+    minimumGraceMs: 80,
+    maximumGraceMs: 220,
   },
   handTwist: {
     // Occlusion ngắn được debounce 80 ms; sau đó twist cũ phải rời hết trong khoảng 180 ms
@@ -168,5 +236,10 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
       left: { minRadians: -90 * Math.PI / 180, maxRadians: 90 * Math.PI / 180 },
       right: { minRadians: -90 * Math.PI / 180, maxRadians: 90 * Math.PI / 180 },
     },
+  },
+  gesture: {
+    classifier: DEFAULT_GESTURE_CLASSIFIER_CONFIG,
+    temporal: DEFAULT_GESTURE_TEMPORAL_CONFIG,
+    pose: DEFAULT_FINGER_POSE_TEMPORAL_CONFIG,
   },
 };

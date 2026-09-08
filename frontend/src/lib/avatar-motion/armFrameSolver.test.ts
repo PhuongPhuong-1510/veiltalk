@@ -337,6 +337,90 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(solved.elbowPosition.x).toBeGreaterThan(0);
   });
 
+  it("keeps a stable mildly cross-body bend instead of applying the outside prior as a hard rule", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.5, .4); world[15] = lm(.3, .9);
+    world[14] = lm(-.5, .4); world[16] = lm(-.3, .9);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    // Hướng chủ yếu theo depth nhưng hơi đi vào trong: continuity phải thắng outside prior
+    // mềm; chỉ nghiệm xuyên sâu mới bị đẩy ra như test phía trên.
+    const crossBody = { x: -.2, y: 0, z: .98 };
+    const history: ArmGeometryHistory = {
+      previousPole: crossBody, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+      calibratedLength: { upper: .5, lower: .5 }, inferenceStartedAtMs: 0, previousElbowDirection: crossBody,
+    };
+    const solved = solveAnatomicalArmFrames(world, image, profile, { left: history, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+    expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-anatomy-flip");
+    expect(solved.elbowDirection!.z).toBeGreaterThan(0);
+  });
+
+  it("uses a fresh Hand palm-forward direction to reject the upside-down inferred elbow branch", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.45, .433); world[15] = lm(.7, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    const upsideDownHistory: ArmGeometryHistory = {
+      previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+      calibratedLength: { upper: .5, lower: .5 }, inferenceStartedAtMs: 0, previousElbowDirection: { x: 0, y: 1, z: 0 },
+    };
+    const solved = solveAnatomicalArmFrames(
+      world, image, profile, { left: upsideDownHistory, right: emptyHistory() }, 100,
+      DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+      { left: { forwardImage: { x: 0, y: -1, z: 0 }, geometryQuality: 1 } },
+    ).sides.left!;
+
+    expect(solved.elbowSource).toBe("inferred-history");
+    expect(solved.elbowPosition.y).toBeLessThan(0);
+    expect(solved.diagnostic.confidenceFlags).toContain("elbow-hand-palm-branch");
+  });
+
+  it("downgrades a high-visibility elbow that makes the forearm point opposite a good Hand palm", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.45, .433); world[15] = lm(.7, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const history: ArmGeometryHistory = {
+      previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+      calibratedLength: { upper: .5, lower: .5 }, inferenceStartedAtMs: 0, previousElbowDirection: { x: 0, y: 1, z: 0 },
+    };
+    const solved = solveAnatomicalArmFrames(
+      world, imageFrame(world), profile, { left: history, right: emptyHistory() }, 100,
+      DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+      { left: { forwardImage: { x: 0, y: -1, z: 0 }, geometryQuality: 1 } },
+    ).sides.left!;
+
+    expect(solved.elbowSource).toBe("inferred-history");
+    expect(solved.elbowPosition.y).toBeLessThan(0);
+    expect(solved.diagnostic.confidenceFlags).toContain("observed-elbow-hand-conflict");
+    expect(solved.diagnostic.confidenceFlags).toContain("elbow-hand-palm-branch");
+  });
+
+  it("does not let a low-quality Hand palm override the established elbow branch", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.45, .433); world[15] = lm(.7, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    const history: ArmGeometryHistory = {
+      previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+      calibratedLength: { upper: .5, lower: .5 }, inferenceStartedAtMs: 0, previousElbowDirection: { x: 0, y: 1, z: 0 },
+    };
+    const solved = solveAnatomicalArmFrames(
+      world, image, profile, { left: history, right: emptyHistory() }, 100,
+      DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+      { left: { forwardImage: { x: 0, y: -1, z: 0 }, geometryQuality: 0.1 } },
+    ).sides.left!;
+
+    expect(solved.elbowPosition.y).toBeGreaterThan(0);
+    expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-hand-palm-branch");
+  });
+
   it("does not anchor the bend side from a degenerate near-straight frame", () => {
     // Mỏ neo phía gập chỉ được ghi khi mặt phẳng gập còn xác định. Tay gần duỗi thẳng thì
     // hướng lệch khuỷu là nhiễu — ghi nó vào sẽ khóa nhầm phía cho các frame sau.
@@ -489,6 +573,47 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(vector(expired.secondary.lower!).angleTo(transported)).toBeGreaterThan(1e-3);
     expect(vector(expired.secondary.lower!).dot(vector(expired.primary.lower!))).toBeCloseTo(0, 6);
   });
+  it("searches beyond the two opposite poles when the inferred forearm would cross a non-contact face region", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0); world[13] = lm(.45, .433); world[15] = lm(.7, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0); world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    const history: ArmGeometryHistory = { previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+      calibratedLength: { upper: .5, lower: .5 }, inferenceStartedAtMs: 0, previousElbowDirection: { x: 0, y: 1, z: 0 } };
+    const solved = solveAnatomicalArmFrames(world, image, profile, { left: history, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined, {
+      left: { hand: null, imageToWorldScale: 5, imageAspectRatio: 1, face: {
+        centerImageAspect: { x: .6, y: .44, z: 0 }, radiusX: .07, radiusY: .08, desiredSide: 1,
+        allowContact: false, observedMinimumEllipseDistance: 2, quality: 1,
+      } },
+    }).sides.left!;
+    expect(solved.diagnostic.spatial?.candidateCount).toBe(24);
+    expect(solved.diagnostic.spatial?.faceEvidenceUsed).toBe(true);
+    expect(solved.diagnostic.confidenceFlags).toContain("elbow-face-clearance-branch");
+    expect(solved.elbowDirection).not.toEqual({ x: 0, y: 1, z: 0 });
+  });
+
+  it("rejects a visible elbow whose mapped forearm penetrates the avatar head capsule", () => {
+    const collisionProfile = structuredClone(profile);
+    collisionProfile.collisionReference = {
+      head: { centerWorld: { x: .575, y: .2165, z: 0 }, radius: .12 },
+      torso: { startWorld: { x: 0, y: -1, z: 0 }, endWorld: { x: 0, y: -2, z: 0 }, radius: .1 },
+      arms: {
+        left: { shoulderWorld: { x: .2, y: 0, z: 0 }, upperLength: .5, lowerLength: .5, radius: .02 },
+        right: { shoulderWorld: { x: -.2, y: 0, z: 0 }, upperLength: .5, lowerLength: .5, radius: .02 },
+      },
+    };
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0); world[13] = lm(.45, .433); world[15] = lm(.7, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0); world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const history: ArmGeometryHistory = { previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true, previousDepthDegenerate: false, lastValidPoleAtMs: 0,
+      calibratedLength: { upper: .5, lower: .5 }, inferenceStartedAtMs: 0, previousElbowDirection: { x: 0, y: 1, z: 0 } };
+    const solved = solveAnatomicalArmFrames(world, imageFrame(world), collisionProfile, { left: history, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
+    expect(solved.elbowSource).toBe("inferred-history");
+    expect(solved.diagnostic.confidenceFlags).toContain("observed-elbow-head-collision");
+    expect(solved.diagnostic.confidenceFlags).toContain("elbow-rig-collision-branch");
+    expect(solved.diagnostic.spatial?.headCollisionPenalty).toBe(0);
+  });
+
   it("converts through a non-identity ancestor while preserving world directions", () => {
     const rotated = structuredClone(profile); const ancestor = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 3);
     const primary = new Vector3(1, 0, 0).applyQuaternion(ancestor); const secondary = new Vector3(0, 1, 0).applyQuaternion(ancestor); const binormal = new Vector3(0, 0, 1).applyQuaternion(ancestor);

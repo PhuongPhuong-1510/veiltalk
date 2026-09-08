@@ -12,6 +12,13 @@ describe("coordinate adapter", () => {
     expect(quaternionFromUnitVectors({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 })).toBeNull();
     expect(normalizeQuaternion({ x: Number.NaN, y: 0, z: 0, w: 1 })).toBeNull();
   });
+  it("uses a stable orthogonal axis for an exact 180-degree rotation", () => {
+    const rotation = quaternionFromUnitVectors({ x: 1, y: 0, z: 0 }, { x: -1, y: 0, z: 0 });
+    expect(rotation).not.toBeNull();
+    expect(Math.hypot(rotation!.x, rotation!.y, rotation!.z, rotation!.w)).toBeCloseTo(1);
+    expect(rotation!.w).toBeCloseTo(0);
+    expect(Math.abs(rotation!.x)).toBeLessThan(1e-8);
+  });
   it("extracts identity from a facial transform", () => {
     expect(quaternionFromRotationMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])).toEqual({ x: 0, y: -0, z: -0, w: 1 });
   });

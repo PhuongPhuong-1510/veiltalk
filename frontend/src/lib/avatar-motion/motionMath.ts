@@ -11,11 +11,22 @@ export const angularDeltaDegrees = (a: QuaternionData, b: QuaternionData): numbe
 export const vectorAngularDeltaDegrees = (a: Vector3Data, b: Vector3Data): number => vector(a).angleTo(vector(b)) * 180 / Math.PI;
 
 export function quaternionFromBasis(primary: Vector3Data, secondary: Vector3Data, binormal: Vector3Data): QuaternionData | null {
-  const x = vector(primary).normalize();
-  const y = vector(secondary).addScaledVector(x, -vector(secondary).dot(x)).normalize();
-  const z = new Vector3().crossVectors(x, y).normalize();
-  if (![x, y, z].every((value) => Number.isFinite(value.lengthSq()) && value.lengthSq() > 1e-8)) return null;
-  if (z.dot(vector(binormal)) < 0) { y.negate(); z.negate(); }
+  const rawPrimary = vector(primary), rawSecondary = vector(secondary), expectedBinormal = vector(binormal);
+  if (![rawPrimary, rawSecondary, expectedBinormal].every((value) => Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z))) return null;
+  if (rawPrimary.lengthSq() <= 1e-8 || rawSecondary.lengthSq() <= 1e-8 || expectedBinormal.lengthSq() <= 1e-8) return null;
+  const x = rawPrimary.normalize();
+  const y = rawSecondary.addScaledVector(x, -rawSecondary.dot(x));
+  if (y.lengthSq() <= 1e-8) return null;
+  y.normalize();
+  const z = new Vector3().crossVectors(x, y);
+  if (z.lengthSq() <= 1e-8) return null;
+  z.normalize();
+  if (z.dot(expectedBinormal) < 0) { y.negate(); z.negate(); }
+  // Gram-Schmidt + cross phải tạo một basis trực chuẩn thuận. Giữ check tường minh tại
+  // boundary để landmark hỏng không âm thầm tạo reflection (det = -1) rồi đi vào quaternion.
+  const determinant = x.dot(new Vector3().crossVectors(y, z));
+  const orthogonal = Math.abs(x.dot(y)) < 1e-5 && Math.abs(x.dot(z)) < 1e-5 && Math.abs(y.dot(z)) < 1e-5;
+  if (!orthogonal || !Number.isFinite(determinant) || Math.abs(determinant - 1) > 1e-5) return null;
   return quaternionData(new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(x, y, z)).normalize());
 }
 
