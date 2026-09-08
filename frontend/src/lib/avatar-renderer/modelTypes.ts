@@ -1,12 +1,13 @@
 import type { Object3D } from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
-import type { AvatarJointName } from "../avatar-motion/avatarPoseTypes";
+import type { AvatarJointName, AvatarPoseJointName } from "../avatar-motion/avatarPoseTypes";
 import type { VRM } from "@pixiv/three-vrm";
 import type { NormalizedAvatarRigProfile } from "../avatar-motion/normalizedRigProfile";
+import type { FingerRigProfile } from "../avatar-motion/fingerRig";
 
 export interface AvatarModelRigProfile {
   id: string;
-  boneNodes: Partial<Record<AvatarJointName | "head", string>>;
+  boneNodes: Partial<Record<AvatarJointName | "head" | "hips", string>>;
   expressionMorphTargets: Record<string, string>;
   forwardAxis: "+Z" | "-Z";
   restPose: "T-pose" | "A-pose" | "unknown";
@@ -40,12 +41,14 @@ export interface LoadedAvatarModel {
   gltf: GLTF;
   vrm: VRM | null;
   root: Object3D;
-  bones: Partial<Record<AvatarJointName | "head", Object3D>>;
-  restRotations: Partial<Record<AvatarJointName | "head", { x: number; y: number; z: number; w: number }>>;
+  bones: Partial<Record<AvatarPoseJointName | "head" | "hips", Object3D>>;
+  restRotations: Partial<Record<AvatarPoseJointName | "head" | "hips", { x: number; y: number; z: number; w: number }>>;
   morphTargets: Map<string, Array<{ influences: number[]; index: number }>>;
   expressionMap: Record<string, string>;
   capability: ModelCapabilityReport;
   rigProfile: NormalizedAvatarRigProfile | null;
+  /** Phase 3B.3: chuỗi xương ngón điều khiển được + flex axis của chính model này. null khi không phải VRM. */
+  fingerRig: FingerRigProfile | null;
   dispose(): void;
 }
 

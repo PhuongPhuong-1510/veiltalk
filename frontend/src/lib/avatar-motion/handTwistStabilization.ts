@@ -63,6 +63,8 @@ export interface HandTwistStabilizationInput {
   dtSeconds: number;
   reanchorNeutral: boolean;
   reanchorReason: string | null;
+  /** Có giá trị khi rig cung cấp mốc palm tuyệt đối; 0 nghĩa không hiệu chỉnh khi palm đã khớp model. */
+  neutralOverrideRadians?: number;
 }
 
 export interface HandTwistStabilizationResult {
@@ -108,7 +110,8 @@ export function updateHandTwistStabilization(
     !Number.isFinite(config.deadZoneRadians) || config.deadZoneRadians < 0 ||
     !Number.isFinite(config.targetFilterTimeConstantSeconds) || config.targetFilterTimeConstantSeconds < 0 ||
     !Number.isFinite(config.minCorrectionRadians) || !Number.isFinite(config.maxCorrectionRadians) ||
-    config.minCorrectionRadians > config.maxCorrectionRadians
+    config.minCorrectionRadians > config.maxCorrectionRadians ||
+    (input.neutralOverrideRadians !== undefined && !Number.isFinite(input.neutralOverrideRadians))
   ) return null;
 
   const rawWrapped = wrapAngle(input.rawWrappedTwistRadians);
@@ -121,7 +124,9 @@ export function updateHandTwistStabilization(
       ? state.neutralUnwrappedRadians + shortestAngleDelta(wrapAngle(state.neutralUnwrappedRadians), rawWrapped)
       : rawWrapped;
   const shouldAnchor = !state.neutralInitialized || input.reanchorNeutral;
-  const neutral = shouldAnchor ? rawUnwrapped : state.neutralUnwrappedRadians;
+  const neutral = input.neutralOverrideRadians !== undefined
+    ? input.neutralOverrideRadians
+    : shouldAnchor ? rawUnwrapped : state.neutralUnwrappedRadians;
   const corrected = rawUnwrapped - neutral;
   const deadZoneOutput = applyContinuousDeadZone(corrected, config.deadZoneRadians);
   const filterShouldReset = shouldAnchor || !state.filterInitialized;

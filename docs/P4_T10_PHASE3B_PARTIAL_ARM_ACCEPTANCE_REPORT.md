@@ -4,6 +4,13 @@
 > (shoulder / elbow / wrist)
 > Trạng thái: **IMPLEMENTED — MANUAL BROWSER GATE PASS (case A + case B)**
 
+> Cập nhật Phase 3B.4: báo cáo này vẫn là bằng chứng lịch sử cho bản partial-arm ban đầu,
+> nhưng hai giới hạn cuối tài liệu đã được thay thế một phần. Hand wrist substitution/source
+> hysteresis nay đã có production candidate tại
+> `docs/P4_T10_PHASE3B4_WRIST_RECONSTRUCTION_STATUS_AND_ACCEPTANCE.md`; hard rule “khuỷu luôn
+> lệch ra ngoài” đã đổi thành chấm hai nghiệm với outside-body prior mềm và deep-inside penalty.
+> Phase 3B.4 vẫn chờ nghiệm thu webcam nên chưa thay thế trạng thái PASS của hai case gốc.
+
 ## Vấn đề
 
 Tay avatar bị quằn hoặc bật về tư thế duỗi thẳng khi một phần cánh tay bị che hoặc ra ngoài
@@ -136,3 +143,12 @@ cd frontend && npm run build    → PASS, 1,820 modules
 - **Hiệu năng**: pipeline đo được ~14 FPS trên máy test, dưới mục tiêu 24 FPS (NFR). Không gây ra
   các lỗi trên nhưng làm mọi mốc thời gian mong manh (`invalidGraceMs = 80 ms` ≈ 1 frame). Cần xử
   lý riêng.
+
+## Addendum 2026-09-08 — corrective spatial retest pending
+
+Bảng manual phía trên là bằng chứng của baseline partial-arm cũ, không phủ hai ảnh lỗi mới: tay thật
+đứng cạnh mặt nhưng forearm avatar cắt mặt, và palm bị lật dù tắt Hand twist. Các mục Hand wrist
+substitution/source hysteresis đã được Phase 3B.4 triển khai; corrective mới còn thêm full-circle elbow
+search, Face clearance, VRM head/torso collision proxy và absolute rig-palm alignment. Trạng thái nghiệm
+thu mới nhất nằm tại `P4_T10_PHASE3B4_WRIST_RECONSTRUCTION_STATUS_AND_ACCEPTANCE.md`; không dùng bảng
+PASS cũ để tuyên bố W9/W10 đã đạt.

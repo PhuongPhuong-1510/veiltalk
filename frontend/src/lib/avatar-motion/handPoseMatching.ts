@@ -259,10 +259,24 @@ export function matchHandsToPose(input: MatchHandsToPoseInput): HandPoseMatchRes
   };
 
   const previous: Record<ArmSide, HandMatchPreviousState | undefined> = { left: input.previous.left, right: input.previous.right };
-  const assignment = bestAssignment(candidates, poseWrists, previous, config);
+  // Khi Pose wrist bị che, raw Pose point có thể mất hẳn đúng lúc Hand Landmarker vẫn thấy
+  // bàn tay. Cho phép continuity anchor gần nhất thay Pose image wrist trong một cửa sổ ngắn;
+  // không dùng Hand world vì origin của hai pipeline khác nhau. Lần đầu chưa từng match vẫn
+  // phải từ chối — handedness label một mình không đủ để trao quyền điều khiển cả cánh tay.
+  const continuityUsable = (side: ArmSide): boolean => Boolean(
+    previous[side]?.wristPosition &&
+    previous[side]?.lastMatchedAtMs !== null &&
+    input.handSampledAtMs !== null &&
+    input.handSampledAtMs! - previous[side]!.lastMatchedAtMs! <= config.continuityTimeoutMs,
+  );
+  const matchingTargets: Record<ArmSide, HandMatchImagePoint | null> = {
+    left: poseWrists.left ?? (continuityUsable("left") ? previous.left!.wristPosition : null),
+    right: poseWrists.right ?? (continuityUsable("right") ? previous.right!.wristPosition : null),
+  };
+  const assignment = bestAssignment(candidates, matchingTargets, previous, config);
 
   const buildSideResult = (side: ArmSide): HandSideMatchResult => {
-    if (poseWrists[side] === null) return rejectedResult(side, "non-finite");
+    if (matchingTargets[side] === null) return rejectedResult(side, "non-finite");
     const chosen = assignment[side];
     if (!chosen) return rejectedResult(side, "wrist-distance-too-large");
     const candidate = candidates.find((c) => c.arrayIndex === chosen.arrayIndex)!;
@@ -292,7 +306,7 @@ export function matchHandsToPose(input: MatchHandsToPoseInput): HandPoseMatchRes
 
     return {
       side, matched: true, candidateArrayIndex: chosen.arrayIndex, candidateSourceIndex: candidate.sourceIndex,
-      distance: distance(candidate.wristPoint, poseWrists[side]!),
+      distance: distance(candidate.wristPoint, matchingTargets[side]!),
       handedness: candidate.handedness, handednessScore: candidate.candidate.handednessScore,
       rejectionReason: null, continuity, matchChanged,
     };

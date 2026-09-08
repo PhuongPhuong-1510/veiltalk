@@ -84,6 +84,13 @@ describe("Hand twist stabilization", () => {
     expect(result.correctedTwistRadians).toBeCloseTo(0);
   });
 
+  it("uses zero as the absolute rig neutral instead of erasing the first observed angle", () => {
+    const result = updateHandTwistStabilization(INITIAL_HAND_TWIST_STABILIZATION_STATE, input(40 * DEG, 0, { neutralOverrideRadians: 0 }), config)!;
+    expect(result.neutralTwistRadians).toBe(0);
+    expect(result.correctedTwistRadians).toBeCloseTo(40 * DEG);
+    expect(result.clampedTwistRadians).toBeCloseTo(37 * DEG);
+  });
+
   it("keeps calibration neutral across tracking reset and unwraps the new wrapped sample near it", () => {
     const anchored = updateHandTwistStabilization(INITIAL_HAND_TWIST_STABILIZATION_STATE, input(170 * DEG, 0), config)!;
     const restarted = resetHandTwistStabilizationKeepingNeutral(anchored.state);

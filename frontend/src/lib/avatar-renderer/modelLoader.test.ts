@@ -37,14 +37,18 @@ describe("AvatarModelLoader", () => {
     expect(geometrySpy).toHaveBeenCalledOnce(); expect(materialSpy).toHaveBeenCalledOnce();
   });
   it("generates an immutable plain-data normalized arm profile", () => {
-    const root = new Object3D(); const chest = new Object3D(); const neck = new Object3D(); const leftShoulder = new Object3D(); const leftUpperArm = new Object3D(); const leftLowerArm = new Object3D(); const leftHand = new Object3D();
+    const root = new Object3D(); const chest = new Object3D(); const neck = new Object3D(); const head = new Object3D(); const hips = new Object3D(); const leftShoulder = new Object3D(); const leftUpperArm = new Object3D(); const leftLowerArm = new Object3D(); const leftHand = new Object3D();
     const rightShoulder = new Object3D(); const rightUpperArm = new Object3D(); const rightLowerArm = new Object3D(); const rightHand = new Object3D();
     leftLowerArm.position.x = 1; leftHand.position.x = 1; rightLowerArm.position.x = -1; rightHand.position.x = -1;
-    leftShoulder.position.x = 0.2; rightShoulder.position.x = -0.2; neck.position.y = 0.3;
-    root.add(chest, leftShoulder, rightShoulder); chest.add(neck); leftShoulder.add(leftUpperArm); leftUpperArm.add(leftLowerArm); leftLowerArm.add(leftHand); rightShoulder.add(rightUpperArm); rightUpperArm.add(rightLowerArm); rightLowerArm.add(rightHand); root.updateMatrixWorld(true);
-    const profile = createRigProfile(7, "avatar#7", { chest, neck, leftShoulder, leftUpperArm, leftLowerArm, leftHand, rightShoulder, rightUpperArm, rightLowerArm, rightHand });
+    leftShoulder.position.x = 0.2; rightShoulder.position.x = -0.2; neck.position.y = 0.3; head.position.y = 0.25; hips.position.y = -0.6;
+    root.add(chest, leftShoulder, rightShoulder); chest.add(neck, hips); neck.add(head); leftShoulder.add(leftUpperArm); leftUpperArm.add(leftLowerArm); leftLowerArm.add(leftHand); rightShoulder.add(rightUpperArm); rightUpperArm.add(rightLowerArm); rightLowerArm.add(rightHand); root.updateMatrixWorld(true);
+    const profile = createRigProfile(7, "avatar#7", { chest, neck, head, hips, leftShoulder, leftUpperArm, leftLowerArm, leftHand, rightShoulder, rightUpperArm, rightLowerArm, rightHand });
     expect(profile?.modelGeneration).toBe(7); expect(profile?.joints.leftLowerArm).toMatchObject({ parentJoint: "leftUpperArm", childJoint: "leftHand", controlledParentJoint: "leftUpperArm", restLocalPosition: { x: 1, y: 0, z: 0 }, restWorldPosition: { x: 1.2, y: 0, z: 0 } });
     expect(Object.isFrozen(profile)).toBe(true); expect(Object.isFrozen(profile?.joints.leftUpperArm.restWorldDirection)).toBe(true); expect(Object.isFrozen(profile?.joints.leftUpperArm.restLocalPosition)).toBe(true); expect(Object.isFrozen(profile?.joints.leftUpperArm.restWorldPosition)).toBe(true); expect(JSON.stringify(profile)).not.toMatch(/Object3D|uuid|children/);
     expect(profile?.torsoReference.forwardWorld).toEqual({ x: 0, y: 0, z: 1 }); expect(Object.isFrozen(profile?.joints.leftUpperArm.anatomicalRestBasis)).toBe(true);
+    expect(profile?.collisionReference?.arms.left.upperLength).toBeCloseTo(1);
+    expect(profile?.collisionReference?.arms.left.lowerLength).toBeCloseTo(1);
+    expect(profile?.collisionReference?.head.radius).toBeGreaterThan(0);
+    expect(Object.isFrozen(profile?.collisionReference?.head)).toBe(true);
   });
 });

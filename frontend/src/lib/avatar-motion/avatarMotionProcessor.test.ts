@@ -115,6 +115,22 @@ describe("AvatarMotionProcessor", () => {
       expect(Object.values(twisted.jointRotations.leftLowerArm!)).toSatisfy((values: number[]) => values.every(Number.isFinite));
     });
 
+    it("uses the VRM rest palm as absolute zero on the first trusted Hand sample", () => {
+      const processor = new AvatarMotionProcessor({ filtered: false, constraints: false, handTwistEnabled: true, now: () => 120 });
+      processor.setFingerRig({
+        version: 1, modelGeneration: 1,
+        left: { side: "left", chains: [], controllableSegmentCount: 0, restPalmNormalWorld: { x: 0, y: 0, z: 1 } },
+        right: { side: "right", chains: [], controllableSegmentCount: 0, restPalmNormalWorld: { x: 0, y: 0, z: -1 } },
+      });
+      processor.setRigProfile(rigProfile);
+      const input = frame(); input.rawHands = [handCandidateWithMiddleDepth(0, LEFT_WRIST_IMAGE, "left", 100, .08)];
+      processor.process(input);
+      const diagnostic = processor.getLastDiagnostics()!.handTwist.left;
+      expect(diagnostic.alignmentMode).toBe("rig-absolute");
+      expect(diagnostic.neutralTwistRadians).toBe(0);
+      expect(diagnostic.correctedTwistRadians).not.toBe(0);
+    });
+
     it("2B-5C exposes the complete scalar diagnostic chain independently for left and right", () => {
       let now = 120;
       const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: true, now: () => now });
@@ -1076,6 +1092,95 @@ describe("AvatarMotionProcessor", () => {
 
     now = 570; processor.process(sampledFrame(570));
     expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" });
+  });
+  it("reconstructs a missing Pose wrist from a matched Hand wrist when elbow remains observed", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    for (const timestamp of [100, 160, 220]) {
+      now = timestamp;
+      const observed = sampledFrame(timestamp);
+      observed.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", timestamp)];
+      processor.process(observed);
+    }
+
+    now = 280;
+    const wristLost = sampledFrame(280);
+    wristLost.pose.landmarks![15].visibility = 0;
+    wristLost.pose.landmarks![15].x = .95; // Pose outlier không được thắng continuity Hand.
+    wristLost.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", 280)];
+    const rawBefore = structuredClone(wristLost);
+    const packet = processor.process(wristLost);
+    expect(wristLost).toEqual(rawBefore);
+    expect(packet).not.toHaveProperty("wristEvidence");
+    const diagnostic = processor.getLastDiagnostics()!.arms.left;
+    expect(diagnostic.wristEvidence).toMatchObject({ source: "hand-image", reconstructionConfidence: 1, reconstructionRejectionReason: null });
+    expect(diagnostic.observation.lowerDirectionValid).toBe(true);
+    expect(diagnostic.segmentLossState.lower).toBe("recovering");
+  });
+
+  it("reconstructs Hand wrist first then infers elbow when both Pose wrist and elbow are hidden", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    for (const timestamp of [100, 160, 220]) {
+      now = timestamp;
+      const observed = sampledFrame(timestamp);
+      observed.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", timestamp)];
+      processor.process(observed);
+    }
+
+    now = 280;
+    const hidden = sampledFrame(280);
+    hidden.pose.landmarks![13].visibility = 0;
+    hidden.pose.landmarks![15].visibility = 0;
+    hidden.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", 280)];
+    processor.process(hidden);
+    const diagnostic = processor.getLastDiagnostics()!.arms.left;
+    expect(diagnostic.wristEvidence?.source).toBe("hand-image");
+    expect(diagnostic.wristEvidence?.reconstructionConfidence).toBe(1);
+    expect(diagnostic.elbowInference.source).toBe("inferred-history");
+    expect(diagnostic.observation.lowerDirectionValid).toBe(true);
+  });
+
+  it("uses matched Hand palm-forward evidence even with Hand twist disabled to reject an upside-down observed elbow", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    const input = sampledFrame(100);
+    setPoseLandmark(input, 11, -.2, .3);
+    setPoseLandmark(input, 13, -.45, -.133);
+    setPoseLandmark(input, 15, -.7, .3);
+    const wrist = input.pose.landmarks![15];
+    input.rawHands = [handCandidate(0, { x: wrist.x, y: wrist.y }, "left", 100)];
+
+    processor.process(input);
+    const diagnostic = processor.getLastDiagnostics()!.arms.left;
+    expect(diagnostic.elbowInference.source).toBe("inferred-rest-prior");
+    expect(diagnostic.confidenceFlags).toContain("observed-elbow-hand-conflict");
+    expect(diagnostic.confidenceFlags).toContain("elbow-hand-palm-branch");
+    expect(diagnostic.elbowInference.inferredPosition!.y).toBeLessThan(0);
+  });
+
+  it("does not let an expired cached Hand palm downgrade a later observed elbow", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    const initial = sampledFrame(100);
+    initial.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", 100)];
+    processor.process(initial);
+
+    now = 400;
+    const later = sampledFrame(400);
+    setPoseLandmark(later, 11, -.2, .3);
+    setPoseLandmark(later, 13, -.45, -.133);
+    setPoseLandmark(later, 15, -.7, .3);
+    later.rawHands = [];
+    processor.process(later);
+
+    const diagnostic = processor.getLastDiagnostics()!.arms.left;
+    expect(diagnostic.elbowInference.source).toBe("observed");
+    expect(diagnostic.confidenceFlags).not.toContain("observed-elbow-hand-conflict");
   });
   it("calibrates only observed segments then uses inferred elbow as a temporary fallback", () => {
     let now = 100; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(rigProfile);

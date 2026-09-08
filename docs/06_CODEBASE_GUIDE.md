@@ -1,6 +1,6 @@
 # 06 — Bản đồ Codebase
 
-> **Trạng thái: đang thực hiện Phase 4 — P4-T01 đến P4-T09 đã hoàn thành; P4-T10 Phase 3A đã implement, Phase 3B Hand forearm twist đang làm và chưa qua webcam acceptance.**
+> **Trạng thái: đang thực hiện Phase 4 — P4-T01 đến P4-T09 đã hoàn thành; P4-T10 vẫn IN PROGRESS. Phase 3B Hand forearm twist/partial-arm đã có acceptance riêng, còn Phase 3B.3 gesture ngón năm nhãn với directional swing thumb v3 đang làm; corrective spatial/absolute-palm của Phase 3B.4 đã code và vẫn chờ webcam acceptance.**
 > File này được cập nhật sau mỗi phase. Mục đích: phiên làm việc sau đọc file này
 > là biết ngay code nằm ở đâu, không phải quét cả repo.
 >
@@ -514,32 +514,48 @@ P3-T01 (WebSocket server với JWT auth) hoàn thành: `npm test` — 11/11 test
 | `frontend/src/lib/tracking/` | P4-T09: camera lifecycle, MediaPipe runtime dùng chung fileset, raw tracking contract local-only, mapper, cadence, metrics và test |
 | `frontend/src/components/dev/TrackingDevHarness.tsx` | Harness webcam thật tại `/dev/tracking`; overlay landmark local-only, chọn 720p/480p, CPU/GPU, từng task/cả ba, state ratio/loss counter; lazy-load chỉ DEV, không capture/upload |
 | `frontend/public/mediapipe/` | WASM 0.10.35 và ba model Face/Hand/Pose self-host cùng origin; provenance/checksum ở Deployment Guide mục 5.5 |
-| `frontend/src/lib/avatar-motion/avatarPoseTypes.ts` | P4-T10: contract `AvatarPosePacketV1`; `jointRotations` là quaternion delta normalized-humanoid parent-local, rest-relative, không chứa raw landmark |
-| `frontend/src/lib/avatar-motion/normalizedRigProfile.ts` | P4-T10 Phase 3A: profile plain-data có torso rest reference và anatomical rest basis local/world (primary, secondary, binormal); validate và deep-freeze |
+| `frontend/src/lib/avatar-motion/avatarPoseTypes.ts` | P4-T10: contract `AvatarPosePacketV1`; `jointRotations` là quaternion delta normalized-humanoid parent-local, rest-relative, không chứa raw landmark. Phase 3B.3 thêm `AvatarFingerJointName` (30 xương ngón) **tách riêng** khỏi `AvatarJointName` để rig profile/solver/diagnostics của Phase 3A/3B không đổi kiểu; khoá packet dùng union `AvatarPoseJointName`. Ngón cái theo chuẩn VRM là `Metacarpal`/`Proximal`/`Distal`, không có `Intermediate` |
+| `frontend/src/lib/avatar-motion/normalizedRigProfile.ts` | P4-T10: profile plain-data có torso/anatomical rest basis; corrective 3B.4 thêm head sphere, torso/arm capsule và bone length/radius optional của đúng VRM; validate và deep-freeze |
 | `frontend/src/lib/avatar-motion/jointSolver.ts` | P4-T10 Phase 2: solver parent-local/rest-relative theo thứ tự upper arm → lower arm mỗi bên; child dùng target world của parent trong cùng pose, không đọc animated renderer state |
-| `frontend/src/lib/avatar-motion/avatarMotionProcessor.ts` | P4-T10 orchestration: Pose filter/solve/constraint/temporal, Hand matching/palm/twist, tracking epoch theo side và packet output; Hand chỉ được sửa lowerArm khi feature flag bật và observation hợp lệ. Phase 3B partial arm: upper/lower nghiệm thu độc lập (`chainGeometryValid` chỉ còn hỏi upper, `lowerGeometryValid` riêng) nên mất cổ tay không giết cánh tay trên; hand twist gate theo lower |
-| `frontend/src/lib/avatar-motion/torsoBasis.ts` / `armFrameSolver.ts` | Phase 3A: per-segment direction validity tách khỏi pole/twist confidence; parallel-transport secondary; two-bone inferred elbow từ Pose shoulder/wrist với calibrated human lengths, reachability/confidence/timeout gate. Phase 3B partial arm: `inferElbow()` khóa phía gập bằng mỏ neo `previousElbowDirection`, ràng buộc giải phẫu theo `torso.right` (khuỷu luôn lệch ra ngoài thân, thắng mỏ neo lịch sử), prior pole có hạn tuổi và miễn timeout khi nghiệm tươi hoàn toàn |
+| `frontend/src/lib/avatar-motion/avatarMotionProcessor.ts` | P4-T10 orchestration: Pose filter/solve/constraint/temporal, Hand matching/palm/twist, tracking epoch theo side và packet output. Phase 3B.4 tạo bản sao landmark chỉ khi Hand wrist 2D được reconstruct 3D thành công; raw frame gốc giữ nguyên; đổi nguồn Pose↔Hand kích hoạt reacquire blend. Palm-forward image-space đã match được cache ngắn hạn và cấp riêng cho elbow branch solver, kể cả khi Hand twist tắt. Phase 3B partial arm vẫn nghiệm thu upper/lower độc lập; hand twist gate theo lower |
+| `frontend/src/lib/avatar-motion/torsoBasis.ts` / `armFrameSolver.ts` | Phase 3A: per-segment direction validity, parallel transport và two-bone inferred elbow. Corrective 3B.4 quét 24 điểm trên toàn vòng nghiệm và chấm prior/history/Hand palm-forward/face-clearance/head-torso collision; elbow Pose ngược palm hoặc xuyên head bị hạ cấp. Cross-body có chủ ý và face contact vẫn được phép qua soft evidence |
 | `frontend/src/lib/avatar-motion/armTemporalState.ts` | Phase 3A: temporal state riêng upper/lower trong shared arm state, phát rotation parent-local cho hold → return-to-identity → recovery. Phase 3B partial arm: giữ `previousElbowDirection` qua các frame làm mỏ neo phía gập |
-| `frontend/src/lib/avatar-motion/swingTwist.ts` / `motionMath.ts` | Phase 3A foundation: basis/quaternion math và swing–twist round-trip; production clamp để Phase 3C |
+| `frontend/src/lib/avatar-motion/swingTwist.ts` / `motionMath.ts` | Phase 3A foundation: basis/quaternion math và swing–twist round-trip; Phase 3B.4 reject basis non-finite/zero/collinear và kiểm tra trực chuẩn thuận (`det≈+1`) trước khi tạo quaternion |
 | `frontend/src/lib/avatar-motion/avatarMotionDiagnostics.ts` | Diagnostic snapshot internal/DEV-only, tách khỏi `AvatarPosePacketV1`; chứa arm geometry/stability và toàn bộ chuỗi Hand twist theo side |
 | `frontend/src/lib/avatar-motion/coordinateAdapter.ts` | P4-T10: production conversion giữ nguyên `(x,y,z) → (x,-y,-z)`, normalize vector/quaternion và chống zero/NaN |
 | `frontend/src/lib/avatar-motion/oneEuroFilter.ts` / `jointConstraints.ts` / `trackingLoss.ts` | Lọc direction và safety radial clamp; semantic anatomical calibration để Phase 3C |
-| `frontend/src/lib/avatar-motion/handPoseMatching.ts` / `handPalmBasis.ts` / `handMotionDiagnostics.ts` | Phase 3B input: ghép Hand candidate với wrist Pose, dựng image/world palm basis và xuất diagnostic không tham gia motion |
+| `frontend/src/lib/avatar-motion/handPoseMatching.ts` / `handPalmBasis.ts` / `handMotionDiagnostics.ts` | Phase 3B input: ghép Hand candidate với wrist Pose. Phase 3B.4 cho phép recent image-space continuity làm anchor khi Pose wrist invalid; continuity hết hạn hoặc chưa từng match vẫn reject. Không trộn Pose world và Hand world |
+| `frontend/src/lib/avatar-motion/wristEvidence.ts` | Phase 3B.4: state chọn `pose-world`/`hand-image`/`held`/`unavailable`, xác nhận Hand chỉ trên detector sample mới, freshness/timestamp gate, Pose↔Hand reacquire signal và EWMA cadence để tính grace 80–220ms |
+| `frontend/src/lib/avatar-motion/wristReconstruction.ts` | Phase 3B.4: scale image→world cục bộ từ hai vai; nâng Hand wrist 2D lên sphere chiều dài xương, chọn dấu depth theo hướng frame trước, reject khi thiếu prior hoặc vượt reach slack |
+| `frontend/src/lib/avatar-motion/faceArmSpatialEvidence.ts` | Corrective Phase 3B.4: ellipse mặt aspect-corrected, side của wrist và contact gate từ Face+Hand landmarks; local-only, không vào packet |
 | `frontend/src/lib/avatar-motion/handForearmTwist.ts` / `handTwistConfidence.ts` | Phase 3B geometry/trust: đo signed axial twist quanh forearm và quyết định trusted/influence từ quality, projection, age và handedness |
 | `frontend/src/lib/avatar-motion/handTwistStabilization.ts` / `handTwistTemporal.ts` | Phase 3B state riêng từng side: unwrap, neutral, dead zone, filter, clamp, acquire/hold/fade/reset |
-| `frontend/src/lib/avatar-motion/handTwistRig.ts` | Phase 3B coordinate/rig boundary: đổi toàn bộ world palm basis sang motion frame trước solver và ghép `poseLowerDelta × handTwistDelta` quanh primaryLocal |
+| `frontend/src/lib/avatar-motion/handTwistRig.ts` | Phase 3B coordinate/rig boundary: đổi world palm basis sang motion frame, so observed palm với rest palm của VRM để lấy absolute axial twist (fallback session-relative), rồi ghép `poseLowerDelta × handTwistDelta` quanh primaryLocal |
 | `frontend/src/lib/avatar-motion/handCalibrationAnalysis.ts` / `handTwistRootCauseValidation.test.ts` | Phase 3B calibration snapshot, synthetic geometry và rig-only regression cho dấu, ±π, primary direction, wrist inheritance |
-| `frontend/src/lib/avatar-renderer/modelLoader.ts` | P4-T10 Phase 2: load GLTF/VRM, `rotateVRM0`, lấy normalized humanoid nodes, capture rig profile theo từng model generation, chống stale load và dispose tài nguyên |
+| `frontend/src/lib/avatar-motion/gestureFixture.ts` / `gestureFixture.test.ts` | P4-T10 Phase 3B.3 Việc 0: collector landmark tay local-only, dedupe theo detector sample, coverage calibration/holdout và negative pose. Hiện là công cụ chẩn đoán tuỳ chọn, không phải cổng chặn trước khi code |
+| `frontend/src/lib/avatar-motion/fingerRig.ts` / `fingerRig.test.ts` | P4-T10 Phase 3B.3: capability chuỗi ngón, flex axis và directional thumb swing theo chính model. Corrective 3B.4 còn xuất rest palm normal để Hand twist căn tuyệt đối; model thiếu hình học hợp lệ dùng fallback tương đối |
+| `frontend/src/lib/avatar-motion/fingerGestureToggle.test.ts` | Phase 3B.3 Bước 0: bất biến công tắc — mặc định tắt, tắt/đổi model phát identity đúng một lần rồi im lặng, bật/tắt không đổi khoá xương arm |
+| `frontend/src/lib/avatar-motion/fingerFeatures.ts` | Phase 3B.3 Bước 1: curl từng ngón từ world landmark — kết hợp góc MCP/PIP/DIP (trọng số PIP cao nhất) với chord ratio; bất biến uniform scale; landmark hỏng trả `valid:false` thay vì curl 0 |
+| `frontend/src/lib/avatar-motion/gestureClassifier.ts` | Phase 3B.3 Bước 1: rule-based, ngưỡng **riêng từng ngón**; điểm lớp `fist` lấy **min** các ngón (trung bình sẽ để `point` lọt thành `fist`); tách `unknown-observed` (nhả nhãn) khỏi `unknown-low-quality` (giữ tạm) |
+| `frontend/src/lib/avatar-motion/gestureTemporal.ts` | Phase 3B.3 Bước 1: state machine đếm theo **thời gian thực**; sample trùng timestamp không đẩy nhanh promotion (bất biến FPS); `unknown-observed` bắt buộc nhả nhãn cũ |
+| `frontend/src/lib/avatar-motion/fingerPosePresets.ts` / `fingerPosePresets.test.ts` | Phase 3B.3: preset pure data **semantic flexion** + `direction?: "up" | "down"` cho thumb, không mang quaternion/góc chung hay phụ thuộc model/nguồn nhãn. `FINGER_POSE_PRESET_VERSION = 3` bảo vệ network P4-T15; bảng có năm nhãn cốt lõi gồm `thumbsDown`. Test chốt quan hệ flexion để chỉnh preset không âm thầm phá dáng khác |
+| `frontend/src/lib/avatar-motion/fingerPosePlanner.ts` | Phase 3B.3: semantic flexion → quaternion quanh flex axis theo model; với `direction`, lấy `directionalSwingLocal` per-rig rồi chỉ áp tại `ThumbMetacarpal` theo `swing × flexion`. Chỉ ghi joint trong chuỗi điều khiển được, giữ contract renderer `restLocal × deltaLocal`, không đụng `leftHand`/`rightHand` |
+| `frontend/src/lib/avatar-motion/fingerPoseTemporal.ts` | Phase 3B.3 Bước 1: owner **duy nhất** của blend ngón (renderer đã bỏ smoothing cho finger joint); slerp theo elapsed time có hemisphere continuity; joint hết target được blend về identity rồi nhả quyền sở hữu |
+| `frontend/src/lib/avatar-motion/fingerGesturePipeline.test.ts` | Phase 3B.3 Bước 1: end-to-end qua processor — nắm ra `fist`, duỗi thì nhả, sample trùng không promote sớm, chỉ ghi joint trong chuỗi, tắt thì phát identity rồi im lặng |
+| `frontend/src/lib/avatar-renderer/modelLoader.ts` | P4-T10: load GLTF/VRM, `rotateVRM0`, lấy normalized humanoid nodes (gồm head/hips), capture rest arm + collision reference theo model generation, chống stale load và dispose tài nguyên |
 | `frontend/src/lib/avatar-renderer/avatarRenderer.ts` | P4-T10 Phase 2: tái tạo absolute local target bằng `restLocal × deltaLocal`, slerp absolute local nếu bật smoothing, gán normalized bone quaternion; giữ nguyên position/scale |
 | `frontend/src/lib/avatar-renderer/animationFrameLoop.ts` / `rendererMetrics.ts` / `renderSmoothing.ts` | P4-T10: một rAF loop có duplicate guard, metrics FPS/p95/resource và smoothing frame-rate-independent |
 | `frontend/src/lib/avatar-renderer/avatarDiagnostics.ts` | P4-T10 Phase 1/2 DEV-only: rest-basis, angular error, helpers, nine frozen presets và phép đo world direction từ rig profile |
 | `frontend/src/components/avatar/AvatarCanvas.tsx` | React adapter sở hữu canvas, `ResizeObserver` và renderer lifecycle; không chứa IK math |
-| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | Harness local-only tại `/dev/avatar-renderer`; freeze webcam, axes/vector helpers và toggle filter/constraint/hand-twist/smoothing; coordinate diagnostic cố định theo convention production, không còn preset/replay/manual-neutral/Hand Calibration hoặc bảng H1/H3/H6 legacy; route bị loại khỏi production build |
+| `frontend/src/components/dev/AvatarRendererDevHarness.tsx` | Harness local-only tại `/dev/avatar-renderer`; chọn/reload một trong 5 VRM local, giữ model cũ tới khi model mới swap thành công và chỉ commit request mới nhất; đổi model reset rig/calibration/motion state; capability blocker và tên required bone bị thiếu được báo rõ; freeze webcam, axes/vector helpers, hand-twist/smoothing và collector fixture 3B.3; coordinate diagnostic cố định theo convention production, không upload landmark; route bị loại khỏi production build |
+| `frontend/src/components/dev/devAvatarModels.ts` | Catalog DEV duy nhất cho 5 VRM local và model mặc định của `/dev/avatar-renderer`; tách biệt hoàn toàn với catalog avatar production |
 | `docs/P4_T10_PHASE1_DIAGNOSTICS_REPORT.md` | Báo cáo nghiệm thu forensic Phase 1: model/rest basis, bằng chứng H1–H3, calibration webcam H6, deterministic replay, privacy và đề xuất Phase 2 chưa triển khai |
 | `docs/P4_T10_PHASE2_ACCEPTANCE_REPORT.md` | Báo cáo review/nghiệm thu Phase 2: H1 fixed, H2 còn mở, deterministic real-model evidence, automated/browser/privacy/lifecycle evidence và điều kiện chuyển phase |
 | `docs/P4_T10_PHASE3A_ACCEPTANCE_REPORT.md` | Phase 3A arm-frame evidence; automated gate và trạng thái manual browser pending |
 | `docs/P4_T10_PHASE3B_HAND_TWIST_STATUS_AND_PLAN.md` | Nguồn trạng thái/kế hoạch Phase 3B: phạm vi Hand forearm twist, file map, lỗi chiều xoay webcam còn mở và acceptance gate đa avatar |
 | `docs/P4_T10_PHASE3B_PARTIAL_ARM_ACCEPTANCE_REPORT.md` | Phase 3B partial arm tracking (bổ sung): root cause đo được cho mất cổ tay / mất khuỷu, ràng buộc giải phẫu chống xuyên thân, config mới và manual webcam gate |
+| `docs/P4_T10_PHASE3B3_HAND_GESTURE_PLAN.md` | Kế hoạch v5 Phase 3B.3: năm semantic gesture, observability, fixture calibration/holdout, finger rig capability, directional swing thumb per-rig và network boundary |
+| `docs/P4_T10_PHASE3B4_WRIST_RECONSTRUCTION_STATUS_AND_ACCEPTANCE.md` | Phase 3B.4: contract wrist evidence/reconstruction, candidate scoring, automated evidence, giới hạn và ma trận nghiệm thu webcam |
 | `frontend/src/index.css` | Kokoro design system: Tailwind v4 theme, semantic CSS variables light/dark, typography, radius, shadow và reduced-motion baseline |
 | `frontend/tsconfig.app.json` | Cấu hình TypeScript và alias `@/*` → `src/*` |
 | `frontend/vite.config.ts` | Vite React plugin và alias `@` → `src` |
@@ -781,10 +797,14 @@ khác với `lost`; One Euro Filter không update bằng cached sample.
 
 P4-T10 dùng `GLTFLoader + VRMLoaderPlugin`; VRM dùng humanoid/expression API chuẩn, còn
 GLB/glTF thường chỉ nhận mapping từ `AvatarModelRigProfile` đã kiểm chứng, không suy đoán
-node name. Thư mục local `frontend/public/models/avatars/` hiện có ba model thử nghiệm:
-`reference-avatar.vrm`, `reference-avatar-1.vrm` và `reference-avatar-2.vrm`. Loader capture
-normalized humanoid rig profile mới theo mỗi model generation; motion state cũ không được dùng
-lại sau reload. Có file không đồng nghĩa model đã qua acceptance: từng model phải có humanoid
+node name. Thư mục local `frontend/public/models/avatars/` hiện có năm model thử nghiệm:
+`reference-avatar.vrm`, `reference-avatar-1.vrm`, `reference-avatar-2.vrm`,
+`reference-avatar-3.vrm` và `reference-avatar-4.vrm`. Dropdown `Avatar model` tại
+`/dev/avatar-renderer` đọc catalog DEV tĩnh này; chọn model sẽ tải ngay, còn Reload tải lại đúng
+model đang chọn. Loader giữ model cũ cho tới khi swap thành công, loại kết quả stale khi đổi nhanh
+và capture normalized humanoid rig profile mới theo mỗi model generation; rig, finger rig,
+calibration và motion state cũ không được dùng lại sau đổi/reload. Có file không đồng nghĩa model
+đã qua acceptance: từng model phải có humanoid
 upper/lower arm hợp lệ, rest basis finite và chạy cùng deterministic/webcam matrix. Các binary
 local này chưa được coi là asset production và không được commit/redistribute khi chưa xác minh
 license/metadata riêng cho từng file.

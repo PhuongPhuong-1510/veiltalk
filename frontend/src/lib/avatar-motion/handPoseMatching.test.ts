@@ -276,4 +276,28 @@ describe("matchHandsToPose", () => {
     const assignedSides = [result.left, result.right].filter((r) => r.matched);
     expect(assignedSides).toHaveLength(1);
   });
+
+  it("keeps a side match from recent image continuity when Pose wrist is missing", () => {
+    const result = matchHandsToPose(baseInput({
+      poseWristImage: { left: null, right: null },
+      handSampledAtMs: 200,
+      poseSampledAtMs: 200,
+      rawHands: [handCandidate(3, lm(.72, .5), "left", 200)],
+      previous: { left: previousWrist(.71, .5 / (VIDEO_WIDTH / VIDEO_HEIGHT), 100) },
+    }));
+    expect(result.left.matched).toBe(true);
+    expect(result.left.continuity).toBe("continued");
+    expect(result.left.candidateSourceIndex).toBe(3);
+  });
+
+  it("does not resurrect a missing Pose wrist from expired continuity", () => {
+    const result = matchHandsToPose(baseInput({
+      poseWristImage: { left: null, right: null },
+      handSampledAtMs: 2_000,
+      poseSampledAtMs: 2_000,
+      rawHands: [handCandidate(3, lm(.72, .5), "left", 2_000)],
+      previous: { left: previousWrist(.71, .5 / (VIDEO_WIDTH / VIDEO_HEIGHT), 100) },
+    }));
+    expect(result.left.matched).toBe(false);
+  });
 });

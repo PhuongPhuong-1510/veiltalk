@@ -1,5 +1,5 @@
 import { AmbientLight, Box3, Color, DirectionalLight, PerspectiveCamera, Quaternion, Scene, Vector3, WebGLRenderer } from "three";
-import type { AvatarJointName, AvatarPosePacketV1, QuaternionData } from "../avatar-motion/avatarPoseTypes";
+import { isFingerJointName, type AvatarPoseJointName, type AvatarPosePacketV1, type QuaternionData } from "../avatar-motion/avatarPoseTypes";
 import { AvatarModelLoader } from "./modelLoader";
 import type { LoadedAvatarModel, ModelLoadOptions } from "./modelTypes";
 import { dampingAlpha, dampScalar, slerpQuaternion } from "./renderSmoothing";
@@ -18,7 +18,7 @@ export class AvatarRenderer {
   private readonly loader: AvatarModelLoader; private readonly metrics = new RendererMetricsCollector();
   private readonly now: () => number; private model: LoadedAvatarModel | null = null;
   private target: AvatarPosePacketV1 | null = null; private appliedSequence: number | null = null;
-  private currentExpressions: Record<string, number> = {}; private currentRotations: Partial<Record<AvatarJointName | "head", QuaternionData>> = {};
+  private currentExpressions: Record<string, number> = {}; private currentRotations: Partial<Record<AvatarPoseJointName | "head", QuaternionData>> = {};
   private readonly loop: AnimationFrameLoop; private lastDrawAt: number | null = null; private disposed = false; private smoothing: boolean;
   private readonly contextLostHandler: (event: Event) => void; readonly canvas: HTMLCanvasElement;
   // >1 phóng to (camera lại gần), <1 thu nhỏ; áp lên khoảng cách camera tính trong frameModel.
@@ -41,6 +41,9 @@ export class AvatarRenderer {
   async loadModel(url: string, options: ModelLoadOptions = {}): Promise<LoadedAvatarModel["capability"] | null> {
     this.assertUsable(); const loaded = await this.loader.load(url, options); if (!loaded) return null;
     const previous = this.model; this.model = loaded; this.scene.add(loaded.root); this.frameModel(loaded); if (previous) { this.scene.remove(previous.root); previous.dispose(); }
+    // Packet/delta của rig cũ không được phép áp lên model vừa swap. Model mới bắt đầu từ
+    // normalized rest pose cho tới khi motion processor phát packet mới theo rig profile mới.
+    this.target = null; this.appliedSequence = null;
     this.currentExpressions = {}; this.currentRotations = {}; return loaded.capability;
   }
   start(): void { this.assertUsable(); if (this.loop.running) return; this.lastDrawAt = null; this.loop.start(); }
@@ -71,6 +74,8 @@ export class AvatarRenderer {
   getMetrics(): RendererMetricsSnapshot { return this.metrics.snapshot(this.webgl); }
   getCapability() { return this.model?.capability ?? null; }
   getRigProfile() { return this.model?.rigProfile ?? null; }
+  /** Phase 3B.3: chuỗi xương ngón + flex axis của model đang tải. null khi model không phải VRM. */
+  getFingerRig() { return this.model?.fingerRig ?? null; }
   /** DEV harness inspection only; callers must not mutate returned bones. */
   getDiagnosticModel(): Pick<LoadedAvatarModel, "root" | "bones" | "restRotations"> | null {
     return this.model ? { root: this.model.root, bones: this.model.bones, restRotations: this.model.restRotations } : null;
@@ -104,12 +109,16 @@ export class AvatarRenderer {
       this.model!.vrm?.expressionManager?.setValue(modelName, Math.min(1, Math.max(0, value)));
       for (const morph of this.model!.morphTargets.get(modelName) ?? []) morph.influences[morph.index] = Math.min(1, Math.max(0, value));
     }
-    const rotations: Partial<Record<AvatarJointName | "head", QuaternionData>> = { ...packet.jointRotations, ...(packet.headRotation ? { head: packet.headRotation } : {}) };
-    for (const [name, target] of Object.entries(rotations) as Array<[AvatarJointName | "head", QuaternionData]>) {
+    const rotations: Partial<Record<AvatarPoseJointName | "head", QuaternionData>> = { ...packet.jointRotations, ...(packet.headRotation ? { head: packet.headRotation } : {}) };
+    for (const [name, target] of Object.entries(rotations) as Array<[AvatarPoseJointName | "head", QuaternionData]>) {
       const bone = this.model!.bones[name]; const rest = this.model!.restRotations[name];
       if (!bone || !rest) continue;
       const targetLocal = absoluteLocalFromRestDelta(rest, target);
-      const current = this.currentRotations[name] ?? rest; const value = rotationAlpha < 1 ? slerpQuaternion(current, targetLocal, rotationAlpha) : targetLocal; this.currentRotations[name] = value;
+      // Phase 3B.3: xương ngón đã được `fingerPoseTemporal` blend theo thời gian thực ở phía
+      // processor. Slerp thêm lần nữa ở đây là double-smoothing — làm cử chỉ trễ và "nhão" đúng
+      // vào lúc cần dứt khoát (nắm/xoè). Xương arm giữ nguyên đường smoothing cũ của Phase 3A/3B.
+      const alpha = isFingerJointName(name) ? 1 : rotationAlpha;
+      const current = this.currentRotations[name] ?? rest; const value = alpha < 1 ? slerpQuaternion(current, targetLocal, alpha) : targetLocal; this.currentRotations[name] = value;
       bone.quaternion.set(value.x, value.y, value.z, value.w).normalize();
     }
   }

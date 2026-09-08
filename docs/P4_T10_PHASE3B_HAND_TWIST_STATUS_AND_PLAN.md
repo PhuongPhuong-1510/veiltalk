@@ -106,7 +106,7 @@ và không re-anchor neutral.
 | Temporal | `handTwistTemporal.ts` | Acquire/track/hold/fade/reset theo thời gian |
 | Analysis | `handCalibrationAnalysis.ts`, `handTwistRootCauseValidation.test.ts` | Calibration snapshot và synthetic/rig-only evidence |
 | Rig source | `normalizedRigProfile.ts`, `avatar-renderer/modelLoader.ts` | Cung cấp model-generation và anatomical rest basis của lowerArm |
-| DEV UI | `components/dev/AvatarRendererDevHarness.tsx` | Checkbox, freeze/replay, calibration và diagnostic snapshot |
+| DEV UI | `components/dev/AvatarRendererDevHarness.tsx`, `components/dev/devAvatarModels.ts` | Checkbox, freeze/replay, calibration, diagnostic snapshot và selector 5 VRM local; đổi/reload model reset rig/motion state, giữ model cũ tới lúc swap và chỉ nhận request mới nhất |
 
 Mỗi module trên có file `*.test.ts` tương ứng khi tồn tại logic thuần; integration chính nằm trong
 `avatarMotionProcessor.test.ts`.
@@ -157,8 +157,9 @@ Nếu lỗi ngẫu nhiên vẫn còn sau webcam re-test partial occlusion, cần
    - Xác nhận tay phải đi cùng chiều sau khi bỏ lần đảo thứ hai (`rigApplicationSign.right: -1→+1`).
    - Thu tay trái tương đương trước khi khóa convention; không đổi chirality/signed-angle thêm nếu chưa có bằng chứng.
 6. **Kiểm chứng theo model**
-   - Chạy cùng procedure trên `reference-avatar.vrm`, `reference-avatar-1.vrm` và
-     `reference-avatar-2.vrm`.
+   - Chạy cùng procedure trên cả năm model trong catalog DEV: `reference-avatar.vrm`,
+     `reference-avatar-1.vrm`, `reference-avatar-2.vrm`, `reference-avatar-3.vrm` và
+     `reference-avatar-4.vrm`.
    - Nếu dấu phụ thuộc rig, phải biểu diễn bằng dữ liệu/profile đã đo; không hard-code theo tên model.
 7. **Regression và production candidate fix đã có**; còn webcam re-test, anomaly capture nếu còn lỗi, world-orientation evidence sau renderer và acceptance đa model.
 
