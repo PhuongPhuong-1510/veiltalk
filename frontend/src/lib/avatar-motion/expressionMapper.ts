@@ -3,8 +3,9 @@ import { clamp01 } from "./coordinateAdapter";
 const DIRECT_EXPRESSIONS = [
   "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight",
   "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "eyeBlinkLeft", "eyeBlinkRight",
-  "eyeLookDownLeft", "eyeLookDownRight", "eyeLookInLeft", "eyeLookInRight", "eyeLookOutLeft",
-  "eyeLookOutRight", "eyeLookUpLeft", "eyeLookUpRight", "eyeSquintLeft", "eyeSquintRight",
+  // AR3-T01 sở hữu eye-look và phát semantic gaze riêng; không đưa raw gaze vào expressions
+  // vì LookAt-expression adapter sẽ áp lần hai.
+  "eyeSquintLeft", "eyeSquintRight",
   "eyeWideLeft", "eyeWideRight", "jawForward", "jawLeft", "jawOpen", "jawRight",
   "mouthClose", "mouthDimpleLeft", "mouthDimpleRight", "mouthFrownLeft", "mouthFrownRight",
   "mouthFunnel", "mouthLeft", "mouthLowerDownLeft", "mouthLowerDownRight", "mouthPressLeft",
@@ -19,8 +20,6 @@ export const mapMediaPipeExpressions = (input: Record<string, number>): Record<s
   for (const name of DIRECT_EXPRESSIONS) if (name in input) output[name] = clamp01(input[name]);
   output.blinkLeft = output.eyeBlinkLeft ?? 0;
   output.blinkRight = output.eyeBlinkRight ?? 0;
-  output.happy = clamp01(((output.mouthSmileLeft ?? 0) + (output.mouthSmileRight ?? 0)) / 2);
-  output.aa = output.jawOpen ?? 0;
   return output;
 };
 

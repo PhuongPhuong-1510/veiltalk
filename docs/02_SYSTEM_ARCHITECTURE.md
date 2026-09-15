@@ -128,7 +128,46 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 - Corrective patch Phase 3B.4 sau manual W3: khi giải two-bone IK, hai nhánh khuỷu được chấm thêm bằng hướng Hand image-space `wrist→middle-MCP` đã match và còn mới. Đây là prior mềm có quality gate; Pose elbow có visibility cao nhưng làm cẳng tay ngược mạnh palm-forward bị hạ cấp sang inference. Chỉ vector hướng được so sánh, không trộn origin Pose-world với Hand-world. Cơ chế này độc lập toggle Hand twist.
 - Corrective spatial patch sau manual W9: solver quét 24 pole trên toàn đường tròn nghiệm thay vì chỉ `prior/-prior`. Face landmarks tạo ellipse image-space local-only; Hand landmarks quyết định khi nào contact với mặt là có chủ ý. Model loader chụp head sphere, torso capsule, arm length/radius từ normalized VRM rest pose. Candidate được chấm thêm face-clearance và head/torso penetration; Pose elbow nhìn thấy nhưng ánh xạ thành forearm xuyên head cũng bị hạ cấp sang inference. Finger rig đồng thời cung cấp rest palm normal để Hand twist căn tuyệt đối theo model; model thiếu bằng chứng rig dùng session-relative fallback. Tất cả dữ liệu này chỉ tồn tại trong client processor/diagnostic, không đi vào packet.
 
-- Output: `AvatarPosePacketV1` plain-data nhỏ gọn. `jointRotations` chứa quaternion delta trong normalized-humanoid parent-local, rest-relative space; packet không chứa raw face/hand/pose landmarks hoặc facial transform matrix. RTCDataChannel transport thuộc P4-T15, chưa nằm trong P4-T10.
+- Pipeline khuôn mặt F1–F4: blendshape MediaPipe được neutral-calibrate local-only, sau đó đi qua bộ mắt/chân mày và mapper miệng thuần riêng. Mouth mapper giữ `jawOpen`/`mouthClose` độc lập, dựng visible opening + round/width evidence, rồi phân phối activity liên tục sang năm VRM vowel `aa/ih/ou/ee/oh`. F4 chiếu conflict/budget theo từng vùng trước và sau dynamics bất đối xứng theo nhóm cơ; lưu output sau projection để không phát lại state bị che. `eyeSquint` không được suy thành blink; raw eye Joy bị loại khỏi production profile sau bằng chứng webcam blink=0 nhưng morph vẫn đóng mắt. Model 2 cũng không map raw target 25 vào `mouthClose` vì forensic bounds chứng minh target Extra này tác động cả vùng mắt; closure của model đó triệt vowel về rest pose. Blink thật vẫn độc lập. Hai khóe cười được tách theo max của `jawOpen` và độ tách môi trên/dưới: closed/open map riêng tới mouth Fun/Joy với gain và suppression chống cộng chồng vowel/lip-shape; frown map tới mouth Sorrow. Không kênh nào dùng preset vui toàn mặt. Duplicate giữ nguyên, loss đi qua hold → smoothstep return → exact neutral, còn reacquire ramp từ output hiện tại. Processor là temporal owner duy nhất của expression; renderer áp trực tiếp expression packet và chỉ tiếp tục smoothing bone rotation. Input nonfinite bị chặn; raw corrective chỉ chạy qua profile model đã nghiệm thu. Facial quaternion đảo pitch X theo avatar convention; yaw/roll còn manual gate. F4 không dùng microphone/audio; audio fusion thuộc F5.
+
+- AR3 Gaze tách tám coefficient `eyeLook*` khỏi expression packet và chuyển thành semantic
+  `gaze?: {version:1,yaw,pitch}` đã neutral-calibrate, binocular-conjugate fusion, clamp và temporal theo
+  observation timestamp. Solver không phụ thuộc capability model local nên sender model unsupported vẫn phát
+  semantic cho receiver khác rig. Renderer chọn độc quyền LookAt bone, LookAt expression, đủ hai eye bones hoặc
+  unsupported/no-op; eye-bone fallback áp tuyệt đối `restLocal × deltaLocal` theo trục rest riêng từng mắt.
+  LookAt-expression được đánh dấu tự xử lý vertical eyelid; T02 chỉ phát target mí chuyên dụng đã được profile
+  xác nhận và để blink F2 triệt secondary theo từng bên, không fallback sang blink/squint/full-face. Renderer không
+  lọc gaze lần hai; network interpolation/jitter thuộc transport. `faithful` là mặc định; cinematic là mode opt-in
+  gồm soft camera-attention bias, deterministic micro-saccade và idle blink, chuyển mode có blend và tự tắt khi
+  loss. Vergence và prediction không nằm trong v1. T04 collector chỉ lưu scalar tổng hợp local-only; raw coefficient,
+  landmark, diagnostic và head telemetry không đi vào packet.
+
+- F5-0 mới chỉ là qualification boundary, chưa phải audio pipeline: `onnxruntime-web` chạy model do người kiểm thử chọn từ file local trong dedicated Worker; input benchmark là tensor tổng hợp, không phải microphone PCM. DEV panel nhận lại checksum, graph metadata và timing dạng số để so sánh với renderer/tracking đang chạy. Candidate/model không nằm trong production bundle; license, browser performance và Vietnamese fixture phải qua gate trước khi nối AudioWorklet/VAD/fusion.
+
+- Output local hiện hỗ trợ discriminated union `AvatarPosePacketV1 | AvatarPosePacketV2`. V1 giữ legacy head path, bao gồm toàn bộ thời gian upper-body calibration còn `idle/collecting`; chỉ chuyển sang V2 sau trạng thái `calibrated`. V2 dùng calibrated rest-relative head và optional upper-body joint delta. `jointRotations` vẫn là normalized-humanoid parent-local/rest-relative; packet không chứa raw face/hand/pose landmark hoặc facial transform matrix. Mixed-peer negotiation/RTCDataChannel transport vẫn thuộc P4-T15.
+- AR4-T03.1 mở rộng backward-compatible Packet V2 bằng optional `shoulderMotion` gồm hai scalar semantic
+  `leftVertical/rightVertical` trong `[-1,1]`. Đây là full-state snapshot: sender mới emit ở mọi packet V2 kể cả
+  duplicate/loss; omitted/null chỉ có nghĩa sender cũ hoặc capability unavailable. Processor sở hữu filter và
+  hold→return; renderer không smoothing lần hai. Renderer đổi scalar thành local shoulder displacement theo
+  bề rộng giải phẫu giữa hai gốc upper-arm và anatomical current torso-up, luôn gán từ rest position để không drift. Observation
+  vertical lấy từ Pose image-space đã sửa aspect ratio và chuẩn hóa theo span ngang hai vai; Pose world-space chỉ giữ rotation/reach/depth,
+  nên việc thấy hông không được làm đổi gain nhún vai. Không có root/chest
+  translation và không chứa raw landmark.
+  Với three-vrm, rotation vẫn đi qua normalized humanoid; local displacement được gán lên raw skinned shoulder bone
+  sau `vrm.update()` vì thư viện không transfer non-hips normalized position sang raw skeleton.
+
+- AR4-T06 giữ Packet V2 và thêm fore/aft torso rotation: `full-torso` đo shoulder–hip angle neutral-relative;
+  `shoulder-only` dùng depth/scale proxy có cap bảo thủ và nhãn camera-approach mơ hồ. Processor là temporal owner
+  duy nhất và truyền final torso delta vào head-relative solver hiện hữu. Lean phải được giải trước vertical shoulder;
+  raw lean evidence điều khiển `commonMotionGain` để bỏ riêng dịch dọc đồng hướng L/R do perspective, còn differential
+  shoulder vẫn được giữ. Không có root/chest translation và không đưa diagnostic/raw cue vào packet.
+
+- Face/Hand/Pose cùng xử lý một camera frame dùng chung source-sample timestamp. Thời điểm từng inference hoàn tất chỉ dùng cho performance metric, không được dùng làm sample time vì pipeline nối tiếp sẽ tạo skew giả cho paired calibration.
+
+- Upper-body calibration mặc định hỗ trợ khung gọi chỉ thấy đầu–vai. Face + hai shoulder là evidence bắt buộc;
+  hips là evidence tùy chọn để khóa `full-torso` khi đạt ít nhất 80% paired sample. `shoulder-only` không phát torso
+  pitch/curl không quan sát được nhưng vẫn chạy head–neck distribution, torso yaw/roll, shoulder và arm. Face/Pose
+  được neutral hóa riêng; sửa dấu Pose yaw trước khi tính `inverse(QshoulderDelta) × QfaceDelta`.
 
 - Xử lý edge case: mất theo dõi do che khuất/ánh sáng yếu — áp dụng đúng FR-09 (giữ tư thế hợp lệ gần nhất).
 
@@ -138,7 +177,7 @@ Browser Client là thành phần phức tạp nhất hệ thống, đáng đư�
 
 - Định dạng model: GLB/GLTF với morph target ánh xạ trực tiếp tới hệ số blendshape từ Tracking Module (nhất quán với khuyến nghị dùng model VRM — VRM xây trên nền GLTF).
 
-- Pipeline render: nhận `AvatarPosePacketV1` → ánh xạ blendshape → tái tạo target local tuyệt đối bằng `qRestLocal × qDeltaLocal` → frame-rate-independent quaternion smoothing (mặc định bật) → gán normalized humanoid bone quaternion → `vrm.update(dt)` → render WebGL canvas. Renderer không ghi bone position/scale khi apply pose.
+- Pipeline render: dispatch packet bằng `version`; V1 giữ đường legacy, V2 áp upper-body đã temporal-filter trực tiếp để tránh double smoothing. Mọi bone tái tạo target local tuyệt đối bằng `qRestLocal × qDeltaLocal`; arm legacy vẫn dùng renderer smoothing hiện có. Renderer không ghi bone position/scale khi apply pose.
 
 - Hai chế độ nguồn dữ liệu: theo dõi cục bộ (cho chính nhân vật của người dùng) và dữ liệu nhận qua RTCDataChannel (cho nhân vật của người đối thoại) — cùng một Renderer, khác nguồn input. Về model 3D phía nhận: khi thiết lập cuộc gọi, phía nhận tải model GLB của người gọi từ Backend API (không truyền trực tiếp qua WebRTC DataChannel vì file model có thể lớn). Backend lưu sẵn URL/reference tới model đã chọn của từng user trong hồ sơ tài khoản (FR-04); phía nhận dùng URL này để tải model đúng trước khi bắt đầu nhận skeleton data. Nhờ đó, người dùng B thấy đúng nhân vật ảo (màu tóc, trang phục) mà người dùng A đã tùy chỉnh.
 
@@ -299,9 +338,9 @@ Trình bày dạng bảng bước-theo-bước thay vì sơ đồ UML, để đ�
 |----------|-----------------------------|-----------------------------------------------------------------------------------------------|
 | **1**    | Webcam                      | Sinh khung hình mới, đưa vào Tracking Module qua getUserMedia().                              |
 | **2**    | MediaPipe                   | Trích xuất landmark khuôn mặt/tay/thân từ khung hình.                                         |
-| **3**    | Motion Processor            | Cập nhật tracking-loss state; lọc segment direction khi có sample mới; chọn nguồn wrist theo confidence/freshness/hysteresis. Pose wrist hợp lệ được ưu tiên; khi Pose wrist mất nhưng Hand wrist đã match và còn mới, dựng wrist 3D cục bộ từ image-space + chiều dài xương + depth prior. Raw frame gốc không bị sửa. |
-| **4**    | Arm Retargeting Solver      | Tính target world, parent-local target và rest-relative delta theo parent → child. Mất elbow nhưng còn shoulder+wrist dùng two-bone IK. Quét 24 điểm trên toàn vòng nghiệm, chấm continuity, Hand palm-forward, face-clearance và head/torso capsule của đúng VRM thay vì luật “luôn ở ngoài”. Reconstruction không đủ bằng chứng bị reject về hold/return, không kéo giãn xương. |
-| **5**    | Communication Module        | — GỬI — Đóng gói `AvatarPosePacketV1`, gửi qua RTCDataChannel; không gửi raw landmarks.       |
+| **3**    | Motion Processor            | Paired calibration → source/observation temporal → hold/return/reacquire → upper-body layer intent → per-layer/final aggregate clamp → final parent-world hierarchy. Raw frame gốc không bị sửa. |
+| **4**    | Arm Retargeting Solver      | Dùng final animated shoulder parent để đổi arm world target sang parent-local/rest-relative delta; giữ two-bone IK, pole/continuity/collision và partial-arm behavior hiện có. |
+| **5**    | Communication Module        | — GỬI — Hiện local có Packet V1/V2; P4-T15 phải negotiate peer version trước khi gửi V2. Không gửi raw landmark/matrix. |
 | **6**    | Avatar Renderer (phía nhận) | — NHẬN — Tái tạo `restLocal × deltaLocal`, áp normalized bone/morph target và render canvas. |
 
 ### 5.3. Luồng xác thực

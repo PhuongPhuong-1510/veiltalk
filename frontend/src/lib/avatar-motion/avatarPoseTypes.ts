@@ -48,6 +48,13 @@ export type AvatarFingerJointName =
 /** Khoá hợp lệ của `jointRotations`: xương arm/thân (cũ) hoặc xương ngón (3B.3). */
 export type AvatarPoseJointName = AvatarJointName | AvatarFingerJointName;
 
+/** AR4: các joint thân trên có semantic rest-relative trong packet V2. */
+export type AvatarUpperBodyJointName =
+  | "hips" | "spine" | "chest" | "upperChest" | "neck"
+  | "leftShoulder" | "rightShoulder";
+
+export type AvatarPoseJointNameV2 = AvatarPoseJointName | AvatarUpperBodyJointName;
+
 const capitalizeFinger = (finger: AvatarFingerName) =>
   `${finger[0].toUpperCase()}${finger.slice(1)}` as Capitalize<AvatarFingerName>;
 
@@ -73,6 +80,21 @@ export function isFingerJointName(name: string): name is AvatarFingerJointName {
 export interface QuaternionData { x: number; y: number; z: number; w: number }
 export interface Vector3Data { x: number; y: number; z: number }
 
+/** AR4-T03.1: semantic full-state snapshot; không phải model-space position hay event delta. */
+export interface ShoulderMotionStateV1 {
+  version: 1;
+  /** Giá trị đã calibration/filter trong [-1, 1]: dương nâng vai, âm hạ vai. */
+  leftVertical: number;
+  rightVertical: number;
+}
+
+/** AR3-T01: gaze semantic độc lập rig; không chứa coefficient MediaPipe hoặc diagnostic runtime. */
+export interface GazeStateV1 {
+  version: 1;
+  yaw: number;
+  pitch: number;
+}
+
 export interface AvatarPartTrackingInfo {
   sourceState: AvatarSourceTrackingState;
   outputState: AvatarOutputMotionState;
@@ -92,6 +114,8 @@ export interface AvatarPosePacketV1 {
     pose: AvatarPartTrackingInfo;
   };
   expressions: Record<string, number>;
+  /** Optional để receiver cũ bỏ qua an toàn; renderer mới tự adapt theo capability model nhận. */
+  gaze?: GazeStateV1 | null;
   /**
    * LEGACY / UNVERIFIED: quaternion lấy từ MediaPipe facial transform và renderer hiện
    * áp như rest-relative local delta. Phase 3A không thay đổi hành vi hoặc dùng field này
@@ -115,5 +139,22 @@ export interface AvatarPosePacketV1 {
    */
   handMotion: HandMotionDiagnosticsSnapshot | null;
 }
+
+/**
+ * AR4 packet. `headRotation` ở V2 là delta local rest-relative đã calibration; V1 vẫn giữ
+ * nguyên đường legacy để không đổi nghĩa một field dưới cùng version.
+ */
+export interface AvatarPosePacketV2 extends Omit<AvatarPosePacketV1, "version" | "jointRotations"> {
+  version: 2;
+  headRotation: QuaternionData | null;
+  jointRotations: Partial<Record<AvatarPoseJointNameV2, QuaternionData>>;
+  /**
+   * Full-state snapshot: sender mới phải emit ở mọi V2 packet khi feature khả dụng, kể cả duplicate/loss.
+   * Omitted/null chỉ biểu thị sender cũ hoặc capability bị tắt/không hỗ trợ.
+   */
+  shoulderMotion?: ShoulderMotionStateV1 | null;
+}
+
+export type AvatarPosePacket = AvatarPosePacketV1 | AvatarPosePacketV2;
 
 export const IDENTITY_QUATERNION: QuaternionData = { x: 0, y: 0, z: 0, w: 1 };

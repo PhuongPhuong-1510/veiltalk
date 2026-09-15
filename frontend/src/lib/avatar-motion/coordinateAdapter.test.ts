@@ -22,4 +22,12 @@ describe("coordinate adapter", () => {
   it("extracts identity from a facial transform", () => {
     expect(quaternionFromRotationMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])).toEqual({ x: 0, y: -0, z: -0, w: 1 });
   });
+  it("keeps MediaPipe pitch sign while converting Y/Z into the avatar convention", () => {
+    const angle = Math.PI / 3;
+    const c = Math.cos(angle); const s = Math.sin(angle);
+    const rotation = quaternionFromRotationMatrix([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
+    expect(rotation).not.toBeNull();
+    expect(rotation!.x).toBeCloseTo(Math.sin(angle / 2));
+    expect(rotation!.w).toBeCloseTo(Math.cos(angle / 2));
+  });
 });

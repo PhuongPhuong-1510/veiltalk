@@ -108,6 +108,9 @@ Phương pháp: dùng Postman Runner với 50 lần gọi liên tiếp cho mỗi
 | P4-T10 live tracking | Các log quan sát khoảng 22–27 FPS tùy điều kiện camera/ánh sáng | INCONCLUSIVE cho NFR-02 vì chưa đủ 10 lần × 60 giây trong điều kiện chuẩn |
 | P4-T10 tracking-to-render | Chưa có chuỗi LIVE 60 giây với avg/p95 hợp lệ | UNVERIFIED |
 | P4-T10 model startup/reload | Model DEV `reference-avatar-2.vrm` hiện 22,529,772 bytes. Reload trong phiên tái dùng canvas/WebGL và giữ model cũ đến khi swap; latest-request guard ngăn stale callback xóa rig profile. Chưa có 10 lần đo network/parse/first-visible/rig-ready; DEV React Strict Mode có thể tăng chi phí lần tải trang đầu | Correctness fix PASS bằng automated test; startup performance UNVERIFIED |
+| AR3-T01–T04 Gaze | Solver chạy local-only trên scalar đã neutral-calibrate; packet thêm ba scalar `version/yaw/pitch`. Conditional eyelid, faithful/cinematic và T04 scalar collector đã nối DEV harness. Sau manual feedback “hơi nhanh/lé”, default filter giảm response và adapter dùng 85% range. Automated 68 files / 723 tests, lint và build PASS; chưa retest webcam 60 giây trên ba VRM | CODE/TOOLING COMPLETE; corrective RETEST PENDING, baseline/ngưỡng và tracking→render/FPS còn PENDING |
+| F5-0 ORT/model smoke | Uni2005 INT8 11,225,320 bytes, `[1,32,120]→[1,32,230]`, Node/WASM 3 warmup + 60 measured trên Ryzen 7 5800H: p95 1-thread 48.55 ms, 2-thread 28.14 ms, auto 22.30 ms | Chỉ smoke; browser measurement bên dưới mới là gate quyết định |
+| F5-0 browser qualification | Chrome + renderer/tracking LIVE: inference p95 WASM 1/2/auto lần lượt 49.59/38.20/29.17 ms; WebGPU 123.73 ms. FPS sau đo tốt nhất theo tracking/pipeline chỉ 17.4/17.5 | **FAIL** p95 ≤25 ms và ≥24 FPS; loại Uni2005 INT8 khỏi provider production trên cấu hình hiện tại |
 
 Các số phát triển trên phục vụ chẩn đoán và không được điền thay vào bảng NFR chính thức ở
 mục 4.1 cho tới khi hoàn thành đúng protocol mục 2–3.
@@ -158,5 +161,17 @@ thời trong cửa sổ reload và model cũ phải được dispose ngay sau sw
 ### 5.3. Điều kiện đo không đạt chuẩn (nếu có)
 
 \[ĐIỀN: ghi nhận nếu điều kiện đo thực tế khác với điều kiện chuẩn SRS. Ví dụ: 'Thiết bị đo có RAM 16GB thay vì 8GB theo điều kiện chuẩn — kết quả đo có thể tốt hơn thực tế trên thiết bị tối thiểu.'\]
+
+### 5.4. AR4 upper-body protocol
+
+Tại `/dev/avatar-renderer`, chạy 60 giây cho từng VRM sau paired calibration. Ghi tracking/render FPS,
+tracking→render latency, upper-body solver avg/p95, head/torso raw-vs-final jitter reduction, aggregate clamp count
+và invalid count. Gate code seed: solver p95 ≤1.5 ms, invalid/joint-limit violation = 0; gate hệ thống vẫn là
+tracking→render <100 ms và ≥24 FPS. `t50/t90` đo bằng step fixture đã biết target, không suy từ động tác webcam
+không có ground truth. Bảng kết quả để trống cho tới khi manual run thật; automated PASS không thay thế benchmark.
+
+AR4-T06 code gate ngày 2026-09-16 đạt 77 test files / 777 tests, lint và production build PASS. Kết quả này chỉ
+xác nhận correctness regression, gồm cả việc fore/aft lean không rò thành bilateral shrug; benchmark LIVE 60 giây
+trên ít nhất ba VRM vẫn **UNVERIFIED** và phải đo theo protocol trên trước khi đánh dấu task DONE.
 
 *— Hết tài liệu —*

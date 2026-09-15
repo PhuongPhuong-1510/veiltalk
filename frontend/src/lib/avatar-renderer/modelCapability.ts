@@ -3,7 +3,7 @@ import type { AvatarModelRigProfile, ModelCapabilityReport } from "./modelTypes"
 import type { VRM } from "@pixiv/three-vrm";
 
 const REQUIRED = ["head", "neck", "leftUpperArm", "leftLowerArm", "leftHand", "rightUpperArm", "rightLowerArm", "rightHand"] as const;
-const OPTIONAL = ["chest", "leftShoulder", "rightShoulder"] as const;
+const OPTIONAL = ["hips", "spine", "chest", "upperChest", "leftShoulder", "rightShoulder"] as const;
 
 export function inspectModel(root: Object3D, profile: AvatarModelRigProfile | undefined, sourceUrl: string, loadTimeMs: number, fileSizeBytes: number | null, licenseStatus: ModelCapabilityReport["licenseStatus"], vrm: VRM | null = null): ModelCapabilityReport {
   const materials = new Set<Material>();

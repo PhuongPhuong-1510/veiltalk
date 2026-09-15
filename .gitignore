@@ -51,6 +51,8 @@ postgres-data/
 # *.glb
 # Các model tham chiếu P4-T10 là asset local chưa xác minh quyền phân phối; không commit.
 frontend/public/models/avatars/*.vrm
+# F5 model qualification: artifact GPL/local-only, không đi vào public/production bundle.
+frontend/dev-assets/audio/candidates/
 
 # ===== File tạm =====
 *.tmp

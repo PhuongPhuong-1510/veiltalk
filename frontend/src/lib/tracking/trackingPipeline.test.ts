@@ -92,6 +92,16 @@ describe("TrackingPipeline", () => {
     expect(second.pose.sampledAtMs).toBe(first.pose.sampledAtMs);
   });
 
+  it("uses one source-frame sample time for sequential detectors", async () => {
+    const test = setup();
+    await test.pipeline.start(test.video);
+    test.frame(1);
+    const produced = test.onFrame.mock.calls[0][0];
+    expect(produced.face.sampledAtMs).not.toBeNull();
+    expect(produced.face.sampledAtMs).toBe(produced.pose.sampledAtMs);
+    expect(produced.face.sampledAtMs).toBe(produced.handSampledAtMs);
+  });
+
   it("does not call fetch, WebSocket or WebRTC while processing camera frames", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);

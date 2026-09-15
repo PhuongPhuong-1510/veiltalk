@@ -158,18 +158,21 @@ export class TrackingPipeline {
       const tasks = this.dependencies.runtime.tasks;
       if (tasks.face) {
         results.face = this.measure("face", () => tasks.face!.detectForVideo(this.video!, mediaPipeTimestampMs));
-        results.sampledAtMs.face = this.now();
+        // Các detector bên dưới cùng đọc một camera frame. `sampledAtMs` là thời điểm
+        // lấy frame, không phải lúc từng inference kết thúc; nếu không Face -> Hands ->
+        // Pose chạy nối tiếp sẽ tạo skew giả và làm calibration theo cặp bị kẹt.
+        results.sampledAtMs.face = startedAt;
       }
 
       const fullRate = (this.options.profile ?? "full-rate") === "full-rate";
       if (tasks.hands && (fullRate || startedAt - this.lastHandSampleMs >= (this.options.handIntervalMs ?? 66.7))) {
         results.hands = this.measure("hands", () => tasks.hands!.detectForVideo(this.video!, mediaPipeTimestampMs));
-        results.sampledAtMs.hands = this.now();
+        results.sampledAtMs.hands = startedAt;
         this.lastHandSampleMs = results.sampledAtMs.hands;
       }
       if (tasks.pose && (fullRate || startedAt - this.lastPoseSampleMs >= (this.options.poseIntervalMs ?? 66.7))) {
         results.pose = this.measure("pose", () => tasks.pose!.detectForVideo(this.video!, mediaPipeTimestampMs));
-        results.sampledAtMs.pose = this.now();
+        results.sampledAtMs.pose = startedAt;
         this.lastPoseSampleMs = results.sampledAtMs.pose;
       }
 

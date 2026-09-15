@@ -53,6 +53,8 @@ export function quaternionFromRotationMatrix(data: number[]): QuaternionData | n
     const s = Math.sqrt(1 + m22 - m00 - m11) * 2;
     q = { w: (data[1] - data[4]) / s, x: (data[8] + data[2]) / s, y: (data[9] + data[6]) / s, z: s / 4 };
   }
+  // Đổi basis MediaPipe sang motion semantic. X giữ nguyên; chỉ Y/Z đổi dấu.
+  // Đảo cả X sẽ làm cúi/ngửa đầu ngược chiều dù yaw vẫn có vẻ đúng.
   return normalizeQuaternion({ x: q.x, y: -q.y, z: -q.z, w: q.w });
 }
 

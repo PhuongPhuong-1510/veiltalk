@@ -459,4 +459,58 @@ Wrist flexion/extension, finger pose và nắm đấm không phải failure củ
 Known issue ngoài matrix: khi bàn tay che mặt, Face tracking có thể làm đầu/mặt quay hoặc biến dạng.
 Lỗi này xảy ra cả khi Hand twist tắt và phải được theo dõi như task Face-occlusion riêng.
 
+### 6.9. F5-0 — Audio model qualification gate
+
+Automated test phải khóa descriptor, byte size/SHA-256, vocab index liên tục/không trùng, ONNX input/output
+metadata, runtime output shape, percentile và fail khi artifact/shape/p95 thay đổi. License redistribution và
+fixture tiếng Việt là manual gate, không được suy thành PASS từ graph hợp lệ.
+
+Browser gate chạy tại `/dev/avatar-renderer`: bật tracking + renderer, chọn `.onnx` và `vocab.json` local rồi chạy
+WASM 1/2/auto và WebGPU nếu có. Ghi inference avg/p50/p95/max, cross-origin isolation, FPS
+renderer/tracking/pipeline trước→sau. Chỉ p95 ≤25 ms và mọi FPS ≥24 mới qua performance gate; kết quả Node không
+thay thế browser. File được đọc local, không upload/lưu; benchmark dùng tensor tổng hợp và không mở microphone.
+
+### 6.10. AR3-T01–T04 — Gaze automated và unified manual gate
+
+Automated gate phải kiểm tra: dấu center/trái/phải/lên/xuống; binocular disagreement; mắt đóng/mất;
+semantic ellipse clamp; duplicate/reversed/loss/reacquire theo timestamp; cùng timestamped trajectory tại các
+render FPS khác nhau; packet không có raw coefficient; local model unsupported vẫn phát semantic; LookAt và
+eye-bones không cùng apply; eye-bone luôn `rest × delta`, không tích lũy; invalid packet/model swap trả về rest.
+
+Manual T04A chạy E1–E12 trong `docs/AR3_EYE_GAZE_ATTENTION_IMPLEMENTATION_PLAN.md` trên ít nhất ba VRM
+khác capability. Bắt buộc đối chiếu raw L/R, fused gaze và head yaw/pitch khi giữ mắt thẳng theo đầu rồi quay
+đầu. T02 automated gate còn chốt dedicated-target-only, vertical-eyelid ownership và blink-side suppression.
+T03 gate chốt faithful bit-exact khi mặc định/tắt, deterministic bounded cinematic, transition blend và suppression
+khi loss. T04 collector chỉ đo scalar khách quan (jitter ổn định, clamp, invalid, duplicate/reversed, reacquire peak
+và settle); false blink/direction correctness vẫn là manual vì chưa có ground truth. Automated gate ngày
+2026-09-14: **68 files / 723 tests PASS**, lint và production build PASS. Regression mới chốt default filtered
+center→edge không nhảy thẳng tới biên sau corrective giảm độ nhạy. Kết quả này chỉ xác nhận code/tooling
+complete; AR3 chưa DONE trước webcam/head-relative/đa-model gate E1–E12 ở cả faithful và cinematic.
+
+### 6.11. AR4-T01–T05 — Upper-body automated và manual gate
+
+Automated gate khóa: quaternion log/exp và asymmetric ellipsoid; paired calibration skew 49/50/51 ms;
+duplicate/reversed/exact-neutral/source hysteresis; aggregate clamp sau composition; final parent-world hierarchy;
+arm dùng animated shoulder parent; independent shoulder shrug; pause-safe breathing; faithful sway bằng 0;
+Packet V1 legacy/V2 dispatch, privacy serialization; jitter reduction và t50/t90 measurement helper.
+Corrective regression khóa các hành vi webcam: Face/Pose cùng source frame có cùng `sampledAtMs`; trong lúc
+calibration còn `collecting` processor giữ V1; Face pitch đúng dấu; Pose yaw được sửa trước head-relative; khung
+chỉ có Face + hai vai vẫn calibration `shoulder-only` và phát V2; bilateral/independent shrug không cần hông;
+full-torso mất hông blend về shoulder observation mà không snap.
+
+Manual corrective 2026-09-15 đã FAIL ở pitch Face, yaw torso, shoulder-only calibration và shrug; code corrective
+đã hoàn tất nhưng trạng thái vẫn **MANUAL RETEST PENDING**. Manual gate chạy U1–U13/U6A trong
+`docs/AR4_HEAD_NECK_TORSO_SHOULDER_IMPLEMENTATION_PLAN.md` trên ít nhất ba VRM capability-diverse. Trước mỗi model: reload, bật tracking, giữ neutral và bấm
+`Calibrate neutral face + upper body`; chỉ bắt đầu động tác khi cả F1 và AR4 báo `calibrated`.
+Curl ghi `N/A — baseline-gated` trong vòng nghiệm thu này. Không đánh dấu AR4 DONE trước khi chủ dự án xác nhận
+manual matrix và benchmark 60 giây/model.
+AR4-T03.1 vertical shrug automated bổ sung: ear-gap/nose-gap image-space có aspect correction và head-roll/pitch gate,
+bilateral/unilateral scalar, close-crop case nơi world shoulder đứng yên nhưng image shoulder nhấc lên, fallback bilateral khi ear mất nhưng nose còn tốt, scale rig theo hai gốc upper-arm, duplicate
+full-state snapshot, hold→return exact zero, current-torso-up model adapter và rest-position A–B–A không drift.
+Manual phải chạy VS-U1→VS-U16 trong `docs/AR4_T03_VERTICAL_SHRUG_EXTENSION_PLAN.md`; đặc biệt U14 head tilt,
+U15 torso lean và U16 packet cadence. AR4-T06 bổ sung sign fixture qua coordinate adapter, full/proxy cap,
+confidence hysteresis, head-relative ownership và regression bắt buộc: fore/aft lean không được lọt thành bilateral shrug,
+trong khi differential shoulder vẫn hoạt động. Automated gate ngày 2026-09-16: **77 test files / 777 tests PASS**, lint và
+production build PASS. Manual/performance AR4-T06 vẫn pending.
+
 *— Hết tài liệu —*
