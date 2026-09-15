@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Group } from "three";
 import { AvatarCanvas } from "../avatar/AvatarCanvas";
-import { AvatarMotionProcessor } from "../../lib/avatar-motion/avatarMotionProcessor";
-import type { AvatarPosePacketV1 } from "../../lib/avatar-motion/avatarPoseTypes";
+import { AvatarMotionProcessor, type ShoulderVerticalDiagnosticSnapshot,type TorsoLeanDiagnosticSnapshot } from "../../lib/avatar-motion/avatarMotionProcessor";
+import type { AvatarPosePacket } from "../../lib/avatar-motion/avatarPoseTypes";
 import type { AvatarMotionDiagnosticSnapshot } from "../../lib/avatar-motion/avatarMotionDiagnostics";
+import type { FacialNeutralCalibrationSnapshot } from "../../lib/avatar-motion/facialNeutralCalibration";
+import type { EyeBrowExpressionSnapshot } from "../../lib/avatar-motion/eyeBrowExpression";
+import type { MouthExpressionSnapshot } from "../../lib/avatar-motion/mouthExpression";
+import type { MouthPipelineTelemetrySnapshot } from "../../lib/avatar-motion/mouthPipelineTelemetry";
+import type { FacialExpressionDynamicsSnapshot } from "../../lib/avatar-motion/facialExpressionDynamics";
+import type { GazeDiagnostics } from "../../lib/avatar-motion/gazeSolver";
+import type { GazeEyelidDiagnostic } from "../../lib/avatar-motion/gazeEyelidCoupling";
+import type { GazeMetricsSnapshot } from "../../lib/avatar-motion/gazeMetrics";
 import type { FingerRigProfile } from "../../lib/avatar-motion/fingerRig";
 import type { GesturePoseLabel } from "../../lib/avatar-motion/gestureClassifier";
-import type { AvatarRenderer } from "../../lib/avatar-renderer/avatarRenderer";
+import type { AppliedFacialExpressionDiagnostic, AppliedShoulderTranslationDiagnostic, AvatarRenderer } from "../../lib/avatar-renderer/avatarRenderer";
+import type { AppliedGazeDiagnostic, GazeCapability } from "../../lib/avatar-renderer/gazeCapabilityAdapter";
 import { clearDiagnosticHelpers, createDiagnosticHelpers, elbowPlaneNormal, updateDiagnosticHelpers } from "../../lib/avatar-renderer/avatarDiagnostics";
 import type { ModelCapabilityReport } from "../../lib/avatar-renderer/modelTypes";
 import type { RendererMetricsSnapshot } from "../../lib/avatar-renderer/rendererMetrics";
@@ -17,6 +26,10 @@ import { useTracking } from "../../lib/tracking/useTracking";
 import { DEFAULT_POSE_MODEL, type PoseModelVariant } from "../../lib/tracking/mediaPipeRuntime";
 import { GestureFixtureCollector, reportFixtureGaps, type FixtureGapReport, type GestureFixtureCondition, type GestureFixtureDistance, type GestureFixtureOcclusion, type GestureFixtureOrientation, type GestureFixturePose, type GestureFixtureSplit } from "../../lib/avatar-motion/gestureFixture";
 import { DEFAULT_DEV_AVATAR_MODEL_ID, DEV_AVATAR_MODELS, getDevAvatarModel, type DevAvatarModel } from "./devAvatarModels";
+import { AudioQualificationPanel } from "./AudioQualificationPanel";
+import type { UpperBodyCalibrationSnapshot } from "../../lib/avatar-motion/upperBodyCalibration";
+import type { LifeMotionSnapshot } from "../../lib/avatar-motion/upperBodyLifeMotion";
+import type { UpperBodyMetricSnapshot } from "../../lib/avatar-motion/upperBodyMetrics";
 import "./avatarRendererDevHarness.css";
 
 const DIAGNOSTIC_CONVERSION = "current" as const;
@@ -26,7 +39,7 @@ export default function AvatarRendererDevHarness() {
   const videoRef = useRef<HTMLVideoElement>(null); const rendererRef = useRef<AvatarRenderer | null>(null); const helpersRef = useRef<Group | null>(null);
   const modelLoadRequestRef = useRef(0);
   const freezeTimerRef = useRef<number | null>(null);
-  const processorRef = useRef(new AvatarMotionProcessor()); const latestPacket = useRef<AvatarPosePacketV1 | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
+  const processorRef = useRef(new AvatarMotionProcessor()); const latestPacket = useRef<AvatarPosePacket | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
   const [filtered, setFiltered] = useState(true); const [constraints, setConstraints] = useState(true); const [smoothing, setSmoothing] = useState(true);
   const [handTwistEnabled, setHandTwistEnabled] = useState(true);
   // Phase 3B.3 — mặc định TẮT. Bật là hành động thử nghiệm có chủ đích của người test.
@@ -40,7 +53,26 @@ export default function AvatarRendererDevHarness() {
   const [poseModel, setPoseModel] = useState<PoseModelVariant>(DEFAULT_POSE_MODEL);
   const [avatarModelId, setAvatarModelId] = useState(DEFAULT_DEV_AVATAR_MODEL_ID);
   const [zoom, setZoom] = useState(1); const [verticalOffset, setVerticalOffset] = useState(0);
-  const [error, setError] = useState<string | null>(null); const [capability, setCapability] = useState<ModelCapabilityReport | null>(null); const [packet, setPacket] = useState<AvatarPosePacketV1 | null>(null);
+  const [error, setError] = useState<string | null>(null); const [capability, setCapability] = useState<ModelCapabilityReport | null>(null); const [packet, setPacket] = useState<AvatarPosePacket | null>(null);
+  const [facialCalibration, setFacialCalibration] = useState<FacialNeutralCalibrationSnapshot>(() => processorRef.current.getFacialCalibration());
+  const [upperBodyCalibration, setUpperBodyCalibration] = useState<UpperBodyCalibrationSnapshot>(() => processorRef.current.getUpperBodyCalibration());
+  const [upperBodyLife, setUpperBodyLife] = useState<LifeMotionSnapshot>(() => processorRef.current.getUpperBodyLifeMotion());
+  const [upperBodyMetrics, setUpperBodyMetrics] = useState<UpperBodyMetricSnapshot>(() => processorRef.current.getUpperBodyMetrics());
+  const [shoulderVertical, setShoulderVertical] = useState<ShoulderVerticalDiagnosticSnapshot>(() => processorRef.current.getShoulderVerticalDiagnostics());
+  const [torsoLean,setTorsoLean]=useState<TorsoLeanDiagnosticSnapshot>(()=>processorRef.current.getTorsoLeanDiagnostics());
+  const [appliedShoulderTranslation, setAppliedShoulderTranslation] = useState<AppliedShoulderTranslationDiagnostic | null>(null);
+  const [eyeBrowExpressions, setEyeBrowExpressions] = useState<EyeBrowExpressionSnapshot>(() => processorRef.current.getEyeBrowExpressions());
+  const [mouthExpressions, setMouthExpressions] = useState<MouthExpressionSnapshot>(() => processorRef.current.getMouthExpressions());
+  const [facialDynamics, setFacialDynamics] = useState<FacialExpressionDynamicsSnapshot>(() => processorRef.current.getFacialDynamics());
+  const [mouthTelemetry, setMouthTelemetry] = useState<MouthPipelineTelemetrySnapshot>(() => processorRef.current.getMouthPipelineTelemetry());
+  const [gazeDiagnostics, setGazeDiagnostics] = useState<GazeDiagnostics>(() => processorRef.current.getGazeDiagnostics());
+  const [gazeMetrics, setGazeMetrics] = useState<GazeMetricsSnapshot>(() => processorRef.current.getGazeMetrics());
+  const [gazeEyelidDiagnostic, setGazeEyelidDiagnostic] = useState<GazeEyelidDiagnostic>(() => processorRef.current.getGazeEyelidDiagnostic());
+  const [gazeMode, setGazeMode] = useState<"faithful" | "cinematic">("faithful");
+  const [gazeAttention, setGazeAttention] = useState(0);
+  const [gazeCapability, setGazeCapability] = useState<GazeCapability | null>(null);
+  const [appliedGaze, setAppliedGaze] = useState<AppliedGazeDiagnostic | null>(null);
+  const [appliedFacialExpressions, setAppliedFacialExpressions] = useState<Readonly<Record<string, AppliedFacialExpressionDiagnostic>>>({});
   const [planeNormals, setPlaneNormals] = useState<Record<string, unknown>>({});
   const [motionDiagnostics, setMotionDiagnostics] = useState<AvatarMotionDiagnosticSnapshot | null>(null);
   const [rendererMetrics, setRendererMetrics] = useState<RendererMetricsSnapshot | null>(null); const [trackingMetrics, setTrackingMetrics] = useState<TrackingMetricsSnapshot | null>(null);
@@ -75,6 +107,8 @@ export default function AvatarRendererDevHarness() {
   useEffect(() => { processorRef.current.setConstraints(constraints); }, [constraints]);
   useEffect(() => { processorRef.current.setHandTwistEnabled(handTwistEnabled); }, [handTwistEnabled]);
   useEffect(() => { processorRef.current.setGestureEnabled(gestureEnabled); }, [gestureEnabled]);
+  useEffect(() => { processorRef.current.setGazeMode(gazeMode); }, [gazeMode]);
+  useEffect(() => { processorRef.current.setGazeAttentionStrength(gazeAttention); }, [gazeAttention]);
   // Nhãn cử chỉ cần nhịp nhanh hơn panel chung (400ms): ở 400ms người test không thấy được nhãn
   // đổi lúc chuyển tư thế, nên không phân biệt được "nhận sai" với "nhận chậm".
   useEffect(() => {
@@ -87,7 +121,10 @@ export default function AvatarRendererDevHarness() {
   useEffect(() => { rendererRef.current?.setVerticalOffset(verticalOffset); }, [verticalOffset]);
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const renderer = rendererRef.current; const raw = frozenRaw.current ?? latestRaw.current; setPacket(latestPacket.current); setMotionDiagnostics(processorRef.current.getLastDiagnostics()); if (!renderer) return;
+      const renderer = rendererRef.current; const raw = frozenRaw.current ?? latestRaw.current; setPacket(latestPacket.current); setMotionDiagnostics(processorRef.current.getLastDiagnostics()); setFacialCalibration(processorRef.current.getFacialCalibration()); setUpperBodyCalibration(processorRef.current.getUpperBodyCalibration()); setUpperBodyLife(processorRef.current.getUpperBodyLifeMotion()); setUpperBodyMetrics(processorRef.current.getUpperBodyMetrics()); setShoulderVertical(processorRef.current.getShoulderVerticalDiagnostics());setTorsoLean(processorRef.current.getTorsoLeanDiagnostics()); setEyeBrowExpressions(processorRef.current.getEyeBrowExpressions()); setMouthExpressions(processorRef.current.getMouthExpressions()); setFacialDynamics(processorRef.current.getFacialDynamics()); setMouthTelemetry(processorRef.current.getMouthPipelineTelemetry()); setGazeDiagnostics(processorRef.current.getGazeDiagnostics()); setGazeMetrics(processorRef.current.getGazeMetrics()); setGazeEyelidDiagnostic(processorRef.current.getGazeEyelidDiagnostic()); if (!renderer) return;
+      setAppliedFacialExpressions(renderer.getAppliedFacialExpressions());
+      setAppliedShoulderTranslation(renderer.getAppliedShoulderTranslation());
+      setGazeCapability(renderer.getGazeCapability()); setAppliedGaze(renderer.getAppliedGaze());
       setRendererMetrics(renderer.getMetrics()); const model = renderer.getDiagnosticModel(); if (!model) return;
       if (raw?.pose.worldLandmarks) { setPlaneNormals({ left: elbowPlaneNormal(raw.pose.worldLandmarks, "left", DIAGNOSTIC_CONVERSION), right: elbowPlaneNormal(raw.pose.worldLandmarks, "right", DIAGNOSTIC_CONVERSION) }); if (helpersRef.current) updateDiagnosticHelpers(helpersRef.current, model.bones, raw.pose.worldLandmarks, DIAGNOSTIC_CONVERSION); }
     }, 400); return () => window.clearInterval(timer);
@@ -98,14 +135,27 @@ export default function AvatarRendererDevHarness() {
   const resetModelMotionState = useCallback(() => {
     processorRef.current.setFingerRig(null);
     processorRef.current.setRigProfile(null);
+    processorRef.current.setUpperBodyRigProfile(null);
+    processorRef.current.setFacialModelFingerprint(null);
+    processorRef.current.setGazeEyelidSupport(null);
     processorRef.current.reset();
     latestPacket.current = null;
     setPacket(null);
     setMotionDiagnostics(null);
+    setTorsoLean(processorRef.current.getTorsoLeanDiagnostics());
     setPlaneNormals({});
     setFingerRig(null);
     setCapability(null);
     setGesturePoses({ left: "rest", right: "rest" });
+    setMouthExpressions(processorRef.current.getMouthExpressions());
+    setFacialDynamics(processorRef.current.getFacialDynamics());
+    setMouthTelemetry(processorRef.current.getMouthPipelineTelemetry());
+    setUpperBodyCalibration(processorRef.current.getUpperBodyCalibration());
+    setUpperBodyLife(processorRef.current.getUpperBodyLifeMotion());
+    setUpperBodyMetrics(processorRef.current.getUpperBodyMetrics());
+    setShoulderVertical(processorRef.current.getShoulderVerticalDiagnostics()); setAppliedShoulderTranslation(null);
+    setAppliedFacialExpressions({});
+    setGazeCapability(null); setAppliedGaze(null); setGazeDiagnostics(processorRef.current.getGazeDiagnostics()); setGazeMetrics(processorRef.current.getGazeMetrics()); setGazeEyelidDiagnostic(processorRef.current.getGazeEyelidDiagnostic());
   }, []);
 
   const loadRendererModel = useCallback(async (renderer: AvatarRenderer, model: DevAvatarModel) => {
@@ -118,6 +168,10 @@ export default function AvatarRendererDevHarness() {
       const report = await renderer.loadModel(model.url, { licenseStatus: "unknown" });
       if (!report || !isCurrentModelLoadRequest(rendererRef.current, renderer, modelLoadRequestRef.current, requestId)) return;
       const rigProfile = renderer.getRigProfile();
+      processorRef.current.setUpperBodyRigProfile(renderer.getUpperBodyRigProfile());
+      processorRef.current.setFacialModelFingerprint(renderer.getFacialCapability()?.modelFingerprint ?? null);
+      processorRef.current.setGazeEyelidSupport(renderer.getGazeEyelidSupport());
+      setGazeCapability(renderer.getGazeCapability());
       setCapability(report);
       if (report.unsupportedFeatures.length > 0) {
         const missingBones = Object.entries(report.requiredBones).filter(([, available]) => !available).map(([bone]) => bone);
@@ -157,6 +211,8 @@ export default function AvatarRendererDevHarness() {
     // Cleanup có thể chạy khi React đang unmount; chỉ xóa state nội bộ, không set React state.
     processorRef.current.setFingerRig(null);
     processorRef.current.setRigProfile(null);
+    processorRef.current.setUpperBodyRigProfile(null);
+    processorRef.current.setGazeEyelidSupport(null);
     processorRef.current.reset();
     latestPacket.current = null;
   }, []);
@@ -255,26 +311,97 @@ export default function AvatarRendererDevHarness() {
       window.clearInterval(freezeTimerRef.current!); freezeTimerRef.current = null; setFreezeCountdown(null); toggleFreeze();
     }, 1000);
   }
-  const evidenceFrame = frozenRaw.current ?? latestRaw.current; const posePoints = evidenceFrame?.pose.worldLandmarks; const evidenceLandmarks = posePoints ? { leftShoulder: posePoints[11], rightShoulder: posePoints[12], leftElbow: posePoints[13], rightElbow: posePoints[14], leftWrist: posePoints[15], rightWrist: posePoints[16] } : null;
+  const evidenceFrame = frozenRaw.current ?? latestRaw.current; const posePoints = evidenceFrame?.pose.worldLandmarks; const evidenceLandmarks = posePoints ? { leftEar: posePoints[7], rightEar: posePoints[8], leftShoulder: posePoints[11], rightShoulder: posePoints[12], leftElbow: posePoints[13], rightElbow: posePoints[14], leftWrist: posePoints[15], rightWrist: posePoints[16], leftHip: posePoints[23], rightHip: posePoints[24] } : null;
   return <main className="avatar-renderer-dev">
     <header><div><strong>DEV ONLY · LOCAL ONLY</strong><h1>P4-T10 Retargeting Diagnostics</h1></div><p>Không upload, capture hoặc lưu raw frame.</p></header>
     {error && <pre className="dev-error" role="alert">{error}</pre>}
     <section className="dev-controls">
-      <button onClick={() => void toggleTracking()}>{trackingRunning ? "Stop tracking" : "Start tracking"}</button><button onClick={toggleRenderer}>{rendererRunning ? "Stop renderer" : "Start renderer"}</button><button onClick={reloadModel} disabled={modelLoading}>{modelLoading ? "Loading model…" : "Reload model"}</button>
+      <button onClick={() => void toggleTracking()}>{trackingRunning ? "Stop tracking" : "Start tracking"}</button><button onClick={toggleRenderer}>{rendererRunning ? "Stop renderer" : "Start renderer"}</button><button onClick={reloadModel} disabled={modelLoading}>{modelLoading ? "Loading model…" : "Reload model"}</button><button onClick={() => { processorRef.current.calibrateFaceNeutral(); setFacialCalibration(processorRef.current.getFacialCalibration()); setUpperBodyCalibration(processorRef.current.getUpperBodyCalibration()); }}>Calibrate neutral face + upper body</button><span className={`facial-calibration-badge ${facialCalibration.state}`}>F1: {facialCalibration.state} · {facialCalibration.acceptedSamples}/{facialCalibration.requiredSamples} · {facialCalibration.collectionMode}</span><span className="eye-brow-badge">AR4: {upperBodyCalibration.state} · {upperBodyCalibration.acceptedPairs}/{upperBodyCalibration.requiredPairs} · {upperBodyCalibration.mode}</span><span className="eye-brow-badge">F2 blink L/R: {eyeBrowExpressions.blinkLeft.toFixed(2)}/{eyeBrowExpressions.blinkRight.toFixed(2)}{eyeBrowExpressions.unilateralCandidate ? ` · guard ${eyeBrowExpressions.unilateralCandidate}` : ""}</span>
       <button onClick={toggleFreeze} disabled={!frozen && !latestRaw.current}>{frozen ? "Unfreeze" : "Freeze current"}</button><button onClick={freezeAfterCountdown} disabled={frozen || freezeCountdown !== null || !latestRaw.current}>{freezeCountdown === null ? "Freeze in 5s" : `Freeze in ${freezeCountdown}s`}</button>
-      <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={handTwistEnabled} onChange={(e) => setHandTwistEnabled(e.target.checked)} /> Hand twist (2B-5)</label><label><input type="checkbox" checked={gestureEnabled} onChange={(e) => setGestureEnabled(e.target.checked)} /> Finger gesture (3B.3)</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Smoothing</label><label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
+      <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Dynamics/filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={handTwistEnabled} onChange={(e) => setHandTwistEnabled(e.target.checked)} /> Hand twist (2B-5)</label><label><input type="checkbox" checked={gestureEnabled} onChange={(e) => setGestureEnabled(e.target.checked)} /> Finger gesture (3B.3)</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Bone smoothing</label><label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
       <label>Pose model <select value={poseModel} onChange={(e) => { if (trackingRunning) { tracking?.stop(); setTrackingRunning(false); } setPoseModel(e.target.value as PoseModelVariant); }}><option value="full">full (chính xác hơn)</option><option value="lite">lite (nhẹ hơn)</option></select></label>
       <label>Avatar model <select value={avatarModelId} onChange={(event) => selectAvatarModel(event.target.value)}>{DEV_AVATAR_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select></label>
       <label>Zoom <input type="range" min="0.5" max="3" step="0.05" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {zoom.toFixed(2)}x</label>
       <label>Vị trí trên/dưới <input type="range" min="-0.5" max="0.5" step="0.01" value={verticalOffset} onChange={(e) => setVerticalOffset(Number(e.target.value))} /> {verticalOffset.toFixed(2)}</label>
+      <label>Gaze mode <select value={gazeMode} onChange={(event) => setGazeMode(event.target.value as "faithful" | "cinematic")}><option value="faithful">faithful (mặc định)</option><option value="cinematic">cinematic (thử nghiệm)</option></select></label>
+      <label>Camera attention <input type="range" min="0" max="1" step="0.05" value={gazeAttention} onChange={(event) => setGazeAttention(Number(event.target.value))} disabled={gazeMode !== "cinematic"} /> {gazeAttention.toFixed(2)}</label>
       <button onClick={() => { setZoom(1); setVerticalOffset(0); }}>Reset khung hình</button>
     </section>
     <section className="dev-stage"><AvatarCanvas onReady={attachRenderer} onDispose={detachRenderer} onError={(reason) => setError(`WebGL: ${reason.message}`)} options={{ smoothing, onContextLost: (reason) => setError(reason.message) }} /><div className="dev-camera-preview"><video ref={videoRef} muted playsInline />{!trackingRunning && <p>Camera chưa bật<br /><small>Bấm Start tracking để dùng webcam</small></p>}</div></section>
     <section className="dev-panels">
-      <article><h2>Frozen evidence</h2><p>Mode: {frozen ? "FROZEN" : "LIVE"} · sample: <strong>{sampleName}</strong> · frozen #{frozenSequence}</p><p>Conversion: <strong>{DIAGNOSTIC_CONVERSION}</strong> · raw timestamp {number(evidenceFrame?.frameTimestampMs, 0)} · packet seq {packet?.sequence ?? "—"}</p><p>Solver {filtered ? "+filter" : "raw"} · constraints {constraints ? "on" : "off"} · Hand twist {handTwistEnabled ? "on" : "Pose-only"} · smoothing {smoothing ? "on" : "off"}</p><pre>required world landmarks {JSON.stringify(evidenceLandmarks, null, 2)}</pre><pre>plane normal {JSON.stringify(planeNormals, null, 2)}</pre></article>
+      <article><h2>Frozen evidence</h2><p>Mode: {frozen ? "FROZEN" : "LIVE"} · sample: <strong>{sampleName}</strong> · frozen #{frozenSequence}</p><p>Conversion: <strong>{DIAGNOSTIC_CONVERSION}</strong> · raw timestamp {number(evidenceFrame?.frameTimestampMs, 0)} · packet seq {packet?.sequence ?? "—"}</p><p>Solver {filtered ? "+dynamics/filter" : "raw"} · constraints {constraints ? "on" : "off"} · Hand twist {handTwistEnabled ? "on" : "Pose-only"} · bone smoothing {smoothing ? "on" : "off"}</p><pre>required world landmarks {JSON.stringify(evidenceLandmarks, null, 2)}</pre><pre>plane normal {JSON.stringify(planeNormals, null, 2)}</pre></article>
       <article><h2>Realtime</h2><p>Avatar: <strong>{getDevAvatarModel(avatarModelId)?.label ?? avatarModelId}</strong>{modelLoading ? " · đang tải…" : ""}</p><p>Tracking/Pipeline: {number(trackingMetrics?.cameraFps)} / {number(trackingMetrics?.pipelineFps)} FPS</p><p>Renderer: {number(rendererMetrics?.fps)} FPS · p95 {number(rendererMetrics?.frameTimeP95Ms)}ms</p><p>Processor→draw: {number(rendererMetrics?.processorInputToDrawMs)}ms</p>
         <p>Pose model: <strong>{trackingMetrics?.poseModel ?? `${poseModel} (chưa chạy)`}</strong> · delegate {trackingMetrics?.selectedDelegate ?? "—"}</p>
         <p>Pose inference: {number(trackingMetrics?.inferenceTimeMs.pose.average)}ms trung bình · p95 {number(trackingMetrics?.inferenceTimeMs.pose.p95)}ms · max {number(trackingMetrics?.inferenceTimeMs.pose.max)}ms</p></article>
+      <article><h2>F1 neutral face</h2><p>Giữ mặt thư giãn khi calibration đang thu mẫu.</p><p>Trạng thái: <strong>{facialCalibration.state}</strong> · chế độ {facialCalibration.collectionMode} · nhận {facialCalibration.acceptedSamples}/{facialCalibration.requiredSamples} · bỏ {facialCalibration.rejectedSamples}</p><pre>{JSON.stringify(facialCalibration.baselines, null, 2)}</pre></article>
+      <article><h2>AR4 upper body</h2>
+        <p>Packet: <strong>V{packet?.version ?? "—"}</strong> · paired calibration <strong>{upperBodyCalibration.state}</strong> ({upperBodyCalibration.acceptedPairs}/{upperBodyCalibration.requiredPairs}) · mode <strong>{upperBodyCalibration.mode}</strong> · full torso pairs {upperBodyCalibration.acceptedFullTorsoPairs}</p>
+        <p>Reject: skew {upperBodyCalibration.rejectedSkew} · quality {upperBodyCalibration.rejectedQuality} · missing face/shoulders {upperBodyCalibration.rejectedMissingRequired}</p>
+        <p>Vertical image-space raw L/R <strong>{number(shoulderVertical.raw.left,2)} / {number(shoulderVertical.raw.right,2)}</strong> · filtered {number(shoulderVertical.filtered.left,2)} / {number(shoulderVertical.filtered.right,2)}</p>
+        <p>Source L/R {shoulderVertical.source.left} / {shoulderVertical.source.right} · ear confidence {number(shoulderVertical.earGapConfidence.left,2)} / {number(shoulderVertical.earGapConfidence.right,2)} · lean common gain {number(shoulderVertical.commonMotionGain,2)} · state {shoulderVertical.state.left} / {shoulderVertical.state.right}</p>
+        <p>Applied displacement L/R {number(appliedShoulderTranslation?.left.displacement,4)} / {number(appliedShoulderTranslation?.right.displacement,4)} · capability {appliedShoulderTranslation?.left.capability ?? "—"} / {appliedShoulderTranslation?.right.capability ?? "—"} · clamp {appliedShoulderTranslation?.left.clamped ? "L" : "—"}/{appliedShoulderTranslation?.right.clamped ? "R" : "—"}</p>
+        <p>Lean {torsoLean.source} · raw/final {number(torsoLean.angle===null?null:torsoLean.angle*180/Math.PI,2)}°/{number(torsoLean.filteredAngle*180/Math.PI,2)}° · confidence {number(torsoLean.confidence,2)} · state {torsoLean.state}{torsoLean.limited?" · capped":""}</p>
+        <p>Lean cues shoulder/face/mismatch/depth {number(torsoLean.cues.shoulderScale,3)} / {number(torsoLean.cues.faceScale,3)} / {number(torsoLean.cues.scaleMismatch,3)} / {number(torsoLean.cues.depth,3)} · penalties H/Y/R/S {number(torsoLean.penalties.head,2)}/{number(torsoLean.penalties.yaw,2)}/{number(torsoLean.penalties.roll,2)}/{number(torsoLean.penalties.shrug,2)}</p>
+        <p>Life clock {number(upperBodyLife.continuousLifeTimeMs,0)} ms · breath {number(upperBodyLife.breathing,3)} · speechChest {number(upperBodyLife.speechChest*180/Math.PI,3)}° · sway yaw/roll {number(upperBodyLife.swayYaw*180/Math.PI,3)}°/{number(upperBodyLife.swayRoll*180/Math.PI,3)}°</p>
+        <p>Head jitter raw/final/reduction {number(upperBodyMetrics.head.rawStandardDeviationDeg,3)}°/{number(upperBodyMetrics.head.finalStandardDeviationDeg,3)}°/{number(upperBodyMetrics.head.reductionRatio===null?null:upperBodyMetrics.head.reductionRatio*100,1)}% · torso {number(upperBodyMetrics.torso.rawStandardDeviationDeg,3)}°/{number(upperBodyMetrics.torso.finalStandardDeviationDeg,3)}°/{number(upperBodyMetrics.torso.reductionRatio===null?null:upperBodyMetrics.torso.reductionRatio*100,1)}%</p>
+        <p>Solver avg/p95 {number(upperBodyMetrics.solverAverageMs,3)}/{number(upperBodyMetrics.solverP95Ms,3)} ms · aggregate clamp {upperBodyMetrics.aggregateClampCount} · invalid {upperBodyMetrics.invalidOutputs}</p>
+        <pre>{JSON.stringify(packet?.version===2?{headRotation:packet.headRotation,shoulderMotion:packet.shoulderMotion,jointRotations:Object.fromEntries(Object.entries(packet.jointRotations).filter(([name])=>["hips","spine","chest","upperChest","neck","leftShoulder","rightShoulder"].includes(name)))}:{legacy:true},null,2)}</pre>
+      </article>
+      <article><h2>F2 eyes &amp; brows</h2><p>Blink L/R: <strong>{eyeBrowExpressions.blinkLeft.toFixed(2)} / {eyeBrowExpressions.blinkRight.toFixed(2)}</strong></p><p>Closed L/R: {eyeBrowExpressions.leftClosed ? "yes" : "no"} / {eyeBrowExpressions.rightClosed ? "yes" : "no"} · unilateral guard: {eyeBrowExpressions.unilateralCandidate ?? "none"}</p><p>Raw-profile brow down/up · eye wide: {eyeBrowExpressions.browDown.toFixed(2)} / {eyeBrowExpressions.browUp.toFixed(2)} · {eyeBrowExpressions.eyeWide.toFixed(2)}</p></article>
+      <article><h2>AR3 Gaze</h2>
+        <p>State/sample: <strong>{gazeDiagnostics.outputState}</strong> · {gazeDiagnostics.sampleDisposition} · quality {number(gazeDiagnostics.quality, 2)} · reject {gazeDiagnostics.rejectReason ?? "none"}</p>
+        <p>Raw L H/V: {number(gazeDiagnostics.rawLeft?.horizontal, 2)} / {number(gazeDiagnostics.rawLeft?.vertical, 2)} · Raw R H/V: {number(gazeDiagnostics.rawRight?.horizontal, 2)} / {number(gazeDiagnostics.rawRight?.vertical, 2)}</p>
+        <p>Fused yaw/pitch: <strong>{number(gazeDiagnostics.fused.yaw, 2)} / {number(gazeDiagnostics.fused.pitch, 2)}</strong> · final semantic {number(gazeDiagnostics.finalSemantic.yaw, 2)} / {number(gazeDiagnostics.finalSemantic.pitch, 2)} · clamp {gazeDiagnostics.clampApplied ? "yes" : "no"}</p>
+        <p>Head yaw/pitch rad: {number(gazeDiagnostics.head?.yaw, 2)} / {number(gazeDiagnostics.head?.pitch, 2)}</p>
+        <p>Adapter: <strong>{gazeCapability?.kind ?? "not-loaded"}</strong> · eyelid handled {gazeCapability?.handlesVerticalEyelid ? "yes" : "no"} · applied degrees {number(appliedGaze?.appliedDegrees?.yaw, 1)} / {number(appliedGaze?.appliedDegrees?.pitch, 1)} · reject {appliedGaze?.rejected ?? "none"}</p>
+        <p>Mode: <strong>{gazeDiagnostics.mode}</strong> · blend {number(gazeDiagnostics.cinematic.blend, 2)} · attention bias {number(gazeDiagnostics.cinematic.attentionBias.yaw, 3)} / {number(gazeDiagnostics.cinematic.attentionBias.pitch, 3)} · saccade {number(gazeDiagnostics.cinematic.saccade.yaw, 3)} / {number(gazeDiagnostics.cinematic.saccade.pitch, 3)} · idle blink {number(gazeDiagnostics.cinematic.proceduralBlink, 2)}</p>
+        <p>T02 eyelid: <strong>{gazeEyelidDiagnostic.status}</strong> · {gazeEyelidDiagnostic.reason ?? "none"} · outputs {Object.entries(gazeEyelidDiagnostic.outputs).map(([name, value]) => `${name}=${value.toFixed(2)}`).join(" · ") || "none"}</p>
+        <p>T04 metrics: fresh/invalid {gazeMetrics.freshSampleCount}/{gazeMetrics.invalidSampleCount} · duplicate/reversed {gazeMetrics.duplicateSampleCount}/{gazeMetrics.reversedSampleCount} · clamp {gazeMetrics.clampHitCount} ({number(gazeMetrics.clampHitRatio * 100, 1)}%) · longest {number(gazeMetrics.longestClampDurationMs, 0)}ms</p>
+        <p>Jitter p95 {number(gazeMetrics.semanticGazeJitterP95, 3)} · reacquire peak {number(gazeMetrics.semanticReacquirePeakDelta, 3)} · settle {number(gazeMetrics.semanticReacquireSettleTimeMs, 0)}ms · reacquire count {gazeMetrics.reacquireCount}</p>
+      </article>
+      <article><h2>F3 webcam mouth</h2>
+        <p>Geometry J/C/O: <strong>{mouthExpressions.geometry.jawOpen.toFixed(2)} / {mouthExpressions.geometry.closure.toFixed(2)} / {mouthExpressions.geometry.visibleOpening.toFixed(2)}</strong></p>
+        <p>Jaw source blendshape/landmark: <strong>{mouthExpressions.geometry.blendshapeJawOpen.toFixed(2)} / {mouthExpressions.geometry.landmarkJawOpen.toFixed(2)}</strong></p>
+        <p>Round/width/activity: {mouthExpressions.geometry.round.toFixed(2)} / {mouthExpressions.geometry.width.toFixed(2)} / {mouthExpressions.geometry.activity.toFixed(2)}</p>
+        <p>Vowels aa/ih/ou/ee/oh: <strong>{mouthExpressions.visemes.aa.toFixed(2)} / {mouthExpressions.visemes.ih.toFixed(2)} / {mouthExpressions.visemes.ou.toFixed(2)} / {mouthExpressions.visemes.ee.toFixed(2)} / {mouthExpressions.visemes.oh.toFixed(2)}</strong></p>
+        <p>Corrective pucker/funnel/narrow/wide: {mouthExpressions.corrective.pucker.toFixed(2)} / {mouthExpressions.corrective.funnel.toFixed(2)} / {mouthExpressions.corrective.narrow.toFixed(2)} / {mouthExpressions.corrective.wide.toFixed(2)}</p>
+        <p>Upper/lower: {mouthExpressions.corrective.upperUp.toFixed(2)} / {mouthExpressions.corrective.lowerDown.toFixed(2)}</p>
+      </article>
+      <article><h2>F4 expression dynamics</h2>
+        <p>Lifecycle: <strong>{facialDynamics.lifecycle}</strong> · sample {facialDynamics.sampleDisposition} · {facialDynamics.filtered ? "dynamics ON" : "bypass"}</p>
+        <p>dt: {number(facialDynamics.dtMs)}ms · gap rebase: {facialDynamics.gapRebased ? "yes" : "no"}</p>
+        <p>Final blink L/R: <strong>{number(facialDynamics.final.blinkLeft, 2)} / {number(facialDynamics.final.blinkRight, 2)}</strong></p>
+        <p>Final squint evidence L/R (raw eye Joy disabled): <strong>{number(facialDynamics.final.eyeSquintLeft, 2)} / {number(facialDynamics.final.eyeSquintRight, 2)}</strong></p>
+        <p>Final smile closed/open · frown: <strong>{number(facialDynamics.final.mouthSmileClosed, 2)} / {number(facialDynamics.final.mouthSmileOpen, 2)} · {number(facialDynamics.final.mouthFrown, 2)}</strong></p>
+        <p>Final close · vowel sum: <strong>{number(facialDynamics.final.mouthClose, 2)} · {number(["aa", "ih", "ou", "ee", "oh"].reduce((total, name) => total + (facialDynamics.final[name] ?? 0), 0), 2)}</strong></p>
+        <p>Conflict pre/post: {facialDynamics.preMix.conflicts.join(", ") || "none"} / {facialDynamics.postMix.conflicts.join(", ") || "none"}</p>
+        <p>Budget scale: {Object.entries(facialDynamics.postMix.budgets).filter(([, value]) => value.scale < .999).map(([name, value]) => `${name} ${value.scale.toFixed(2)}`).join(" · ") || "none"}</p>
+      </article>
+      <article><h2>F4 fast-speech telemetry</h2>
+        <p><small>DEV/local-only · cửa sổ peak 1 giây; chỉ lưu scalar blendshape, không lưu ảnh/landmark.</small></p>
+        <p>Face samples: <strong>{mouthTelemetry.window.sampleCount}</strong> · effective {number(mouthTelemetry.window.sampleRateFps)} FPS · active {mouthTelemetry.window.activeSampleCount}</p>
+        <p>Current timestamp/dt: {number(mouthTelemetry.current?.sampledAtMs, 0)} / {number(mouthTelemetry.current?.deltaTimeMs)} ms</p>
+        <p>Current raw/calibrated jaw: <strong>{number(mouthTelemetry.current?.raw.jawOpen, 2)} / {number(mouthTelemetry.current?.calibrated.jawOpen, 2)}</strong></p>
+        <p>Current raw→cal pucker/funnel: <strong>{number(mouthTelemetry.current?.raw.mouthPucker, 2)}→{number(mouthTelemetry.current?.calibrated.mouthPucker, 2)} / {number(mouthTelemetry.current?.raw.mouthFunnel, 2)}→{number(mouthTelemetry.current?.calibrated.mouthFunnel, 2)}</strong></p>
+        <p>Current opening/round/stretch/activity: <strong>{number(mouthTelemetry.current?.speechActivity.visibleOpening, 2)} / {number(mouthTelemetry.current?.speechActivity.round, 2)} / {number(mouthTelemetry.current?.speechActivity.stretch, 2)} / {number(mouthTelemetry.current?.speechActivity.candidate, 2)}</strong></p>
+        <p>Corrective current/boost/envelope/gain: <strong>{number(mouthTelemetry.current?.corrective.currentAmplitude, 2)} / {number(mouthTelemetry.current?.corrective.boostedAmplitude, 2)} / {number(mouthTelemetry.current?.corrective.preservedEnvelope, 2)} / {number(mouthTelemetry.current?.corrective.envelopeGain, 2)}</strong> · {mouthTelemetry.current?.corrective.disposition ?? "—"}</p>
+        <p>Current vowel F3 → desired → dynamic → final: <strong>{number(mouthTelemetry.current?.stages.f3Mapped.vowelSum, 2)} → {number(mouthTelemetry.current?.stages.f4Desired.vowelSum, 2)} → {number(mouthTelemetry.current?.stages.f4Dynamic.vowelSum, 2)} → {number(mouthTelemetry.current?.stages.f4Final.vowelSum, 2)}</strong></p>
+        <p>Peak raw/calibrated/open/activity: <strong>{number(mouthTelemetry.window.peaks.rawJawOpen, 2)} / {number(mouthTelemetry.window.peaks.calibratedJawOpen, 2)} / {number(mouthTelemetry.window.peaks.visibleOpening, 2)} / {number(mouthTelemetry.window.peaks.speechActivity, 2)}</strong></p>
+        <p>Peak boosted/envelope: <strong>{number(mouthTelemetry.window.peaks.boostedAmplitude, 2)} / {number(mouthTelemetry.window.peaks.preservedEnvelope, 2)}</strong></p>
+        <p>Peak vowel F3 → desired → dynamic → final: <strong>{number(mouthTelemetry.window.peaks.f3VowelSum, 2)} → {number(mouthTelemetry.window.peaks.desiredVowelSum, 2)} → {number(mouthTelemetry.window.peaks.dynamicVowelSum, 2)} → {number(mouthTelemetry.window.peaks.finalVowelSum, 2)}</strong></p>
+        <p>Peak final closure: <strong>{number(mouthTelemetry.window.peaks.finalClosure, 2)}</strong></p>
+        <p>Sent to VRM: {(["aa", "ih", "ou", "ee", "oh", "mouthClose"] as const).map((name) => {
+          const applied = appliedFacialExpressions[name];
+          return applied ? `${name}→${applied.modelName} ${number(applied.value, 2)}` : `${name} —`;
+        }).join(" · ")}</p>
+      </article>
+      <AudioQualificationPanel metrics={{
+        rendererFps: rendererMetrics?.fps ?? null,
+        trackingFps: trackingMetrics?.cameraFps ?? null,
+        pipelineFps: trackingMetrics?.pipelineFps ?? null,
+        processorToDrawMs: rendererMetrics?.processorInputToDrawMs ?? null,
+        trackingToRenderMs: rendererMetrics?.poseAgeMs ?? null,
+      }} />
       <article><h2>Finger rig (3B.3)</h2>
         <p>Gesture: <strong>{gestureEnabled ? "ON" : "OFF (Phase 3B nguyên trạng)"}</strong></p>
         {gestureEnabled && <p style={{ fontSize: "1.1em" }}>Nhãn — trái: <strong>{gesturePoses.left}</strong> · phải: <strong>{gesturePoses.right}</strong></p>}

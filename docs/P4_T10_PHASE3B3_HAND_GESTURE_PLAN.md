@@ -1,6 +1,7 @@
 # P4-T10 — Phase 3B.3: Discrete Hand Gestures & Finger Pose (kế hoạch)
 
-> Trạng thái: **v5 — đang thực hiện theo lộ trình từng dáng (xem §4.2). Bước 0 XONG; sửa
+> Trạng thái: **DEFERRED theo quyết định chủ dự án ngày 2026-09-10 — giữ nguyên code/test hiện có,
+> chưa tuyên bố manual acceptance hoặc hoàn thành. Trước khi defer: v5 đang thực hiện theo lộ trình từng dáng (xem §4.2). Bước 0 XONG; sửa
 > directional swing ngón cái đang làm (xem §4.11).**
 > Phạm vi: nhận dạng 5 cử chỉ bàn tay rời rạc (`open`, `fist`, `point`, `thumbsUp`, `thumbsDown`)
 > và phát tư thế ngón lên avatar.

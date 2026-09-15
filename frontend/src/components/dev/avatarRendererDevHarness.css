@@ -3,6 +3,9 @@
 .avatar-renderer-dev header { justify-content: space-between; } .avatar-renderer-dev h1 { margin: 4px 0; }
 .avatar-renderer-dev button { padding: 8px 12px; border: 1px solid #6956d8; border-radius: 8px; color: white; background: #342a69; }
 .dev-controls { margin: 14px 0; padding: 12px; border-radius: 10px; background: #171326; }
+.facial-calibration-badge { align-self: center; padding: 6px 10px; border: 1px solid #d19b55; border-radius: 999px; color: #ffe0a8; background: #4b351c; font-weight: 700; }
+.facial-calibration-badge.ready { border-color: #3ccba1; color: #b9ffe9; background: #173e35; }
+.eye-brow-badge { align-self: center; padding: 6px 10px; border: 1px solid #678fe8; border-radius: 999px; color: #d8e6ff; background: #192b50; font-weight: 700; }
 .dev-stage { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 13fr); height: min(56vh, 580px); gap: 12px; }
 .dev-stage canvas, .dev-stage video { width: 100%; height: 100%; min-height: 0; border-radius: 12px; object-fit: cover; background: #171326; }
 .dev-camera-preview { position: relative; min-height: 0; }

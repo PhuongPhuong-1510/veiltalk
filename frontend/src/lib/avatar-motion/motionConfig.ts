@@ -1,14 +1,41 @@
 import { DEFAULT_GESTURE_CLASSIFIER_CONFIG, type GestureClassifierConfig } from "./gestureClassifier";
 import { DEFAULT_GESTURE_TEMPORAL_CONFIG, type GestureTemporalConfig } from "./gestureTemporal";
 import { DEFAULT_FINGER_POSE_TEMPORAL_CONFIG, type FingerPoseTemporalConfig } from "./fingerPoseTemporal";
+import type { MouthExpressionConfig } from "./mouthExpression";
+import type { FacialExpressionDynamicsConfig } from "./facialExpressionDynamics";
+import { DEFAULT_GAZE_OBSERVATION_CONFIG, type GazeObservationConfig } from "./gazeObservation";
+import type { GazeTemporalConfig } from "./gazeTemporal";
+import { DEFAULT_GAZE_CINEMATIC_CONFIG, type GazeCinematicConfig } from "./gazeCinematic";
+import { DEFAULT_GAZE_EYELID_CONFIG, type GazeEyelidConfig } from "./gazeEyelidCoupling";
 
 export interface OneEuroParameters { minCutoff: number; beta: number; derivativeCutoff: number }
 
 export interface AvatarMotionConfig {
   freshnessMs: { face: number; hand: number; pose: number };
-  loss: { holdMs: number; returnMs: number; recoveryMs: number; filterResetMs: number };
+  loss: { holdMs: number; returnMs: number; recoveryMs: number };
+  face: {
+    neutralCalibrationSamples: number;
+    neutralDeadZone: number;
+    neutralActivationLimit: number;
+    neutralAdaptiveRate: number;
+    neutralAdaptiveWindow: number;
+    blinkEnter: number;
+    blinkExit: number;
+    unilateralBlinkConfirmMs: number;
+    browEmotionFallbackGain: number;
+    browInputOnset: number;
+    browInputFull: number;
+    mouth: MouthExpressionConfig;
+    dynamics: FacialExpressionDynamicsConfig;
+  };
+  gaze: {
+    observation: GazeObservationConfig;
+    temporal: GazeTemporalConfig;
+    limits: { yawLeft: number; yawRight: number; pitchUp: number; pitchDown: number };
+    cinematic: GazeCinematicConfig;
+    eyelid: GazeEyelidConfig;
+  };
   filter: {
-    expressions: OneEuroParameters;
     head: OneEuroParameters;
     arms: OneEuroParameters;
     wrist: OneEuroParameters;
@@ -156,9 +183,108 @@ export interface AvatarMotionConfig {
 /** Các duration là giá trị hiệu chỉnh ban đầu, chưa phải ngưỡng chính thức của SRS. */
 export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
   freshnessMs: { face: 100, hand: 150, pose: 150 },
-  loss: { holdMs: 250, returnMs: 500, recoveryMs: 180, filterResetMs: 750 },
+  loss: { holdMs: 250, returnMs: 500, recoveryMs: 180 },
+  face: {
+    neutralCalibrationSamples: 30,
+    neutralDeadZone: 0.015,
+    neutralActivationLimit: 0.2,
+    neutralAdaptiveRate: 0.01,
+    neutralAdaptiveWindow: 0.06,
+    blinkEnter: 0.55,
+    blinkExit: 0.25,
+    unilateralBlinkConfirmMs: 45,
+    browEmotionFallbackGain: 1,
+    browInputOnset: 0.04,
+    browInputFull: 0.4,
+    mouth: {
+      activation: {
+        jawOpen: { onset: 0.06, full: 0.70 },
+        mouthClose: { onset: 0.08, full: 0.55 },
+        pucker: { onset: 0.12, full: 0.85 },
+        funnel: { onset: 0.10, full: 0.80 },
+        stretch: { onset: 0.06, full: 0.50 },
+        lip: { onset: 0.05, full: 0.50 },
+        corner: { onset: 0.05, full: 0.50 },
+      },
+      landmarkAperture: { onset: 0.02, full: 0.32 },
+      aperture: {
+        low: { onset: 0.18, full: 0.42 },
+        midEnter: { onset: 0.12, full: 0.38 },
+        midExit: { onset: 0.55, full: 0.85 },
+        high: { onset: 0.40, full: 0.80 },
+      },
+      pressClosureGain: 0.75,
+      roundWideAntagonism: 0.50,
+      puckerOpenSuppression: 0.65,
+      funnelClosedGain: 0.35,
+      aaRoundSuppression: 0.80,
+      aaWideSuppression: 0.15,
+      roundedBaseEvidence: 0.60,
+      epsilon: 1e-6,
+    },
+    dynamics: {
+      initialStepMs: 1_000 / 30,
+      dtMaxMs: 80,
+      maxContinuousGapMs: 250,
+      mouthSpeechCorrective: {
+        activityOnset: 0.05,
+        activityFull: 0.55,
+        midRangeLift: 0.35,
+        peakDecayMs: 90,
+        strongClosure: 0.65,
+        maxContinuousGapMs: 250,
+        epsilon: 1e-6,
+      },
+      groups: {
+        eyelid: { attackMs: 10, releaseMs: 30 },
+        eyeShape: { attackMs: 25, releaseMs: 60 },
+        gaze: { attackMs: 25, releaseMs: 60 },
+        lipClosure: { attackMs: 12, releaseMs: 45 },
+        vowel: { attackMs: 20, releaseMs: 50 },
+        jawLipShape: { attackMs: 25, releaseMs: 60 },
+        lipDetail: { attackMs: 35, releaseMs: 90 },
+        brow: { attackMs: 45, releaseMs: 100 },
+        cheekNose: { attackMs: 70, releaseMs: 150 },
+        emotion: { attackMs: 90, releaseMs: 180 },
+        other: { attackMs: 35, releaseMs: 90 },
+      },
+      mixer: {
+        priorityExponent: 1,
+        epsilon: 1e-6,
+        smile: {
+          openOnset: 0.12,
+          openFull: 0.5,
+          closedGain: 0.45,
+          openGain: 0.6,
+          frownGain: 0.55,
+          vowelSuppression: 0.75,
+          lipShapeSuppression: 0.8,
+        },
+        budgets: {
+          lipShape: 0.8,
+          mouthBase: 1.35,
+          lipVerticalPerSide: 0.8,
+          mouthCornerPerSide: 1,
+          cheekNosePerSide: 0.8,
+          emotion: 1,
+        },
+      },
+    },
+  },
+  gaze: {
+    observation: DEFAULT_GAZE_OBSERVATION_CONFIG,
+    temporal: {
+      // Manual AR3 tuning 2026-09-14: giảm phản ứng vi mô và tốc độ bắt mục tiêu để mắt bớt giật.
+      filter: { minCutoff: 1.15, beta: 0.035, derivativeCutoff: 1 },
+      maximumTimestampGapMs: 500,
+      holdMs: 120,
+      returnMs: 240,
+    },
+    limits: { yawLeft: 0.9, yawRight: 0.9, pitchUp: 0.75, pitchDown: 0.65 },
+    cinematic: DEFAULT_GAZE_CINEMATIC_CONFIG,
+    eyelid: DEFAULT_GAZE_EYELID_CONFIG,
+  },
   filter: {
-    expressions: { minCutoff: 1.2, beta: 0.03, derivativeCutoff: 1 },
     head: { minCutoff: 1.1, beta: 0.12, derivativeCutoff: 1 },
     arms: { minCutoff: 1, beta: 0.2, derivativeCutoff: 1 },
     wrist: { minCutoff: 1.4, beta: 0.25, derivativeCutoff: 1 },

@@ -131,12 +131,10 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(result.sides.left?.poleSource).toBe("fresh");
     expect(result.diagnostics.left.observation.poleValid).toBe(true);
   });
-  it("falls back to a hand-derived pole when the arm is fully depth-degenerate but fingers are visible (A3+A5)", () => {
-    // A3+A5 (theo tư vấn chuyên gia): tay chĩa thẳng vào camera như preset bothForward —
-    // depthAlignment=1.0 tuyệt đối, elbow-offset không cho pole dùng được (weak-elbow-offset).
-    // Trước đây rơi thẳng về pole "rest" (hằng số, không phải quan sát thật). Index/pinky
-    // (landmark 19/17, có sẵn trong MediaPipe Pose 33 điểm, không cần Hand Landmarker) vẫn
-    // quan sát được ⇒ solver phải dùng chúng thay vì bỏ phí, cho poleSource="hand".
+  it("rejects a hand-derived pole when the whole arm is camera-axis degenerate", () => {
+    // Webcam gate: khi shoulder/elbow/wrist gần chồng trên trục camera, index/pinky vẫn có
+    // visibility cao nhưng pole chiếu dao động dữ dội. Không có đủ depth evidence để tin Hand;
+    // rest/previous ổn định an toàn hơn một tư thế 'chính xác' giả.
     const world = frame();
     world[13] = lm(.2, 0, -.3); world[15] = lm(.2, 0, -.6);
     world[14] = lm(-.2, 0, -.3); world[16] = lm(-.2, 0, -.6);
@@ -149,8 +147,9 @@ describe("three-point anatomical arm-frame solver", () => {
     const withHands = structuredClone(world);
     withHands[19] = lm(.25, .05, -.7); withHands[17] = lm(.15, -.05, -.7);
     const withFingers = solveAnatomicalArmFrames(withHands, imageFrame(withHands), profile, { left: emptyHistory(), right: emptyHistory() }, 0, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false);
-    expect(withFingers.sides.left?.poleSource).toBe("hand");
-    expect(withFingers.diagnostics.left.observation.poleValid).toBe(true);
+    expect(withFingers.diagnostics.left.confidenceFlags).toContain("depth-degenerate");
+    expect(withFingers.sides.left?.poleSource).toBe("rest");
+    expect(withFingers.sides.left?.acceptedFreshPole).toBe(false);
   });
   it("ignores hand landmarks when fingers are not visible and falls back to rest as before (A5 does not regress the base case)", () => {
     // Bảo vệ hành vi cũ khi không có dữ liệu bàn tay: preset bothForward gốc (không set
@@ -626,5 +625,13 @@ describe("three-point anatomical arm-frame solver", () => {
     const world = frame(); const solved = solveAnatomicalArmFrames(world, imageFrame(world), rotated, { left: emptyHistory(), right: emptyHistory() }, 0, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
     expect(new Vector3(1, 0, 0).applyQuaternion(q3(solved.targetWorldRotations.leftUpperArm!)).angleTo(new Vector3(1, 0, 0))).toBeLessThan(1e-6);
     expect(new Vector3(1, 0, 0).applyQuaternion(q3(solved.targetWorldRotations.leftLowerArm!)).angleTo(new Vector3(0, 1, 0))).toBeLessThan(1e-6);
+  });
+  it("uses the final animated shoulder parent while preserving the requested upper-arm world direction", () => {
+    const world=frame();const parent=new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/6);
+    const solved=solveAnatomicalArmFrames(world,imageFrame(world),profile,{left:emptyHistory(),right:emptyHistory()},0,DEFAULT_AVATAR_MOTION_CONFIG.armFrame,false,undefined,undefined,undefined,{},
+      {leftShoulder:{x:parent.x,y:parent.y,z:parent.z,w:parent.w}}).sides.left!;
+    const reconstructed=parent.clone().multiply(q3(solved.deltas.leftUpperArm!));
+    expect(new Vector3(1,0,0).applyQuaternion(reconstructed).angleTo(new Vector3(1,0,0))).toBeLessThan(1e-6);
+    expect(q3(solved.deltas.leftUpperArm!).angleTo(new Quaternion())).toBeCloseTo(Math.PI/6,5);
   });
 });

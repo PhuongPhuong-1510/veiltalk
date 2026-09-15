@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTorsoBasis } from "./torsoBasis";
+import { buildShoulderTorsoBasis, buildTorsoBasis } from "./torsoBasis";
 
 const point = (x: number, y: number, z = 0, visibility = 1) => ({ x, y, z, visibility });
 describe("torso reference basis", () => {
@@ -14,5 +14,15 @@ describe("torso reference basis", () => {
   it("rejects low-confidence and degenerate landmarks", () => {
     const landmarks = Array.from({ length: 33 }, () => point(0, 0)); landmarks[11] = point(.2, 0, 0, .1); landmarks[12] = point(-.2, 0); landmarks[23] = point(.1, .5); landmarks[24] = point(-.1, .5);
     expect(buildTorsoBasis(landmarks)).toBeNull(); landmarks[11].visibility = 1; landmarks[23] = point(0, 0); landmarks[24] = point(0, 0); expect(buildTorsoBasis(landmarks)).toBeNull();
+  });
+  it("builds a shoulder-only basis without hip landmarks",()=>{
+    const landmarks=Array.from({length:33},()=>point(0,0,0,0));landmarks[11]=point(.2,0,0,1);landmarks[12]=point(-.2,0,0,1);
+    const basis=buildShoulderTorsoBasis(landmarks);expect(basis).not.toBeNull();expect(basis!.right.x).toBeCloseTo(1);expect(basis!.up.y).toBeCloseTo(1);
+    expect(buildTorsoBasis(landmarks)).toBeNull();
+  });
+  it("exposes the raw Pose shoulder yaw sign for the calibration adapter to correct",()=>{
+    const angle=.3,c=Math.cos(angle),s=Math.sin(angle);const landmarks=Array.from({length:33},()=>point(0,0,0,0));
+    landmarks[11]=point(.2*c,0,-.2*s,1);landmarks[12]=point(-.2*c,0,.2*s,1);
+    const basis=buildShoulderTorsoBasis(landmarks)!;expect(basis.worldRotation.y).toBeLessThan(0);expect(basis.worldRotation.w).toBeGreaterThan(0);
   });
 });

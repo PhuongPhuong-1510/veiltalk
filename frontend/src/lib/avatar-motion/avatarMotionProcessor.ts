@@ -1,5 +1,5 @@
 import type { RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
-import { IDENTITY_QUATERNION, type AvatarFingerJointName, type AvatarPartTrackingInfo, type AvatarPosePacketV1, type QuaternionData } from "./avatarPoseTypes";
+import { IDENTITY_QUATERNION, type AvatarFingerJointName, type AvatarOutputMotionState, type AvatarPartTrackingInfo, type AvatarPosePacket, type AvatarPosePacketV1, type AvatarPosePacketV2, type GazeStateV1, type QuaternionData, type ShoulderMotionStateV1 } from "./avatarPoseTypes";
 import type { FingerRigProfile } from "./fingerRig";
 import { computeHandFingerFeatures } from "./fingerFeatures";
 import { classifyGesture, type GestureClassification, type GesturePoseLabel } from "./gestureClassifier";
@@ -8,17 +8,23 @@ import { planFingerPose } from "./fingerPosePlanner";
 import { createFingerPoseTemporalState, updateFingerPoseTemporal, type FingerPoseTemporalState } from "./fingerPoseTemporal";
 import { quaternionFromRotationMatrix } from "./coordinateAdapter";
 import { mapMediaPipeExpressions } from "./expressionMapper";
+import { FacialNeutralCalibrator, type FacialNeutralCalibrationSnapshot } from "./facialNeutralCalibration";
+import { EyeBrowExpressionProcessor, type EyeBrowExpressionSnapshot } from "./eyeBrowExpression";
+import { createMouthExpressionMapper, createNeutralMouthExpressionSnapshot, type MouthExpressionGeometryEvidence, type MouthExpressionResult, type MouthExpressionSnapshot } from "./mouthExpression";
+import { computeMouthLandmarkGeometry } from "./mouthLandmarkGeometry";
+import { MouthPipelineTelemetry, type MouthPipelineTelemetrySnapshot } from "./mouthPipelineTelemetry";
+import { FacialExpressionDynamics, type FacialExpressionDynamicsSnapshot } from "./facialExpressionDynamics";
 import { solveAnatomicalArmFrames, type ArmSpatialEvidence, type GeometryDiagnostic, type HandElbowBranchEvidence } from "./armFrameSolver";
 import { validateRigProfile, type NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import { DEFAULT_AVATAR_MOTION_CONFIG, type AvatarMotionConfig } from "./motionConfig";
-import { OneEuroScalarFilter, OneEuroVectorFilter } from "./oneEuroFilter";
+import { OneEuroVectorFilter } from "./oneEuroFilter";
 import type { AvatarJointName } from "./avatarPoseTypes";
 import { TrackingLossStateMachine } from "./trackingLoss";
 import { createArmTemporalState, updateSegmentTemporalOutput, type ArmTemporalState, type ArmLossState } from "./armTemporalState";
 import { angularDeltaDegrees, vectorAngularDeltaDegrees } from "./motionMath";
 import { buildIdleArmPose, type IdleArmPose } from "./idleArmPose";
 import type { ArmSide, AvatarMotionDiagnosticSnapshot, HandSampleClassification, HandTrackingEpochResetReason, MotionSampleDisposition, PoleSource, TorsoBasisSource } from "./avatarMotionDiagnostics";
-import type { TorsoBasis } from "./torsoBasis";
+import { buildShoulderTorsoBasis, buildTorsoBasis, type TorsoBasis } from "./torsoBasis";
 import { matchHandsToPose, type HandMatchPreviousState, type HandPoseMatchResult, type HandSideMatchResult } from "./handPoseMatching";
 import { computeHandPalmBasis, type HandPalmBasisOutput } from "./handPalmBasis";
 import { buildHandMotionDiagnostics, type HandMotionDiagnosticsSnapshot } from "./handMotionDiagnostics";
@@ -34,8 +40,40 @@ import { createWristEvidenceState, updateWristEvidence, type WristEvidenceOutput
 import { estimateShoulderImageToWorldScale, reconstructPointOnSphereFromImage, type WristReconstructionResult } from "./wristReconstruction";
 import type { RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
 import { buildFaceArmSpatialEvidence } from "./faceArmSpatialEvidence";
+import { GazeSolver, type GazeDiagnostics } from "./gazeSolver";
+import type { GazeMetricsSnapshot } from "./gazeMetrics";
+import { computeGazeEyelidCoupling, NO_GAZE_EYELID_SUPPORT, validateGazeEyelidConfig, type GazeEyelidDiagnostic, type GazeEyelidSupport } from "./gazeEyelidCoupling";
+import { UpperBodyNeutralCalibrator, type UpperBodyCalibrationSnapshot } from "./upperBodyCalibration";
+import { UpperBodyQuaternionTemporal, UpperBodyScalarTemporal, TorsoObservationTransition, TorsoRelativeSourceSelector, UpperBodySourceTransition } from "./upperBodyTemporal";
+import { quaternionExp, quaternionLog } from "./quaternionDistribution";
+import { composeUpperBody, type UpperBodyCompositionResult, type UpperBodyLayer } from "./upperBodyComposer";
+import { computeHeadRelativeIntent,solveHeadNeckDistribution } from "./headNeckSolver";
+import { computeRotationOnlyTorsoOffsetProxy, solveTorsoMotion } from "./torsoMotionSolver";
+import { ShoulderMotionSolver, type ShoulderVerticalSource } from "./shoulderMotionSolver";
+import { computeLeanShoulderCommonGain,TorsoLeanSolver,type TorsoLeanResult } from "./torsoLeanSolver";
+import { UpperBodyLifeMotion, type LifeMotionSnapshot } from "./upperBodyLifeMotion";
+import { UpperBodyMetricsCollector, type UpperBodyMetricSnapshot } from "./upperBodyMetrics";
+import { validateUpperBodyRigProfile, type UpperBodyRigProfileV1 } from "./upperBodyRigProfile";
 
-export interface AvatarMotionProcessorOptions { filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; gestureEnabled?: boolean; now?: () => number; config?: AvatarMotionConfig }
+export interface AvatarMotionProcessorOptions { filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; gestureEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
+
+export interface ShoulderVerticalDiagnosticSnapshot {
+  raw: { left: number; right: number };
+  filtered: { left: number; right: number };
+  source: { left: ShoulderVerticalSource; right: ShoulderVerticalSource };
+  earGapConfidence: { left: number; right: number };
+  commonMotionGain: number;
+  state: { left: AvatarOutputMotionState | "reacquiring"; right: AvatarOutputMotionState | "reacquiring" };
+}
+
+export interface TorsoLeanDiagnosticSnapshot extends TorsoLeanResult {
+  filteredAngle:number;
+  state:AvatarOutputMotionState|"reacquiring";
+}
+
+interface ProcessedUpperBody extends UpperBodyCompositionResult {
+  shoulderMotion: ShoulderMotionStateV1;
+}
 
 interface HandMotionContext {
   diagnostics: HandMotionDiagnosticsSnapshot;
@@ -217,7 +255,19 @@ function poleSourceStrength(source: PoleSource): number {
 
 export class AvatarMotionProcessor {
   private sequence = 0;
-  private readonly expressionFilters = new Map<string, OneEuroScalarFilter>();
+  private readonly facialNeutral: FacialNeutralCalibrator;
+  private readonly eyeBrowExpressions: EyeBrowExpressionProcessor;
+  private readonly mapMouthExpressions: (input: Readonly<Record<string, number>>, geometryEvidence?: Readonly<MouthExpressionGeometryEvidence>) => MouthExpressionResult;
+  private readonly facialDynamics: FacialExpressionDynamics;
+  private readonly gazeSolver: GazeSolver;
+  private currentGaze: GazeStateV1 | null = null;
+  private gazeEyelidSupport: GazeEyelidSupport = NO_GAZE_EYELID_SUPPORT;
+  private gazeEyelidDiagnostic: GazeEyelidDiagnostic = { status: "no-gaze", reason: "no-gaze", outputs: {} };
+  private readonly mouthPipelineTelemetry = new MouthPipelineTelemetry();
+  private lastMouthExpressions: MouthExpressionSnapshot = createNeutralMouthExpressionSnapshot();
+  private lastFaceSampledAtMs: number | null = null;
+  private lastFaceTrackedAtMs: number | null = null;
+  private facialModelFingerprint: string | null = null;
   private readonly directionFilters = new Map<AvatarJointName, OneEuroVectorFilter>();
   private readonly poleFilters = new Map<ArmSide, OneEuroVectorFilter>();
   private readonly loss = {
@@ -231,6 +281,28 @@ export class AvatarMotionProcessor {
   private handTwistEnabled: boolean;
   private gestureEnabled: boolean;
   private rigProfile: NormalizedAvatarRigProfile | null = null;
+  private upperBodyRigProfile: UpperBodyRigProfileV1 | null = null;
+  private readonly upperBodyCalibration = new UpperBodyNeutralCalibrator();
+  private readonly headTemporal: UpperBodyQuaternionTemporal;
+  private readonly torsoTemporal: UpperBodyQuaternionTemporal;
+  private readonly shoulderTemporal: Record<ArmSide, UpperBodyQuaternionTemporal>;
+  private readonly shoulderVerticalTemporal: Record<ArmSide, UpperBodyScalarTemporal>;
+  private readonly torsoRelativeSource = new TorsoRelativeSourceSelector();
+  private readonly headSourceTransition = new UpperBodySourceTransition();
+  private readonly torsoObservationTransition = new TorsoObservationTransition();
+  private readonly shoulderSolver = new ShoulderMotionSolver();
+  private readonly torsoLeanSolver = new TorsoLeanSolver();
+  private readonly torsoLeanTemporal:UpperBodyScalarTemporal;
+  private shoulderVerticalDiagnostics: ShoulderVerticalDiagnosticSnapshot = {
+    raw: { left: 0, right: 0 }, filtered: { left: 0, right: 0 }, source: { left: "unavailable", right: "unavailable" },
+    earGapConfidence: { left: 0, right: 0 }, commonMotionGain:1, state: { left: "idle", right: "idle" },
+  };
+  private torsoLeanDiagnostics:TorsoLeanDiagnosticSnapshot={angle:null,filteredAngle:0,source:"unavailable",confidence:0,cues:{shoulderScale:null,faceScale:null,scaleMismatch:null,depth:null},penalties:{head:0,yaw:0,roll:0,shrug:0},limited:false,state:"idle"};
+  private readonly lifeMotion = new UpperBodyLifeMotion();
+  private readonly upperBodyMetrics = new UpperBodyMetricsCollector();
+  private upperBodyMode: "faithful" | "cinematic";
+  private torsoOffsetNeutral: { lateral: number; depth: number } | null = null;
+  private torsoOffsetNeutralSamples = 0;
   private fingerRig: FingerRigProfile | null = null;
   /**
    * Phase 3B.3: những joint ngón đã TỪNG được ghi rotation. Khi tắt gesture hoặc về `rest`, không
@@ -250,6 +322,10 @@ export class AvatarMotionProcessor {
   private readonly wristEvidenceState: Record<ArmSide, WristEvidenceState> = { left: createWristEvidenceState(), right: createWristEvidenceState() };
   private readonly lastGeometryDiagnostics: Partial<Record<ArmSide, GeometryDiagnostic>> = {};
   private lastTorso: TorsoBasis | null = null;
+  // Tỉ lệ này thuộc camera/session, không thuộc một frame. Khi bàn tay che một vai,
+  // MediaPipe có thể làm hai shoulder image trùng nhau trong đúng frame cần dựng Hand wrist.
+  // Giữ phép đo gần nhất từ hai vai đáng tin cậy để occlusion không vô hiệu hóa lower arm.
+  private lastReliableShoulderImageToWorldScale: number | null = null;
   private diagnostics: AvatarMotionDiagnosticSnapshot | null = null;
   // Tư thế buông tay dựng từ rig hiện tại; mất theo dõi thì trả về đây thay vì T-pose.
   private idlePose: Record<ArmSide, IdleArmPose> | null = null;
@@ -268,6 +344,34 @@ export class AvatarMotionProcessor {
   constructor(options: AvatarMotionProcessorOptions = {}) {
     this.now = options.now ?? (() => performance.now());
     this.config = options.config ?? DEFAULT_AVATAR_MOTION_CONFIG;
+    this.facialNeutral = new FacialNeutralCalibrator({
+      sampleCount: this.config.face.neutralCalibrationSamples,
+      deadZone: this.config.face.neutralDeadZone,
+      neutralActivationLimit: this.config.face.neutralActivationLimit,
+      adaptiveRate: this.config.face.neutralAdaptiveRate,
+      adaptiveWindow: this.config.face.neutralAdaptiveWindow,
+    });
+    this.eyeBrowExpressions = new EyeBrowExpressionProcessor({
+      blinkEnter: this.config.face.blinkEnter,
+      blinkExit: this.config.face.blinkExit,
+      unilateralConfirmMs: this.config.face.unilateralBlinkConfirmMs,
+      browEmotionFallbackGain: this.config.face.browEmotionFallbackGain,
+      browInputOnset: this.config.face.browInputOnset,
+      browInputFull: this.config.face.browInputFull,
+    });
+    this.mapMouthExpressions = createMouthExpressionMapper(this.config.face.mouth);
+    this.facialDynamics = new FacialExpressionDynamics(this.config.face.dynamics);
+    this.gazeSolver = new GazeSolver(this.config.gaze);
+    validateGazeEyelidConfig(this.config.gaze.eyelid);
+    this.upperBodyMode = options.gazeMode ?? "faithful";
+    this.gazeSolver.setMode(this.upperBodyMode);
+    const temporalConfig = { filter: this.config.filter.head, maximumTimestampGapMs: this.config.filter.maxTimestampGapMs, holdMs: 120, returnMs: 300, reacquireMs: 180 };
+    this.headTemporal = new UpperBodyQuaternionTemporal(temporalConfig);
+    this.torsoTemporal = new UpperBodyQuaternionTemporal({ ...temporalConfig, holdMs: 160, returnMs: 420, reacquireMs: 220 });
+    this.shoulderTemporal = { left: new UpperBodyQuaternionTemporal(temporalConfig), right: new UpperBodyQuaternionTemporal(temporalConfig) };
+    const verticalTemporalConfig = { maximumTimestampGapMs: this.config.filter.maxTimestampGapMs, attackMs: 85, releaseMs: 180, holdMs: 120, returnMs: 250, reacquireMs: 100 };
+    this.shoulderVerticalTemporal = { left: new UpperBodyScalarTemporal(verticalTemporalConfig), right: new UpperBodyScalarTemporal(verticalTemporalConfig) };
+    this.torsoLeanTemporal = new UpperBodyScalarTemporal({ maximumTimestampGapMs:this.config.filter.maxTimestampGapMs,attackMs:1,releaseMs:1,holdMs:160,returnMs:420,reacquireMs:220 });
     this.filtered = options.filtered ?? true;
     this.constraints = options.constraints ?? true;
     this.handTwistEnabled = options.handTwistEnabled ?? true;
@@ -276,7 +380,36 @@ export class AvatarMotionProcessor {
     this.gestureEnabled = options.gestureEnabled ?? false;
   }
 
-  setFiltered(enabled: boolean): void { if (this.filtered !== enabled) this.resetFilters(); this.filtered = enabled; }
+  setFiltered(enabled: boolean): void {
+    if (this.filtered !== enabled) {
+      this.resetFilters();
+      this.gazeSolver.reset();
+      this.currentGaze = null;
+    }
+    this.filtered = enabled;
+  }
+  calibrateFaceNeutral(): void {
+    this.resetFacialState(true);
+    this.facialNeutral.beginCalibration();
+    this.calibrateUpperBodyNeutral();
+  }
+  getFacialCalibration(): FacialNeutralCalibrationSnapshot { return this.facialNeutral.snapshot(); }
+  getEyeBrowExpressions(): EyeBrowExpressionSnapshot { return this.eyeBrowExpressions.snapshot(); }
+  getMouthExpressions(): MouthExpressionSnapshot { return structuredClone(this.lastMouthExpressions); }
+  getFacialDynamics(): FacialExpressionDynamicsSnapshot { return this.facialDynamics.snapshot(); }
+  getMouthPipelineTelemetry(): MouthPipelineTelemetrySnapshot { return this.mouthPipelineTelemetry.snapshot(); }
+  getGazeDiagnostics(): GazeDiagnostics { return this.gazeSolver.snapshot(); }
+  getGazeMetrics(): GazeMetricsSnapshot { return this.gazeSolver.metricsSnapshot(this.now()); }
+  getGazeEyelidDiagnostic(): GazeEyelidDiagnostic { return structuredClone(this.gazeEyelidDiagnostic); }
+  setGazeMode(mode: "faithful" | "cinematic"): void { this.upperBodyMode = mode; this.gazeSolver.setMode(mode); }
+  getGazeMode(): "faithful" | "cinematic" { return this.gazeSolver.getMode(); }
+  setGazeAttentionStrength(strength: number): void { this.gazeSolver.setAttentionStrength(strength); }
+  setGazeEyelidSupport(support: GazeEyelidSupport | null): void { this.gazeEyelidSupport = support ?? NO_GAZE_EYELID_SUPPORT; }
+  setFacialModelFingerprint(fingerprint: string | null): void {
+    if (this.facialModelFingerprint === fingerprint) return;
+    this.facialModelFingerprint = fingerprint;
+    this.resetFacialState(true);
+  }
   setConstraints(enabled: boolean): void { this.constraints = enabled; }
   setHandTwistEnabled(enabled: boolean): void {
     if (this.handTwistEnabled === enabled) return;
@@ -341,11 +474,170 @@ export class AvatarMotionProcessor {
     if (this.rigProfile === profile) return;
     this.rigProfile = profile;
     this.idlePose = profile ? { left: buildIdleArmPose(profile, "left"), right: buildIdleArmPose(profile, "right") } : null;
-    this.resetArmState(); this.resetHandTrackingState("rig-profile-change"); this.resetHandSampleClassification(); this.resetFilters();
+    this.resetArmState(); this.resetHandTrackingState("rig-profile-change"); this.resetHandSampleClassification(); this.resetFilters(); this.resetFacialState(true);
+  }
+  setUpperBodyRigProfile(profile: UpperBodyRigProfileV1 | null): void {
+    if (profile && !validateUpperBodyRigProfile(profile)) throw new Error("Upper-body rig profile không hợp lệ.");
+    if (this.upperBodyRigProfile === profile) return;
+    this.upperBodyRigProfile = profile;
+    this.upperBodyCalibration.setModelFingerprint(profile?.modelFingerprint ?? null);
+    this.resetUpperBodyState();
+  }
+  getUpperBodyCalibration(): UpperBodyCalibrationSnapshot { return this.upperBodyCalibration.snapshot(); }
+  getUpperBodyLifeMotion(): LifeMotionSnapshot { return this.lifeMotion.snapshot(); }
+  getUpperBodyMetrics(): UpperBodyMetricSnapshot { return this.upperBodyMetrics.snapshot(); }
+  getShoulderVerticalDiagnostics(): ShoulderVerticalDiagnosticSnapshot { return structuredClone(this.shoulderVerticalDiagnostics); }
+  getTorsoLeanDiagnostics():TorsoLeanDiagnosticSnapshot{return structuredClone(this.torsoLeanDiagnostics);}
+  calibrateUpperBodyNeutral(): void {
+    if (!this.upperBodyRigProfile) return;
+    this.upperBodyCalibration.begin(this.upperBodyRigProfile.modelFingerprint);
+    this.shoulderSolver.reset(); this.headTemporal.reset(); this.torsoTemporal.reset();
+    this.shoulderTemporal.left.reset(); this.shoulderTemporal.right.reset();
+    this.shoulderVerticalTemporal.left.reset(); this.shoulderVerticalTemporal.right.reset();
+    this.torsoLeanTemporal.reset();this.torsoLeanSolver.reset();
+    this.torsoRelativeSource.reset(); this.headSourceTransition.reset(); this.torsoObservationTransition.reset();
+  }
+  private poseImageAspectRatio(frame: RawTrackingFrameV1): number {
+    return frame.videoWidth && frame.videoHeight && frame.videoWidth > 0 && frame.videoHeight > 0
+      ? frame.videoWidth / frame.videoHeight : 1;
   }
   getLastDiagnostics(): AvatarMotionDiagnosticSnapshot | null { return this.diagnostics ? structuredClone(this.diagnostics) : null; }
 
-  process(frame: RawTrackingFrameV1): AvatarPosePacketV1 {
+  private processUpperBody(
+    frame: RawTrackingFrameV1,
+    tracking: AvatarPosePacketV1["tracking"],
+    faceRotation: QuaternionData | null,
+    nowMs: number,
+  ): ProcessedUpperBody | null {
+    const profile = this.upperBodyRigProfile;
+    if (!profile || profile.capability === "unsupported") return null;
+    const startedAt = globalThis.performance?.now?.() ?? nowMs;
+    const poseLandmarks = frame.pose.worldLandmarks;
+    const shoulderBasis = poseLandmarks ? buildShoulderTorsoBasis(poseLandmarks, this.config.armFrame.minimumPoseVisibility, this.config.armFrame.minimumSegmentLength) : null;
+    const fullTorsoBasis = poseLandmarks ? buildTorsoBasis(poseLandmarks, this.config.armFrame.minimumPoseVisibility, this.config.armFrame.minimumSegmentLength) : null;
+    const visibility = (indices: number[]) => {
+      if (!poseLandmarks) return 0;
+      const values = indices.map((index) => poseLandmarks[index]?.visibility).filter((value): value is number => value !== null && value !== undefined && Number.isFinite(value));
+      return values.length === indices.length ? Math.max(0, Math.min(1, Math.min(...values))) : 0;
+    };
+    const acceptedCalibrationPair = this.upperBodyCalibration.process({
+      faceRotation,
+      shoulderRotation: shoulderBasis?.worldRotation ?? null,
+      fullTorsoRotation: fullTorsoBasis?.worldRotation ?? null,
+      faceSampledAtMs: frame.face.sampledAtMs,
+      poseSampledAtMs: frame.pose.sampledAtMs,
+      faceQuality: tracking.face.outputState === "active" ? 1 : 0,
+      shoulderQuality: shoulderBasis ? visibility([11, 12]) : 0,
+      fullTorsoQuality: fullTorsoBasis ? visibility([11, 12, 23, 24]) : 0,
+    });
+    if (acceptedCalibrationPair) {
+      this.shoulderSolver.captureNeutral(poseLandmarks, shoulderBasis, frame.pose.landmarks, this.poseImageAspectRatio(frame));
+      this.torsoLeanSolver.captureNeutral(poseLandmarks,frame.pose.landmarks,frame.face.landmarks,fullTorsoBasis,this.poseImageAspectRatio(frame));
+      const offset = computeRotationOnlyTorsoOffsetProxy(poseLandmarks, fullTorsoBasis);
+      if (offset) {
+        const alpha = 1 / (this.torsoOffsetNeutralSamples + 1);
+        this.torsoOffsetNeutral = this.torsoOffsetNeutral
+          ? { lateral: this.torsoOffsetNeutral.lateral + alpha * (offset.lateral - this.torsoOffsetNeutral.lateral), depth: this.torsoOffsetNeutral.depth + alpha * (offset.depth - this.torsoOffsetNeutral.depth) }
+          : offset;
+        this.torsoOffsetNeutralSamples += 1;
+      }
+    }
+    const calibration = this.upperBodyCalibration.snapshot();
+
+    // Packet V2 định nghĩa head/torso theo neutral của AR4. Trước khi neutral sẵn sàng,
+    // tiếp tục phát V1 để head legacy vẫn chuyển động; phát V2 identity tại đây sẽ khóa
+    // đầu/cổ trong lúc collecting và trộn hai hệ quy chiếu khác nhau trong một contract.
+    if (calibration.state !== "calibrated") return null;
+
+    let headLayer: UpperBodyLayer = {};
+    let torsoLayer: UpperBodyLayer = {};
+    let shoulderLayer: UpperBodyLayer = {};
+    let primaryMagnitude = 0;
+    let metricHeadRaw: QuaternionData | null = null; let metricHeadFinal: QuaternionData | null = null;
+    let metricTorsoRaw: QuaternionData | null = null; let metricTorsoFinal: QuaternionData | null = null;
+    const source = this.torsoRelativeSource.update(frame.face.sampledAtMs, shoulderBasis ? frame.pose.sampledAtMs : null, nowMs);
+    const faceDelta = faceRotation ? this.upperBodyCalibration.faceDelta(faceRotation) : null;
+    const headPoseForShoulder = faceDelta ? quaternionLog(faceDelta) : null;
+    let rawTorso: QuaternionData | null = null;
+    let torsoObservationMode: "shoulder-only" | "full-torso" = "shoulder-only";
+    if (tracking.pose.outputState === "active" && shoulderBasis) {
+      const canUseFull = calibration.mode === "full-torso" && fullTorsoBasis !== null;
+      const observedTorso = canUseFull
+        ? this.upperBodyCalibration.fullTorsoDelta(fullTorsoBasis!.worldRotation)
+        : this.upperBodyCalibration.shoulderDelta(shoulderBasis.worldRotation);
+      const observedRotation=observedTorso?quaternionLog(observedTorso):null;
+      if (observedRotation) {
+        // Hai vai không quan sát được rotation quanh trục vai (pitch thân). Không phát chuyển
+        // động giả cho trục này; yaw/roll vẫn giữ từ đường vai 3D.
+        const lean=this.torsoLeanSolver.solve({mode:calibration.mode==="full-torso"?"full-torso":"shoulder-only",worldLandmarks:poseLandmarks,imageLandmarks:frame.pose.landmarks,faceLandmarks:frame.face.landmarks,fullTorsoBasis,imageAspectRatio:this.poseImageAspectRatio(frame),sampledAtMs:frame.pose.sampledAtMs,headPitch:headPoseForShoulder?.x??0,torsoYaw:observedRotation.y,torsoRoll:observedRotation.z,commonShoulderVertical:0});
+        const leanObservation=lean.source!=="unavailable"?lean.angle:null;
+        const leanTemporal=this.torsoLeanTemporal.update(leanObservation,leanObservation!==null?frame.pose.sampledAtMs:null,nowMs,false);
+        this.torsoLeanDiagnostics={...lean,filteredAngle:leanTemporal.value,state:leanTemporal.state};
+        torsoObservationMode=lean.source==="full-torso"?"full-torso":"shoulder-only";
+        rawTorso=quaternionExp({x:leanTemporal.value,y:observedRotation.y,z:observedRotation.z});
+      }
+      if (rawTorso) rawTorso = this.torsoObservationTransition.update(torsoObservationMode, rawTorso, nowMs);
+    } else {
+      const leanTemporal=this.torsoLeanTemporal.update(null,null,nowMs,false);
+      this.torsoLeanDiagnostics={...this.torsoLeanDiagnostics,angle:null,source:"unavailable",confidence:0,filteredAngle:leanTemporal.value,state:leanTemporal.state};
+    }
+    // Lean phải được giải trước shoulder: nếu không, chuyển động tiến/lùi làm khoảng đầu-vai đổi và
+    // bị hiểu nhầm thành nhún đồng thời hai vai. Chỉ common component bị triệt; differential còn nguyên.
+    const shoulderCommonMotionGain=computeLeanShoulderCommonGain(this.torsoLeanDiagnostics);
+    const shoulder = this.shoulderSolver.solve(poseLandmarks,shoulderBasis,profile,headPoseForShoulder,frame.pose.landmarks,this.poseImageAspectRatio(frame),shoulderCommonMotionGain);
+    this.shoulderVerticalDiagnostics.commonMotionGain=shoulder.commonMotionGain;
+    const temporalTorso = this.torsoTemporal.update(rawTorso, tracking.pose.outputState === "active" ? frame.pose.sampledAtMs : null, nowMs, this.filtered);
+    metricTorsoRaw = rawTorso; metricTorsoFinal = temporalTorso.rotation;
+    const activeTorsoBasis = torsoObservationMode === "full-torso" ? fullTorsoBasis : shoulderBasis;
+    const torso = solveTorsoMotion(activeTorsoBasis, calibration.torsoNeutral, profile, poseLandmarks, false, temporalTorso.rotation, this.torsoOffsetNeutral);
+    torsoLayer = torso.layer;
+    if (torso.rotation) primaryMagnitude = Math.max(primaryMagnitude, Math.hypot(torso.rotation.x, torso.rotation.y, torso.rotation.z));
+
+    // Head-relative solver hiện hữu là owner duy nhất; T06 chỉ cung cấp final torso semantic delta làm input.
+    const torsoParentDelta=torso.rotation?quaternionExp(torso.rotation):null;
+    const sourceHead=faceDelta&&tracking.face.outputState==="active"?source==="torso-relative"?computeHeadRelativeIntent(faceDelta,torsoParentDelta):faceDelta:null;
+    const rawHead=sourceHead?this.headSourceTransition.update(source,sourceHead,nowMs):null;
+    const temporalHead=this.headTemporal.update(rawHead,tracking.face.outputState==="active"?frame.face.sampledAtMs:null,nowMs,this.filtered);
+    metricHeadRaw=rawHead;metricHeadFinal=temporalHead.rotation;
+    const head=solveHeadNeckDistribution(temporalHead.rotation,profile);headLayer=head.layer;
+    if(head.desired)primaryMagnitude=Math.max(primaryMagnitude,Math.hypot(head.desired.x,head.desired.y,head.desired.z));
+
+    // Gate ear-gap bằng face delta độc lập với shoulder basis. Dùng head-relative ở đây sẽ tự tạo roll khi
+    // chính một vai nhún, rồi hạ confidence của đúng observation thật cần giữ.
+    const shoulderMotion: ShoulderMotionStateV1 = { version: 1, leftVertical: 0, rightVertical: 0 };
+    for (const side of ["left", "right"] as const) {
+      const name = side === "left" ? "leftShoulder" : "rightShoulder";
+      const observed = tracking.pose.outputState === "active" ? shoulder.layer[name] ?? null : null;
+      const temporal = this.shoulderTemporal[side].update(observed, observed ? frame.pose.sampledAtMs : null, nowMs, this.filtered);
+      if (profile.joints[name]) shoulderLayer[name] = temporal.rotation;
+      const verticalObserved = tracking.pose.outputState === "active" && shoulder.verticalSource[side] !== "unavailable"
+        ? shoulder.vertical[side] : null;
+      const verticalTemporal = this.shoulderVerticalTemporal[side].update(verticalObserved, verticalObserved !== null ? frame.pose.sampledAtMs : null, nowMs, this.filtered);
+      shoulderMotion[side === "left" ? "leftVertical" : "rightVertical"] = verticalTemporal.value;
+      this.shoulderVerticalDiagnostics.raw[side] = shoulder.vertical[side];
+      this.shoulderVerticalDiagnostics.filtered[side] = verticalTemporal.value;
+      this.shoulderVerticalDiagnostics.source[side] = shoulder.verticalSource[side];
+      this.shoulderVerticalDiagnostics.earGapConfidence[side] = shoulder.earGapConfidence[side];
+      this.shoulderVerticalDiagnostics.state[side] = verticalTemporal.state;
+    }
+    const lifeSecondary = this.lifeMotion.update({
+      nowMs,
+      documentVisible: typeof document === "undefined" || document.visibilityState !== "hidden",
+      mouthOpening: this.lastMouthExpressions.geometry.visibleOpening,
+      mouthClosure: this.lastMouthExpressions.geometry.closure,
+      mode: this.upperBodyMode,
+      primaryMotionMagnitude: primaryMagnitude,
+      evidenceAvailable: tracking.face.outputState === "active" || tracking.pose.outputState === "active",
+    }, profile);
+    const result = composeUpperBody(profile, { torsoBase: torsoLayer, headRelative: headLayer, observedShoulder: shoulderLayer, lifeSecondary });
+    const invalid = Object.values(result.deltas).some((rotation) => rotation && ![rotation.x, rotation.y, rotation.z, rotation.w].every(Number.isFinite));
+    this.upperBodyMetrics.record((globalThis.performance?.now?.() ?? nowMs) - startedAt, invalid, result.aggregateClamped.length);
+    this.upperBodyMetrics.recordMotion("head", metricHeadRaw, metricHeadFinal, frame.face.sampledAtMs);
+    this.upperBodyMetrics.recordMotion("torso", metricTorsoRaw, metricTorsoFinal, frame.pose.sampledAtMs);
+    return { ...result, shoulderMotion };
+  }
+
+  process(frame: RawTrackingFrameV1): AvatarPosePacket {
     const processedTimestampMs = this.now();
     const tracking = {
       face: this.part("face", frame.face.state, frame.face.sampledAtMs, processedTimestampMs, this.config.freshnessMs.face),
@@ -353,13 +645,10 @@ export class AvatarMotionProcessor {
       rightHand: this.part("rightHand", frame.rightHand.state, frame.rightHand.sampledAtMs, processedTimestampMs, this.config.freshnessMs.hand),
       pose: this.part("pose", frame.pose.state, frame.pose.sampledAtMs, processedTimestampMs, this.config.freshnessMs.pose),
     };
-    const semantic = frame.face.blendshapes && tracking.face.outputState === "active"
-      ? mapMediaPipeExpressions(frame.face.blendshapes) : {};
-    const expressions = this.filtered && frame.face.sampledAtMs !== null && frame.face.state === "tracked"
-      ? Object.fromEntries(Object.entries(semantic).map(([name, value]) => [name, this.expressionFilter(name).filter(value, frame.face.sampledAtMs!)]))
-      : semantic;
     const headRotation = tracking.face.outputState === "active" && frame.face.facialTransform
       ? quaternionFromRotationMatrix(frame.face.facialTransform.data) : null;
+    const expressions = this.processFacialExpressions(frame, tracking.face.outputState, processedTimestampMs, headRotation);
+    const upperBody = this.processUpperBody(frame, tracking, headRotation, processedTimestampMs);
     const canUpdateDirections = frame.pose.state === "tracked" && frame.pose.sampledAtMs !== null;
     const poseDiscontinuity: Record<ArmSide, boolean> = { left: false, right: false };
     const poseIsTrackedDuplicate = canUpdateDirections && (["left", "right"] as const).every(
@@ -398,7 +687,8 @@ export class AvatarMotionProcessor {
       right: inactiveHandTwistDiagnostic("right", this.config, frame.handSampledThisFrame, handSampleClassification, this.handTwistState.right),
     };
     const armStabilityDiagnostics = {} as AvatarMotionDiagnosticSnapshot["armStability"];
-    let jointRotations: AvatarPosePacketV1["jointRotations"] = {};
+    let jointRotations: AvatarPosePacketV2["jointRotations"] = {};
+    if (upperBody) for (const [name, rotation] of Object.entries(upperBody.deltas)) if (name !== "head" && rotation) jointRotations[name as keyof typeof jointRotations] = rotation;
     if (this.rigProfile) {
       const sampledAtMs = frame.pose.sampledAtMs;
       const isTrackedDuplicate = poseIsTrackedDuplicate;
@@ -420,7 +710,8 @@ export class AvatarMotionProcessor {
         ? (name, direction) => this.directionFilter(name).filter(direction, sampledAtMs!) : undefined,
       this.filtered ? (side, pole) => this.poleFilter(side).filter(pole, sampledAtMs!) : undefined,
       this.lastTorso ?? undefined,
-      handElbowEvidence) : null;
+      handElbowEvidence,
+      upperBody ? { leftShoulder: upperBody.targetWorldRotations.leftShoulder, rightShoulder: upperBody.targetWorldRotations.rightShoulder } : {}) : null;
       if (solved?.torsoWasObserved) this.lastTorso = solved.torso;
       const torso = solved?.torso ?? this.lastTorso ?? {
         right: this.rigProfile.torsoReference.rightWorld, up: this.rigProfile.torsoReference.upWorld,
@@ -504,7 +795,16 @@ export class AvatarMotionProcessor {
           // Phase 3B partial-arm: mỏ neo phía gập chỉ được cập nhật khi frame này còn xác định được mặt
           // phẳng gập (solver trả null khi tay gần duỗi thẳng). Giữ mỏ neo cũ trong các frame
           // suy biến — đó chính là lúc cần nó nhất để elbow inference không lật phía.
-          if (acceptedGeometry.elbowDirection) state.previousElbowDirection = acceptedGeometry.elbowDirection;
+          // Chỉ observation thật được quyền thay bend-plane anchor. Nếu ghi lại hướng từ chính
+          // nghiệm suy đoán, một lựa chọn depth sai sẽ tự biến thành history của frame kế tiếp
+          // và bị khóa bởi continuity/side-flip dù người dùng vẫn giữ nguyên tư thế.
+          if (acceptedGeometry.elbowDirection && acceptedGeometry.elbowSource === "observed") {
+            state.previousElbowDirection = acceptedGeometry.elbowDirection;
+          } else if (acceptedGeometry.elbowDirection && state.previousElbowDirection === null) {
+            // Cold start chưa từng thấy elbow: cho phép một prior hữu hạn, nhưng không để các
+            // frame inferred tiếp theo tự tích lũy và xoay anchor.
+            state.previousElbowDirection = acceptedGeometry.elbowDirection;
+          }
           if (acceptedGeometry.elbowSource === "observed") { state.previousObservedElbow = acceptedGeometry.elbowPosition; state.inferenceStartedAtMs = null; if (acceptedGeometry.observedLengths) this.updateLengthCalibration(state, acceptedGeometry.observedLengths); }
           else state.inferenceStartedAtMs ??= processedTimestampMs;
         } else if (solved?.diagnostics[side].hardRejectionReason?.startsWith("elbow-inference")) state.inferenceStartedAtMs ??= processedTimestampMs;
@@ -609,7 +909,10 @@ export class AvatarMotionProcessor {
     // Phase 3B.3: chạy SAU nhánh arm và chỉ GHI THÊM khoá xương ngón. Không đọc, không sửa, không
     // ghi đè bất kỳ khoá arm nào ở trên — kể cả `leftHand`/`rightHand` (wrist thuộc Phase 3B).
     this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
-    return { version: 1, sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, headRotation, jointRotations, handMotion: handContext.diagnostics };
+    const common = { sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics };
+    return upperBody
+      ? { ...common, version: 2, headRotation: upperBody.deltas.head ?? null, shoulderMotion: upperBody.shoulderMotion }
+      : { ...common, version: 1, headRotation } as AvatarPosePacketV1;
   }
 
   /**
@@ -767,16 +1070,20 @@ export class AvatarMotionProcessor {
     const wrist = {} as Record<ArmSide, WristEvidenceOutput>;
     const reconstruction: Record<ArmSide, WristReconstructionResult | null> = { left: null, right: null };
     const videoWidth = frame.videoWidth ?? 0, videoHeight = frame.videoHeight ?? 0;
-    const scale = estimateShoulderImageToWorldScale({
-      leftShoulderWorld: originalWorld[11], rightShoulderWorld: originalWorld[12],
-      leftShoulderImage: originalImage[11], rightShoulderImage: originalImage[12],
-      videoWidth, videoHeight,
-    });
     const semantic = (point: RawNormalizedLandmarkV1) => ({ x: point.x, y: -point.y, z: -point.z });
     const visible = (point: RawNormalizedLandmarkV1 | undefined, wasVisible: boolean) => Boolean(point && point.visibility !== null && (
       wasVisible ? point.visibility >= this.config.armFrame.visibilityExit : point.visibility >= this.config.armFrame.visibilityEnter
     ));
     const inBounds = (point: RawNormalizedLandmarkV1 | undefined, margin: number) => Boolean(point && point.x >= -margin && point.x <= 1 + margin && point.y >= -margin && point.y <= 1 + margin);
+    const measuredScale = estimateShoulderImageToWorldScale({
+      leftShoulderWorld: originalWorld[11], rightShoulderWorld: originalWorld[12],
+      leftShoulderImage: originalImage[11], rightShoulderImage: originalImage[12],
+      videoWidth, videoHeight,
+    });
+    const shoulderReliable = [originalImage[11], originalImage[12]].every((point) =>
+      visible(point, false) && inBounds(point, this.config.armFrame.shoulderOuterBoundsMargin));
+    if (shoulderReliable && measuredScale !== null) this.lastReliableShoulderImageToWorldScale = measuredScale;
+    const scale = shoulderReliable ? measuredScale : this.lastReliableShoulderImageToWorldScale;
     const shoulderWidthWorld = originalWorld[11] && originalWorld[12]
       ? Math.hypot(originalWorld[11].x - originalWorld[12].x, originalWorld[11].y - originalWorld[12].y, originalWorld[11].z - originalWorld[12].z)
       : 0;
@@ -1081,20 +1388,98 @@ export class AvatarMotionProcessor {
   }
 
   reset(): void {
-    this.sequence = 0; this.resetArmState(); this.resetHandTrackingState("processor-reset"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
+    this.sequence = 0; this.resetArmState(); this.resetHandTrackingState("processor-reset"); this.resetHandSampleClassification(); this.resetFilters(); this.resetFacialState(true); this.resetUpperBodyState(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
   dispose(): void {
     this.rigProfile = null;
-    this.sequence = 0; this.resetArmState(); this.resetHandTrackingState("dispose"); this.resetHandSampleClassification(); this.resetFilters(); Object.values(this.loss).forEach((machine) => machine.reset());
+    this.upperBodyRigProfile = null;
+    this.facialModelFingerprint = null;
+    this.sequence = 0; this.resetArmState(); this.resetHandTrackingState("dispose"); this.resetHandSampleClassification(); this.resetFilters(); this.resetFacialState(true); this.resetUpperBodyState(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
 
   private part(key: keyof AvatarMotionProcessor["loss"], sourceState: AvatarPartTrackingInfo["sourceState"], sampledAtMs: number | null, now: number, freshness: number): AvatarPartTrackingInfo {
     return { sourceState, sampledAtMs, outputState: this.loss[key].update(sourceState, sampledAtMs, now, freshness, this.config.loss.holdMs, this.config.loss.returnMs) };
   }
-  private expressionFilter(name: string): OneEuroScalarFilter {
-    let filter = this.expressionFilters.get(name);
-    if (!filter) { filter = new OneEuroScalarFilter(this.config.filter.expressions, this.config.filter.maxTimestampGapMs); this.expressionFilters.set(name, filter); }
-    return filter;
+  private processFacialExpressions(frame: RawTrackingFrameV1, outputState: AvatarOutputMotionState, nowMs: number, headRotation: QuaternionData | null): Record<string, number> {
+    const sampledAtMs = frame.face.sampledAtMs;
+    const freshTracked = frame.face.state === "tracked" && outputState === "active" && sampledAtMs !== null && frame.face.blendshapes !== null;
+    if (freshTracked && (this.lastFaceSampledAtMs === null || sampledAtMs > this.lastFaceSampledAtMs)) {
+      const calibrated = this.facialNeutral.process(frame.face.blendshapes!);
+      this.currentGaze = this.gazeSolver.processFresh(calibrated, sampledAtMs, headRotation, this.filtered, nowMs);
+      const landmarkMouth = computeMouthLandmarkGeometry(
+        frame.face.landmarks,
+        frame.videoWidth,
+        frame.videoHeight,
+        this.config.face.mouth.landmarkAperture,
+      );
+      const mouth = this.mapMouthExpressions(calibrated, { landmarkJawOpen: landmarkMouth.jawOpen });
+      this.lastMouthExpressions = mouth.snapshot;
+      const eyeBrow = this.eyeBrowExpressions.process(calibrated, sampledAtMs);
+      const observedBlink = Math.max(eyeBrow.blinkLeft ?? 0, eyeBrow.blinkRight ?? 0);
+      const proceduralBlink = observedBlink > 0 ? 0 : this.gazeSolver.snapshot().cinematic.proceduralBlink;
+      const blinkLeft = Math.max(eyeBrow.blinkLeft ?? 0, proceduralBlink);
+      const blinkRight = Math.max(eyeBrow.blinkRight ?? 0, proceduralBlink);
+      this.gazeEyelidDiagnostic = computeGazeEyelidCoupling(
+        this.currentGaze,
+        { left: blinkLeft, right: blinkRight },
+        this.gazeEyelidSupport,
+        this.config.gaze.eyelid,
+      );
+      const semantic = {
+        ...mapMediaPipeExpressions(calibrated),
+        ...eyeBrow,
+        eyeBlinkLeft: blinkLeft,
+        eyeBlinkRight: blinkRight,
+        blinkLeft,
+        blinkRight,
+        ...this.gazeEyelidDiagnostic.outputs,
+        ...mouth.expressions,
+      };
+      const smileEvidence = ((mouth.expressions.mouthSmileLeft ?? 0) + (mouth.expressions.mouthSmileRight ?? 0)) / 2;
+      const expressions = this.facialDynamics.processFresh(semantic, sampledAtMs, this.filtered, {
+        visibleOpening: mouth.snapshot.geometry.visibleOpening,
+        round: mouth.snapshot.geometry.round,
+        // MediaPipe có thể đồng kích hoạt Stretch khi cười; silent smile không được phép tạo speech envelope.
+        stretch: mouth.snapshot.geometry.width * (1 - smileEvidence),
+        closure: mouth.snapshot.geometry.closure,
+      });
+      this.mouthPipelineTelemetry.record({
+        sampledAtMs,
+        raw: frame.face.blendshapes!,
+        calibrated,
+        mouth: mouth.snapshot,
+        dynamics: this.facialDynamics.snapshot(),
+      });
+      this.lastFaceSampledAtMs = sampledAtMs;
+      this.lastFaceTrackedAtMs = sampledAtMs;
+      return expressions;
+    }
+    if (freshTracked && sampledAtMs !== null) {
+      // Duplicate/reversed face sample không được đẩy gaze temporal. Solver tự giữ output cũ.
+      this.currentGaze = this.gazeSolver.processFresh(frame.face.blendshapes!, sampledAtMs, headRotation, this.filtered, nowMs);
+      return this.facialDynamics.hold("active", sampledAtMs === this.lastFaceSampledAtMs ? "duplicate" : "reversed", this.filtered);
+    }
+    this.currentGaze = this.gazeSolver.processLoss(nowMs);
+    return this.facialDynamics.processLoss(
+      outputState,
+      nowMs,
+      this.lastFaceTrackedAtMs,
+      this.config.loss.holdMs,
+      this.config.loss.returnMs,
+      this.filtered,
+    );
+  }
+  private resetFacialState(resetCalibration: boolean): void {
+    this.lastFaceSampledAtMs = null;
+    this.lastFaceTrackedAtMs = null;
+    this.facialDynamics.reset();
+    this.mouthPipelineTelemetry.reset();
+    this.eyeBrowExpressions.reset();
+    this.gazeSolver.reset();
+    this.currentGaze = null;
+    this.gazeEyelidDiagnostic = { status: "no-gaze", reason: "no-gaze", outputs: {} };
+    this.lastMouthExpressions = createNeutralMouthExpressionSnapshot();
+    if (resetCalibration) this.facialNeutral.reset();
   }
   private updateLengthCalibration(state: ArmTemporalState, lengths: { upper: number; lower: number }): void {
     for (const segment of ["upper", "lower"] as const) {
@@ -1117,7 +1502,21 @@ export class AvatarMotionProcessor {
   private poleFilter(side: ArmSide): OneEuroVectorFilter {
     let filter = this.poleFilters.get(side); if (!filter) { filter = new OneEuroVectorFilter(this.config.filter.pole, this.config.filter.maxTimestampGapMs); this.poleFilters.set(side, filter); } return filter;
   }
-  private resetFilters(): void { this.expressionFilters.clear(); this.directionFilters.clear(); this.poleFilters.clear(); }
+  private resetFilters(): void { this.directionFilters.clear(); this.poleFilters.clear(); }
+  private resetUpperBodyState(): void {
+    this.upperBodyCalibration.reset(this.upperBodyRigProfile?.modelFingerprint ?? null);
+    this.headTemporal.reset(); this.torsoTemporal.reset(); this.shoulderTemporal.left.reset(); this.shoulderTemporal.right.reset();
+    this.shoulderVerticalTemporal.left.reset(); this.shoulderVerticalTemporal.right.reset();
+    this.torsoLeanTemporal.reset();this.torsoLeanSolver.reset();
+    this.torsoRelativeSource.reset(); this.headSourceTransition.reset(); this.torsoObservationTransition.reset(); this.shoulderSolver.reset(); this.lifeMotion.reset(); this.upperBodyMetrics.reset();
+    this.torsoOffsetNeutral = null;
+    this.torsoOffsetNeutralSamples = 0;
+    this.shoulderVerticalDiagnostics = {
+      raw: { left: 0, right: 0 }, filtered: { left: 0, right: 0 }, source: { left: "unavailable", right: "unavailable" },
+      earGapConfidence: { left: 0, right: 0 }, commonMotionGain:1, state: { left: "idle", right: "idle" },
+    };
+    this.torsoLeanDiagnostics={angle:null,filteredAngle:0,source:"unavailable",confidence:0,cues:{shoulderScale:null,faceScale:null,scaleMismatch:null,depth:null},penalties:{head:0,yaw:0,roll:0,shrug:0},limited:false,state:"idle"};
+  }
   private resetArmState(): void {
     for (const side of ["left", "right"] as const) {
       const fresh = createArmTemporalState();
@@ -1127,7 +1526,7 @@ export class AvatarMotionProcessor {
       Object.assign(this.wristEvidenceState[side], createWristEvidenceState());
       Object.assign(this.armStabilityState[side], createArmStabilityProcessorState());
     }
-    this.lastTorso = null; this.diagnostics = null;
+    this.lastTorso = null; this.lastReliableShoulderImageToWorldScale = null; this.diagnostics = null;
   }
   private resetMatchingSide(side: ArmSide): void {
     this.handMatchPrevious[side].wristPosition = null;

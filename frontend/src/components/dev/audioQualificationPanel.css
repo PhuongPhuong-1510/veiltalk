@@ -1,0 +1,11 @@
+.audio-qualification-panel { min-width: min(100%, 360px); }
+.audio-qualification-panel > label { display: block; margin: 10px 0; }
+.audio-qualification-panel input[type="file"] { display: block; width: 100%; margin-top: 5px; color: #ddd6fe; }
+.audio-qualification-panel a { color: #a9c7ff; }
+.audio-qualification-options { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.audio-qualification-options label { display: grid; gap: 4px; }
+.audio-qualification-options select { padding: 6px; color: white; border: 1px solid #6956d8; background: #171326; }
+.audio-qualification-panel li { margin: 5px 0; }
+.audio-qualification-panel .gate-pass { color: #9bf0cb; }
+.audio-qualification-panel .gate-fail, .audio-qualification-error { color: #fecaca; }
+.audio-qualification-panel .gate-manual { color: #ffe0a8; }

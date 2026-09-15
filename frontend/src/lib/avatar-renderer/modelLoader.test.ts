@@ -1,8 +1,8 @@
-import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, Object3D } from "three";
+import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import type { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { AvatarModelLoader, createRigProfile, disposeObject, isCurrentModelLoadRequest } from "./modelLoader";
+import { AvatarModelLoader, createRigProfile, createShoulderTranslationRig, createUpperBodyRigProfile, disposeObject, isCurrentModelLoadRequest } from "./modelLoader";
 
 const gltf = (root: Group): GLTF => ({ scene: root, scenes: [root], animations: [], cameras: [], asset: {}, parser: {} as GLTF["parser"], userData: {} });
 
@@ -50,5 +50,12 @@ describe("AvatarModelLoader", () => {
     expect(profile?.collisionReference?.arms.left.lowerLength).toBeCloseTo(1);
     expect(profile?.collisionReference?.head.radius).toBeGreaterThan(0);
     expect(Object.isFrozen(profile?.collisionReference?.head)).toBe(true);
+  });
+  it("captures shoulder rest positions and torso-up in parent local space",()=>{
+    const chest=new Object3D(),leftShoulder=new Object3D(),rightShoulder=new Object3D(),leftUpperArm=new Object3D(),rightUpperArm=new Object3D();chest.rotation.z=.3;chest.add(leftShoulder,rightShoulder);leftShoulder.add(leftUpperArm);rightShoulder.add(rightUpperArm);leftShoulder.position.set(.02,.3,0);rightShoulder.position.set(-.02,.3,0);leftUpperArm.position.x=.18;rightUpperArm.position.x=-.18;chest.updateMatrixWorld(true);
+    const bones={chest,leftShoulder,rightShoulder,leftUpperArm,rightUpperArm};const profile=createUpperBodyRigProfile(1,"shoulder-test",bones);const rig=createShoulderTranslationRig(bones,profile);
+    expect(rig?.shoulderWidth).toBeCloseTo(.4);expect(rig?.joints.left?.restLocalPosition).toEqual({x:.02,y:.3,z:0});
+    const local=rig!.joints.left!.torsoUpParentLocalRest;const axis=new Vector3(local.x,local.y,local.z).applyQuaternion(chest.getWorldQuaternion(new Quaternion()));
+    expect(axis.angleTo(new Vector3(0,1,0))).toBeLessThan(1e-6);
   });
 });

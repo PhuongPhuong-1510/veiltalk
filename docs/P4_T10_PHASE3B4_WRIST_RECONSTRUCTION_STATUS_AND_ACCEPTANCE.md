@@ -1,6 +1,6 @@
 # P4-T10 — Phase 3B.4: Wrist Evidence & Partial-arm Reconstruction
 
-> Trạng thái: **IMPLEMENTED — AUTOMATED GATE PASS; MANUAL WEBCAM RETEST PENDING**
+> Trạng thái: **HOÀN THÀNH — AUTOMATED GATE PASS; CHỦ DỰ ÁN XÁC NHẬN MANUAL ACCEPTANCE 2026-09-10**
 >
 > Automated gate ngày 2026-09-09 sau corrective spatial + absolute-palm patch và DEV avatar selector: `50 files / 600 tests PASS`, lint PASS, TypeScript + Vite
 > production build PASS. Không thêm thư viện, không đổi `AvatarPosePacketV1`, không gửi raw
@@ -174,6 +174,33 @@ tới khi tái kiểm tra cùng tư thế trên webcam.
 palm vẫn có thể lật. Nguyên nhân được tách thành hai thiếu sót độc lập: solver chưa có face/rig collision
 và Hand twist chỉ có neutral tương đối theo phiên. Corrective spatial + absolute-palm đã qua automated
 gate nhưng W9/W10 vẫn **manual retest pending**; tài liệu không tuyên bố đã nghiệm thu.
+
+### Corrective sau manual gate ngày 2026-09-10
+
+Hai case webcam mới xác nhận hai lỗi continuity độc lập:
+
+- Khi Hand che ngang vùng vai, wrist source đã chuyển sang `hand-image` nhưng phép dựng wrist có
+  thể mất scale vì scale image→world trước đây được tính lại từ hai shoulder của chính frame bị
+  che. Processor giờ chỉ cập nhật scale khi cả hai shoulder đáng tin cậy và dùng lại scale gần
+  nhất trong cùng camera/session khi shoulder tạm mất; reset/đổi rig xóa cache. Regression mô
+  phỏng shoulder collapse + Pose wrist mất xác nhận lower geometry vẫn hợp lệ, không rơi về idle.
+- Khi elbow bị che, nghiệm `inferred-history` trước đây được ghi ngược lại làm
+  `previousElbowDirection`; một nghiệm depth sai vì thế tự trở thành history mới và được
+  continuity/side-flip khóa ở các frame sau. Bend-plane anchor giờ chỉ được cập nhật từ elbow
+  quan sát thật; cold start được phép neo một lần nhưng các frame inferred không tự tích lũy.
+- Khi toàn cánh tay chĩa dọc camera, Pose vẫn có thể báo elbow/wrist/finger visibility cao nhưng
+  phép chiếu bend-plane bị suy biến; `pole hand` từ các điểm gần chồng nhau dao động mạnh và làm
+  avatar quơ loạn. Trong `depth-degenerate`, solver giờ không trao quyền cho Hand pole: dùng
+  previous pole còn hạn, nếu không thì rest pole theo rig. Khi tay rời trục camera, Hand pole mới
+  được phép làm fallback. Đây là safe degradation vì webcam đơn không đủ evidence để khôi phục
+  chính xác depth trong tư thế này.
+
+Automated gate sau corrective: 50 files / 601 tests PASS; lint và build PASS. Hai case vẫn phải
+re-test bằng webcam trên cả trái/phải và ít nhất ba VRM trước khi đổi manual status thành PASS.
+
+Chủ dự án xác nhận đóng AR0-T01 ngày 2026-09-10 sau manual re-test. Hành vi camera-axis dùng
+safe degradation về previous/rest được chấp nhận để cải thiện tiếp ở AR5/AR8; không coi webcam
+đơn có thể khôi phục chính xác depth khi toàn chuỗi tay chồng trên trục camera.
 
 ## 8. Giới hạn còn lại
 

@@ -5,6 +5,7 @@ import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import { buildIdleArmPose } from "./idleArmPose";
 import { rotateVector, vectorAngularDeltaDegrees } from "./motionMath";
 import { DEFAULT_AVATAR_MOTION_CONFIG } from "./motionConfig";
+import type { UpperBodyJointProfile, UpperBodyRigProfileV1 } from "./upperBodyRigProfile";
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
 const zero = { x: 0, y: 0, z: 0 };
@@ -16,6 +17,9 @@ const rigProfile: NormalizedAvatarRigProfile = { version: 1, modelGeneration: 1,
   rightUpperArm: { parentJoint: "rightShoulder", childJoint: "rightLowerArm", parentMode: "fixed-rest", controlledParentJoint: null, restLocalPosition: zero, restLocalRotation: identity, restWorldPosition: zero, restWorldRotation: identity, parentRestWorldRotation: identity, restWorldDirection: { x: -1, y: 0, z: 0 }, anatomicalRestBasis: rightBasis },
   rightLowerArm: { parentJoint: "rightUpperArm", childJoint: "rightHand", parentMode: "controlled", controlledParentJoint: "rightUpperArm", restLocalPosition: zero, restLocalRotation: identity, restWorldPosition: zero, restWorldRotation: identity, parentRestWorldRotation: identity, restWorldDirection: { x: -1, y: 0, z: 0 }, anatomicalRestBasis: rightBasis },
 } };
+const upperLimits={pitchUp:1,pitchDown:1,yawLeft:1,yawRight:1,rollLeft:1,rollRight:1};
+const upperJoint=(name:UpperBodyJointProfile["name"],parent:UpperBodyJointProfile["parent"]):UpperBodyJointProfile=>({name,parent,restLocalRotation:identity,restWorldRotation:identity,parentRestWorldRotation:identity,pitchAxisLocal:{x:1,y:0,z:0},yawAxisLocal:{x:0,y:1,z:0},rollAxisLocal:{x:0,y:0,z:1},limits:upperLimits});
+const upperBodyProfile:UpperBodyRigProfileV1={version:1,modelGeneration:1,modelFingerprint:"upper-test",capability:"reduced",shoulderWidth:.4,joints:{chest:upperJoint("chest",null),neck:upperJoint("neck","chest"),head:upperJoint("head","neck"),leftShoulder:upperJoint("leftShoulder","chest"),rightShoulder:upperJoint("rightShoulder","chest")}};
 
 const landmark = (x: number, y: number, z = 0) => ({ x, y, z, visibility: 1 });
 function frame(state: "tracked" | "lost" | "not-sampled" = "tracked"): RawTrackingFrameV1 {
@@ -85,6 +89,145 @@ function edgeOnLeftHand(timestamp: number): RawHandCandidateV1 {
 }
 
 describe("AvatarMotionProcessor", () => {
+  describe("AR4 V2 upper-body pipeline",()=>{
+    it("keeps legacy V1 until an upper-body profile is explicitly installed",()=>{
+      expect(new AvatarMotionProcessor({filtered:false,now:()=>100}).process(frame()).version).toBe(1);
+    });
+    it("keeps legacy head motion while paired upper-body calibration is collecting",()=>{
+      const processor=new AvatarMotionProcessor({filtered:false,now:()=>100});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
+      const input=frame();const c=Math.cos(.3),s=Math.sin(.3);input.face.facialTransform!.data=[c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1];
+      const packet=processor.process(input);
+      expect(processor.getUpperBodyCalibration()).toMatchObject({state:"collecting",acceptedPairs:1});
+      expect(packet.version).toBe(1);expect(packet.headRotation).not.toBeNull();expect(packet.headRotation!.w).toBeLessThan(.999);
+    });
+    it("calibrates paired face/pose samples and emits only rest-relative V2 rotations",()=>{
+      let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
+      for(let index=0;index<30;index+=1){now=100+index*33;const input=frame();input.frameTimestampMs=now;input.face.sampledAtMs=now;input.pose.sampledAtMs=now;processor.process(input);}
+      expect(processor.getUpperBodyCalibration().state).toBe("calibrated");
+      now+=33;const moved=frame();moved.frameTimestampMs=now;moved.face.sampledAtMs=now;moved.pose.sampledAtMs=now;const c=Math.cos(.3),s=Math.sin(.3);moved.face.facialTransform!.data=[c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1];
+      const packet=processor.process(moved);expect(packet.version).toBe(2);expect(packet.headRotation).not.toBeNull();expect(packet.jointRotations.chest).toBeDefined();expect(packet.jointRotations.neck).toBeDefined();
+      const serialized=JSON.stringify(packet);expect(serialized).not.toContain("landmarks");expect(serialized).not.toContain("facialTransform");expect(Object.values(packet.jointRotations).flatMap(Object.values).every(Number.isFinite)).toBe(true);
+    });
+    it("calibrates from face and shoulders only, then keeps upward head pitch positive",()=>{
+      let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
+      for(let index=0;index<30;index+=1){now=100+index*33;const input=frame();input.frameTimestampMs=now;input.face.sampledAtMs=now;input.pose.sampledAtMs=now;input.pose.worldLandmarks![23].visibility=0;input.pose.worldLandmarks![24].visibility=0;processor.process(input);}
+      expect(processor.getUpperBodyCalibration()).toMatchObject({state:"calibrated",mode:"shoulder-only",acceptedPairs:30,acceptedFullTorsoPairs:0});
+      now+=33;const moved=frame();moved.frameTimestampMs=now;moved.face.sampledAtMs=now;moved.pose.sampledAtMs=now;moved.pose.worldLandmarks![23].visibility=0;moved.pose.worldLandmarks![24].visibility=0;
+      const angle=.3,c=Math.cos(angle),s=Math.sin(angle);moved.face.facialTransform!.data=[1,0,0,0,0,c,s,0,0,-s,c,0,0,0,0,1];
+      const packet=processor.process(moved);expect(packet.version).toBe(2);expect(packet.headRotation?.x).toBeGreaterThan(0);expect(packet.jointRotations.neck?.x).toBeGreaterThan(0);
+    });
+    it("keeps torso and face yaw coherent in shoulder-only mode",()=>{
+      let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
+      const upperFrame=(timestamp:number)=>{const input=frame();input.frameTimestampMs=timestamp;input.face.sampledAtMs=timestamp;input.pose.sampledAtMs=timestamp;setPoseLandmark(input,7,.15,-.05);setPoseLandmark(input,8,-.15,-.05);setPoseLandmark(input,11,.2,.3);setPoseLandmark(input,12,-.2,.3);input.pose.worldLandmarks![23].visibility=0;input.pose.worldLandmarks![24].visibility=0;return input;};
+      for(let index=0;index<30;index+=1){now=100+index*33;processor.process(upperFrame(now));}
+      now+=33;const moved=upperFrame(now),angle=.3,c=Math.cos(angle),s=Math.sin(angle);
+      setPoseLandmark(moved,11,.2*c,.3,-.2*s);setPoseLandmark(moved,12,-.2*c,.3,.2*s);
+      moved.face.facialTransform!.data=[c,0,s,0,0,1,0,0,-s,0,c,0,0,0,0,1];
+      const packet=processor.process(moved);expect(packet.version).toBe(2);expect(packet.jointRotations.chest?.y).toBeGreaterThan(0);expect(Math.abs(packet.headRotation?.y??0)).toBeLessThan(.01);
+    });
+    it("emits a conservative forward lean without hips and keeps depth-only at the ambiguous cap",()=>{
+      let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
+      for(let index=0;index<30;index+=1){now=100+index*33;const input=frame();input.frameTimestampMs=now;input.face.sampledAtMs=now;input.pose.sampledAtMs=now;input.pose.worldLandmarks![23].visibility=0;input.pose.worldLandmarks![24].visibility=0;processor.process(input);}
+      now+=33;const moved=frame();moved.frameTimestampMs=now;moved.face.sampledAtMs=now;moved.pose.sampledAtMs=now;moved.pose.worldLandmarks![23].visibility=0;moved.pose.worldLandmarks![24].visibility=0;setPoseLandmark(moved,11,-.2,.3,-.2);setPoseLandmark(moved,12,.2,.3,-.2);
+      // Perspective của lean có thể kéo cả hai vai lên trong image-space; nó không được lọt sang shrug.
+      moved.pose.landmarks![11].y=.58;moved.pose.landmarks![12].y=.58;
+      const packet=processor.process(moved),lean=processor.getTorsoLeanDiagnostics(),shoulder=processor.getShoulderVerticalDiagnostics();expect(packet.version).toBe(2);expect(lean.source).toBe("ambiguous-camera-approach");expect(lean.filteredAngle).toBeGreaterThan(0);expect(lean.filteredAngle).toBeLessThanOrEqual(2*Math.PI/180);expect(packet.jointRotations.chest?.x).toBeGreaterThan(0);expect(shoulder.commonMotionGain).toBe(0);expect(Math.abs(shoulder.raw.left)).toBeLessThan(.01);expect(Math.abs(shoulder.raw.right)).toBeLessThan(.01);
+    });
+    it("uses shoulder-to-hip geometry for stronger full-torso forward lean",()=>{
+      let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
+      for(let index=0;index<30;index+=1){now=100+index*33;const input=frame();input.frameTimestampMs=now;input.face.sampledAtMs=now;input.pose.sampledAtMs=now;processor.process(input);}
+      expect(processor.getUpperBodyCalibration().mode).toBe("full-torso");now+=33;const moved=frame();moved.frameTimestampMs=now;moved.face.sampledAtMs=now;moved.pose.sampledAtMs=now;setPoseLandmark(moved,11,-.2,.3,-.12);setPoseLandmark(moved,12,.2,.3,-.12);
+      const packet=processor.process(moved),lean=processor.getTorsoLeanDiagnostics();expect(packet.version).toBe(2);expect(lean.source).toBe("full-torso");expect(lean.filteredAngle).toBeGreaterThan(2*Math.PI/180);expect(packet.jointRotations.chest?.x).toBeGreaterThan(0);
+    });
+    it("emits shoulderMotion as a V2 full-state snapshot and detects bilateral vertical shrug",()=>{
+      let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
+      for(let index=0;index<30;index+=1){now=100+index*33;const input=frame();input.frameTimestampMs=now;input.face.sampledAtMs=now;input.pose.sampledAtMs=now;processor.process(input);}
+      now+=33;const raised=frame();raised.frameTimestampMs=now;raised.face.sampledAtMs=now;raised.pose.sampledAtMs=now;setPoseLandmark(raised,11,-.2,.2);setPoseLandmark(raised,12,.2,.2);
+      const active=processor.process(raised);expect(active.version).toBe(2);if(active.version!==2)throw new Error("expected V2");expect(active.shoulderMotion?.leftVertical).toBeGreaterThan(.5);expect(active.shoulderMotion?.rightVertical).toBeGreaterThan(.5);
+      now+=16;const duplicate=structuredClone(raised);duplicate.frameTimestampMs=now;const held=processor.process(duplicate);expect(held.version).toBe(2);if(held.version!==2)throw new Error("expected V2");expect(held.shoulderMotion).toEqual(active.shoulderMotion);
+      expect(JSON.stringify(active.shoulderMotion)).not.toMatch(/landmark|matrix|image/i);
+    });
+  });
+  describe("AR3-T01 gaze packet", () => {
+    const positiveHorizontalGaze = () => ({
+      eyeLookInLeft: 0, eyeLookOutLeft: 1, eyeLookUpLeft: 0, eyeLookDownLeft: 0,
+      eyeLookInRight: 1, eyeLookOutRight: 0, eyeLookUpRight: 0, eyeLookDownRight: 0,
+      eyeBlinkLeft: 0, eyeBlinkRight: 0,
+    });
+
+    it("emits only finite yaw/pitch semantics and keeps raw eye coefficients out of the packet", () => {
+      const input = frame(); input.face.blendshapes = positiveHorizontalGaze();
+      const packet = new AvatarMotionProcessor({ filtered: false, now: () => 120 }).process(input);
+      expect(packet.gaze?.version).toBe(1); expect(packet.gaze?.yaw).toBeCloseTo(.9); expect(packet.gaze?.pitch).toBe(0);
+      const serialized = JSON.stringify(packet);
+      expect(serialized).not.toContain("eyeLookOutLeft");
+      expect(serialized).not.toContain("rawLeft");
+    });
+
+    it("keeps gaze model-independent and does not promote a duplicate face sample", () => {
+      let now = 120; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now });
+      const first = frame(); first.face.blendshapes = positiveHorizontalGaze();
+      expect(processor.process(first).gaze?.yaw).toBeCloseTo(.9);
+      now = 140; const duplicate = frame(); duplicate.face.blendshapes = { ...positiveHorizontalGaze(), eyeLookOutLeft: 0, eyeLookInRight: 0 };
+      expect(processor.process(duplicate).gaze?.yaw).toBeCloseTo(.9);
+      expect(processor.getGazeDiagnostics().sampleDisposition).toBe("duplicate");
+    });
+
+    it("uses the tuned default filter to soften a sudden center-to-edge step", () => {
+      let now = 100; const processor = new AvatarMotionProcessor({ now: () => now });
+      const center = frame(); center.face.sampledAtMs = 100; center.face.blendshapes = { ...positiveHorizontalGaze(), eyeLookOutLeft: 0, eyeLookInRight: 0 };
+      expect(processor.process(center).gaze?.yaw).toBe(0);
+      now = 133; const edge = frame(); edge.face.sampledAtMs = 133; edge.face.blendshapes = positiveHorizontalGaze();
+      const softened = processor.process(edge).gaze?.yaw ?? 0;
+      expect(softened).toBeGreaterThan(0);
+      expect(softened).toBeLessThan(.55);
+    });
+
+    it("holds then returns gaze to null on face loss", () => {
+      let now = 120; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now });
+      const first = frame(); first.face.blendshapes = positiveHorizontalGaze(); processor.process(first);
+      now = 180; expect(processor.process(frame("lost")).gaze?.yaw).toBeCloseTo(.9);
+      now = 300; expect(processor.process(frame("lost")).gaze?.yaw).toBeGreaterThan(0);
+      now = 500; expect(processor.process(frame("lost")).gaze).toBeNull();
+    });
+
+    it("applies T02 only to dedicated model-approved eyelid targets", () => {
+      const processor = new AvatarMotionProcessor({ filtered: false, now: () => 120 });
+      processor.setGazeEyelidSupport({ handlesVerticalEyelid: false, targets: { downLeft: true, downRight: true, upLeft: false, upRight: false } });
+      const input = frame(); input.face.blendshapes = {
+        eyeLookInLeft: 0, eyeLookOutLeft: 0, eyeLookUpLeft: 0, eyeLookDownLeft: 1,
+        eyeLookInRight: 0, eyeLookOutRight: 0, eyeLookUpRight: 0, eyeLookDownRight: 1,
+        eyeBlinkLeft: 1, eyeBlinkRight: 0,
+      };
+      const packet = processor.process(input);
+      expect(processor.getGazeEyelidDiagnostic()).toMatchObject({ status: "applied" });
+      expect(processor.getGazeEyelidDiagnostic().outputs.eyeLidDownRight).toBeGreaterThan(0);
+      expect(packet.expressions.eyeLidDownLeft).toBeGreaterThanOrEqual(0);
+      expect(packet.expressions.eyeLidDownRight).toBeGreaterThan(0);
+    });
+
+    it("keeps faithful as exact default and makes cinematic an explicit bounded mode", () => {
+      let now = 100;
+      const faithful = new AvatarMotionProcessor({ filtered: false, now: () => now });
+      const cinematic = new AvatarMotionProcessor({ filtered: false, gazeMode: "cinematic", now: () => now });
+      cinematic.setGazeAttentionStrength(1);
+      const make = (sampledAtMs: number) => {
+        const input = frame(); input.face.sampledAtMs = sampledAtMs; input.face.blendshapes = {
+          eyeLookInLeft: 0, eyeLookOutLeft: .12, eyeLookUpLeft: 0, eyeLookDownLeft: 0,
+          eyeLookInRight: .12, eyeLookOutRight: 0, eyeLookUpRight: 0, eyeLookDownRight: 0,
+          eyeBlinkLeft: 0, eyeBlinkRight: 0,
+        }; return input;
+      };
+      faithful.process(make(100)); cinematic.process(make(100));
+      now = 200;
+      const base = faithful.process(make(200)).gaze!; const enhanced = cinematic.process(make(200)).gaze!;
+      expect(faithful.getGazeDiagnostics()).toMatchObject({ mode: "faithful", cinematic: { blend: 0 } });
+      expect(cinematic.getGazeDiagnostics().cinematic.blend).toBeGreaterThan(0);
+      expect(enhanced.yaw).not.toBe(base.yaw);
+      expect(Math.abs(enhanced.yaw - base.yaw)).toBeLessThan(.1);
+    });
+  });
+
   describe("Mức 2B-5 Hand twist wiring", () => {
     it("feature flag defaults off and remains bit-for-bit Pose-only", () => {
       const input = frame(); input.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left"), handCandidate(1, RIGHT_WRIST_IMAGE, "right")];
@@ -935,10 +1078,141 @@ describe("AvatarMotionProcessor", () => {
   });
 
   it("creates a serializable plain packet with semantic expressions and finite joints", () => {
-    const processor = new AvatarMotionProcessor({ filtered: false, now: () => 120 }); processor.setRigProfile(rigProfile); const packet = processor.process(frame());
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => 120 }); processor.setRigProfile(rigProfile); const input = frame(); input.face.blendshapes!.eyeBlinkRight = 2; const packet = processor.process(input);
     expect(packet.version).toBe(1); expect(packet.sequence).toBe(1); expect(packet.expressions.eyeBlinkLeft).toBe(1);
     expect(Object.keys(packet.expressions).length).toBeGreaterThanOrEqual(4); expect(packet.jointRotations.leftUpperArm).toBeDefined();
     const serialized = JSON.stringify(packet); expect(JSON.parse(serialized).version).toBe(1); expect(serialized).not.toMatch(/landmarks|facialTransform/);
+  });
+  it("holds detector cadence and short loss, then returns a genuinely lost face to explicit neutral keys", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => now });
+    const tracked = frame(); tracked.face.sampledAtMs = 100; tracked.face.blendshapes = { jawOpen: .8, eyeBlinkLeft: .4 };
+    const active = processor.process(tracked);
+    // F3 remap: jawOpen mạnh đạt full `aa`, không còn pass-through `aa = jawOpen`.
+    expect(active.expressions.aa).toBe(1);
+    expect(active.expressions).toMatchObject({ jawOpen: 1, mouthClose: 0, ih: 0, ou: 0, ee: 0, oh: 0 });
+
+    now = 150;
+    const notSampled = frame(); notSampled.face = { state: "not-sampled", sampledAtMs: 100, landmarks: null, blendshapes: null, facialTransform: null };
+    expect(processor.process(notSampled).expressions).toEqual(active.expressions);
+
+    now = 190;
+    const lost = frame(); lost.face = { state: "lost", sampledAtMs: null, landmarks: null, blendshapes: null, facialTransform: null };
+    expect(processor.process(lost).expressions.aa).toBe(1);
+    now = 280;
+    expect(processor.process(lost).expressions.aa).toBe(1);
+    now = 600;
+    expect(processor.process(lost).expressions.aa).toBeCloseTo(.5);
+    now = 900;
+    const neutral = processor.process(lost);
+    expect(neutral.expressions).toHaveProperty("aa", 0);
+    expect(neutral.expressions).toHaveProperty("blinkLeft", 0);
+  });
+  it("F3 publishes independent closure, five visemes and mouth diagnostics through the processor", () => {
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => 100 });
+    const sample = frame(); sample.face.blendshapes = {
+      jawOpen: .38,
+      mouthClose: 0,
+      mouthStretchLeft: 1,
+      mouthStretchRight: 1,
+      mouthUpperUpLeft: 1,
+      mouthLowerDownRight: 1,
+    };
+    const expressions = processor.process(sample).expressions;
+    expect(expressions).toHaveProperty("jawOpen");
+    expect(expressions).toHaveProperty("mouthClose", 0);
+    expect(expressions).toHaveProperty("aa");
+    expect(expressions).toHaveProperty("ih");
+    expect(expressions).toHaveProperty("ou");
+    expect(expressions).toHaveProperty("ee");
+    expect(expressions).toHaveProperty("oh");
+    expect(expressions.ee).toBeGreaterThan(expressions.ih);
+    expect(processor.getMouthExpressions()).toMatchObject({
+      geometry: { stretch: 1 },
+      corrective: { upperUp: .5, lowerDown: .5 },
+    });
+  });
+  it("uses face-landmark lip aperture when MediaPipe jawOpen is too small during speech", () => {
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => 100 });
+    const sample = frame();
+    sample.face.blendshapes = { jawOpen: .01 };
+    sample.face.landmarks = Array.from({ length: 478 }, () => landmark(.5, .5));
+    sample.face.landmarks[61] = landmark(.4, .5);
+    sample.face.landmarks[291] = landmark(.6, .5);
+    sample.face.landmarks[13] = landmark(.5, .48);
+    sample.face.landmarks[14] = landmark(.5, .55);
+    const packet = processor.process(sample);
+    expect(processor.getMouthExpressions().geometry).toMatchObject({ blendshapeJawOpen: 0 });
+    expect(processor.getMouthExpressions().geometry.landmarkJawOpen).toBeGreaterThan(.3);
+    expect(packet.expressions.aa).toBeGreaterThan(.3);
+  });
+  it("publishes raw-to-final mouth telemetry and retains short peaks for the DEV polling window", () => {
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => 100 });
+    const open = frame();
+    open.face.sampledAtMs = 100;
+    open.face.blendshapes = { jawOpen: .38, mouthStretchLeft: .7, mouthStretchRight: .7 };
+    processor.process(open);
+    const closed = frame();
+    closed.face.sampledAtMs = 150;
+    closed.face.blendshapes = { jawOpen: 0 };
+    processor.process(closed);
+    const telemetry = processor.getMouthPipelineTelemetry();
+    expect(telemetry.current).toMatchObject({ sampledAtMs: 150, deltaTimeMs: 50, raw: { jawOpen: 0 } });
+    expect(telemetry.window).toMatchObject({ sampleCount: 2, sampleRateFps: 20, activeSampleCount: 1 });
+    expect(telemetry.window.peaks.rawJawOpen).toBe(.38);
+    expect(telemetry.window.peaks.f3VowelSum).toBeGreaterThan(0);
+    expect(telemetry.window.peaks.finalVowelSum).toBeGreaterThan(0);
+  });
+  it("runs the F4 speech corrective before mixing and lets strong closure clear its opening envelope", () => {
+    const processor = new AvatarMotionProcessor({ now: () => 100 });
+    const open = frame();
+    open.face.sampledAtMs = 100;
+    open.face.blendshapes = { jawOpen: .2 };
+    processor.process(open);
+    const active = processor.getFacialDynamics().mouthCorrective;
+    expect(active.disposition).toBe("active");
+    expect(active.boostedAmplitude).toBeGreaterThan(active.currentAmplitude);
+
+    const closed = frame();
+    closed.face.sampledAtMs = 150;
+    closed.face.blendshapes = { mouthClose: 1 };
+    const packet = processor.process(closed);
+    expect(processor.getFacialDynamics().mouthCorrective).toMatchObject({ disposition: "closure-reset", preservedEnvelope: 0 });
+    expect(packet.expressions.mouthClose).toBeGreaterThan(.9);
+  });
+  it("F4 publishes one final dynamics/mixer result and no longer derives a full-face happy preset", () => {
+    const processor = new AvatarMotionProcessor({ now: () => 100 });
+    const sample = frame(); sample.face.blendshapes = {
+      mouthClose: 1,
+      cheekSquintLeft: 1,
+      mouthSmileLeft: 1,
+      mouthSmileRight: 1,
+    };
+    const packet = processor.process(sample);
+    expect(packet.expressions.mouthClose).toBeGreaterThan(.9);
+    expect(packet.expressions.cheekSquintLeft).toBeLessThan(.5);
+    expect(packet.expressions).not.toHaveProperty("happy");
+    expect(processor.getFacialDynamics().final).toEqual(packet.expressions);
+  });
+  it("clears facial continuity and calibration when the model fingerprint changes", () => {
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => 100 });
+    processor.process(frame());
+    processor.setFacialModelFingerprint("model-b#vrm:1");
+    expect(processor.getFacialCalibration()).toMatchObject({ state: "collecting", acceptedSamples: 0, baselines: {} });
+    expect(processor.getMouthPipelineTelemetry().current).toBeNull();
+    const lost = frame(); lost.face = { state: "lost", sampledAtMs: null, landmarks: null, blendshapes: null, facialTransform: null };
+    expect(processor.process(lost).expressions).toEqual({});
+  });
+  it("enters manual neutral calibration when explicitly requested", () => {
+    let now = 100;
+    const config = { ...DEFAULT_AVATAR_MOTION_CONFIG, face: { ...DEFAULT_AVATAR_MOTION_CONFIG.face, neutralCalibrationSamples: 3 } };
+    const processor = new AvatarMotionProcessor({ filtered: false, now: () => now, config });
+    processor.calibrateFaceNeutral();
+    for (let index = 0; index < 3; index += 1) {
+      const sample = frame(); sample.face.sampledAtMs = now; sample.face.blendshapes = { jawOpen: .26, browInnerUp: .3 };
+      processor.process(sample); now += 10;
+    }
+    expect(processor.getFacialCalibration()).toMatchObject({ state: "ready", collectionMode: "manual", acceptedSamples: 3, rejectedSamples: 0 });
   });
   it("keeps not-sampled distinct and holds a briefly lost pose", () => {
     let now = 110; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(rigProfile); processor.process(frame());
@@ -1117,6 +1391,37 @@ describe("AvatarMotionProcessor", () => {
     expect(diagnostic.wristEvidence).toMatchObject({ source: "hand-image", reconstructionConfidence: 1, reconstructionRejectionReason: null });
     expect(diagnostic.observation.lowerDirectionValid).toBe(true);
     expect(diagnostic.segmentLossState.lower).toBe("recovering");
+  });
+
+  it("keeps the last reliable shoulder scale when a hand occludes one shoulder", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    for (const timestamp of [100, 160, 220]) {
+      now = timestamp;
+      const observed = sampledFrame(timestamp);
+      observed.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", timestamp)];
+      processor.process(observed);
+    }
+
+    now = 280;
+    const shoulderOccluded = sampledFrame(280);
+    shoulderOccluded.pose.landmarks![12] = {
+      ...shoulderOccluded.pose.landmarks![11],
+      visibility: 0,
+    };
+    shoulderOccluded.pose.landmarks![15].visibility = 0;
+    shoulderOccluded.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", 280)];
+    processor.process(shoulderOccluded);
+
+    const diagnostic = processor.getLastDiagnostics()!.arms.left;
+    expect(diagnostic.wristEvidence).toMatchObject({
+      source: "hand-image",
+      reconstructionConfidence: 1,
+      reconstructionRejectionReason: null,
+    });
+    expect(diagnostic.observation.lowerDirectionValid).toBe(true);
+    expect(diagnostic.segmentLossState.lower).not.toBe("idle");
   });
 
   it("reconstructs Hand wrist first then infers elbow when both Pose wrist and elbow are hidden", () => {

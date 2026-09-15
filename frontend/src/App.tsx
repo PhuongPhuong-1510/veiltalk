@@ -42,6 +42,9 @@ const TrackingDevHarness = import.meta.env.DEV
 const AvatarRendererDevHarness = import.meta.env.DEV
   ? lazy(() => import("./components/dev/AvatarRendererDevHarness"))
   : null;
+const FacialDevHarness = import.meta.env.DEV
+  ? lazy(() => import("./components/dev/FacialDevHarness"))
+  : null;
 
 function SplashScreen() {
   const navigate = useNavigate();
@@ -537,6 +540,9 @@ function AppRoutes() {
       )}
       {AvatarRendererDevHarness && (
         <Route path="/dev/avatar-renderer" element={<Suspense fallback={<div>Đang tải avatar renderer…</div>}><AvatarRendererDevHarness /></Suspense>} />
+      )}
+      {FacialDevHarness && (
+        <Route path="/dev/facial" element={<Suspense fallback={<div>Đang tải facial lab…</div>}><FacialDevHarness /></Suspense>} />
       )}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

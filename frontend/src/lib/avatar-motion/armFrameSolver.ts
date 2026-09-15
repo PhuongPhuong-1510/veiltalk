@@ -384,6 +384,7 @@ function solveSide(
   side: ArmSide, world: RawNormalizedLandmarkV1[], image: RawNormalizedLandmarkV1[], profile: NormalizedAvatarRigProfile, torso: TorsoBasis | null,
   history: ArmGeometryHistory, nowMs: number, config: AvatarMotionConfig["armFrame"], constraintsEnabled: boolean,
   spatialEvidence: ArmSpatialEvidence | null,
+  animatedParentTargetWorld: QuaternionData | null,
   directionFilter?: (name: ControlledArmJoint, direction: Vector3Data) => Vector3Data,
   poleFilter?: (side: ArmSide, pole: Vector3Data) => Vector3Data,
 ): { result: SideArmGeometryResult | null; diagnostic: GeometryDiagnostic; visibilityState: { elbow: boolean; wrist: boolean } } {
@@ -528,11 +529,12 @@ function solveSide(
   // suốt lúc pole bị loại rồi nhả ra một cú nhảy khi pole quay lại.
   let poleSource: PoleSource = candidatePole ? "fresh" : "unavailable";
   let pole = candidatePole;
-  // A3+A5 (theo tư vấn chuyên gia): chèn pole từ hướng bàn tay ngay sau observed/fresh, trước
-  // pole lịch sử — đây là quan sát THẬT của frame hiện tại (khác previous, vốn là dữ liệu cũ),
-  // nên đáng tin hơn dù yếu hơn elbow-offset. Chỉ thử khi elbow-offset không cho pole dùng được.
+  // Hand pole chỉ là hướng chiếu từ các điểm gần như chồng nhau khi toàn cánh tay chĩa dọc
+  // camera. Webcam gate 2026-09-10 chứng minh visibility vẫn cao nhưng nhiễu rất nhỏ làm pole
+  // quay loạn. Trong đúng depth-degenerate mode, không dùng quan sát này: ưu tiên history còn
+  // hạn rồi rest rig ổn định. Khi armAxis đã rời trục camera, Hand pole vẫn là fallback hợp lệ.
   let handPoleRejectionReason: GeometryDiagnostic["handPoleRejectionReason"] = "not-attempted";
-  if (!pole) {
+  if (!pole && !depthDegenerate) {
     const handResult = handPalmPole(wrist ?? elbow, world[i.index], world[i.pinky], image[i.index], image[i.pinky], config.minimumPoseVisibility, armAxis);
     handPoleRejectionReason = handResult.rejectionReason;
     if (handResult.pole) { pole = handResult.pole; poleSource = "hand"; }
@@ -580,7 +582,10 @@ function solveSide(
   if (lowerDirectionValid && lower && lowerSecondary) segments.push([i.lower, lower, lowerSecondary]);
   for (const [name, primary, secondary] of segments) {
     const joint = profile.joints[name], targetWorld = targetBoneWorld(primary, vector(secondary), joint); if (!targetWorld) return reject("invalid-frame", flags);
-    const parentTargetWorld = joint.controlledParentJoint ? targetWorldRotations[joint.controlledParentJoint] : joint.parentRestWorldRotation; if (!parentTargetWorld) return reject("invalid-hierarchy", flags);
+    const parentTargetWorld = joint.controlledParentJoint
+      ? targetWorldRotations[joint.controlledParentJoint]
+      : animatedParentTargetWorld ?? joint.parentRestWorldRotation;
+    if (!parentTargetWorld) return reject("invalid-hierarchy", flags);
     const deltaLocal = multiplyQuaternions(inverseQuaternion(joint.restLocalRotation), multiplyQuaternions(inverseQuaternion(parentTargetWorld), targetWorld));
     const safe = constraintsEnabled ? constrainJointRotation(name, deltaLocal) : deltaLocal; if (!safe) return reject("invalid-constraint", flags);
     deltas[name] = safe; targetWorldRotations[name] = multiplyQuaternions(parentTargetWorld, multiplyQuaternions(joint.restLocalRotation, safe));
@@ -615,6 +620,7 @@ export function solveAnatomicalArmFrames(
   poleFilter?: (side: ArmSide, pole: Vector3Data) => Vector3Data,
   torsoFallback?: TorsoBasis,
   evidence: Partial<Record<ArmSide, HandElbowBranchEvidence | ArmSpatialEvidence | null>> = {},
+  parentTargetWorldRotations: Partial<Record<"leftShoulder" | "rightShoulder", QuaternionData>> = {},
 ): AnatomicalArmSolveResult {
   const observedTorso = buildTorsoBasis(worldLandmarks, config.minimumPoseVisibility, config.minimumSegmentLength);
   const torso = observedTorso ?? torsoFallback ?? {
@@ -625,8 +631,8 @@ export function solveAnatomicalArmFrames(
     if (!value) return null;
     return "hand" in value ? value : { hand: value, face: null, imageToWorldScale: null, imageAspectRatio: 1 };
   };
-  const left = solveSide("left", worldLandmarks, imageLandmarks, profile, torso, histories.left, nowMs, config, constraintsEnabled, normalizeEvidence(evidence.left), directionFilter, poleFilter);
-  const right = solveSide("right", worldLandmarks, imageLandmarks, profile, torso, histories.right, nowMs, config, constraintsEnabled, normalizeEvidence(evidence.right), directionFilter, poleFilter);
+  const left = solveSide("left", worldLandmarks, imageLandmarks, profile, torso, histories.left, nowMs, config, constraintsEnabled, normalizeEvidence(evidence.left), parentTargetWorldRotations.leftShoulder ?? null, directionFilter, poleFilter);
+  const right = solveSide("right", worldLandmarks, imageLandmarks, profile, torso, histories.right, nowMs, config, constraintsEnabled, normalizeEvidence(evidence.right), parentTargetWorldRotations.rightShoulder ?? null, directionFilter, poleFilter);
   return { torso, torsoWasObserved: Boolean(observedTorso), sides: { left: left.result, right: right.result }, diagnostics: { left: left.diagnostic, right: right.diagnostic },
     visibilityStates: { left: left.visibilityState, right: right.visibilityState } };
 }
