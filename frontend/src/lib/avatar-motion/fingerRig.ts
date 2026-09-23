@@ -37,6 +37,12 @@ export interface FingerSegmentRig {
    * dương làm ngón cong lại phía lòng bàn tay.
    */
   flexAxisLocal: Vector3Data;
+  /** Trục xoè/khép MCP trong bone-local; chỉ có ở đốt gốc bốn ngón khi rig quan sát được. */
+  abductionAxisLocal?: Vector3Data;
+  /** Góc xoè giải phẫu đã có sẵn trong rest pose của model; chỉ có ở root bốn ngón thường. */
+  restAbductionRad?: number;
+  /** Đổi dấu semantic-abduction sang chiều dương quanh `abductionAxisLocal`, suy bằng probe thực. */
+  abductionDirectionSign?: 1 | -1;
   /**
    * Swing semantic đã hiệu chuẩn từ hướng rest của đốt gốc ngón cái tới trục lên/xuống của
    * avatar. Chỉ có ở `ThumbMetacarpal`; các đốt ngọn chỉ nhận flexion nhẹ.
@@ -74,8 +80,10 @@ export interface HandFingerRig {
 }
 
 export interface FingerRigProfile {
-  version: 1;
+  version: 1 | 2;
   modelGeneration: number;
+  /** V2 guard: bone-local quaternion chỉ portable khi fingerprint/version trùng. */
+  modelFingerprint?: string | null;
   left: HandFingerRig;
   right: HandFingerRig;
 }
@@ -301,6 +309,8 @@ function buildFingerChain(
   palmDirectionWorld: Vector3,
   avatarUpWorld: Vector3,
   lookup: BoneLookup,
+  restPalmAcrossWorld: Vector3,
+  restPalmForwardWorld: Vector3,
 ): FingerChainRig {
   type Segment = AvatarFingerSegment | AvatarThumbSegment;
   const present: Array<{ segment: Segment; joint: AvatarFingerJointName; bone: Object3D }> = [];
@@ -355,6 +365,22 @@ function buildFingerChain(
     const restWorldRotation = current.bone.getWorldQuaternion(new Quaternion()).normalize();
     const inverseRestWorld = restWorldRotation.clone().invert();
     const flexAxisLocal = flexAxisWorld.clone().applyQuaternion(inverseRestWorld).normalize();
+    const abductionAxisLocal = i === 0 && palmDirectionWorld.lengthSq() > EPSILON
+      ? palmDirectionWorld.clone().applyQuaternion(inverseRestWorld).normalize() : null;
+    let restAbductionRad: number | undefined;
+    let abductionDirectionSign: 1 | -1 | undefined;
+    if (finger !== "thumb" && i === 0 && abductionAxisLocal && restPalmAcrossWorld.lengthSq() > EPSILON && restPalmForwardWorld.lengthSq() > EPSILON) {
+      const semanticAngle = (direction: Vector3) => Math.atan2(
+        direction.dot(restPalmAcrossWorld),
+        Math.max(1e-6, direction.dot(restPalmForwardWorld)),
+      );
+      restAbductionRad = semanticAngle(boneDirection);
+      const probed = boneDirection.clone().applyAxisAngle(palmDirectionWorld, 0.05);
+      let change = semanticAngle(probed) - restAbductionRad;
+      if (change > Math.PI) change -= 2 * Math.PI;
+      if (change < -Math.PI) change += 2 * Math.PI;
+      abductionDirectionSign = change >= 0 ? 1 : -1;
+    }
 
     // Chỉ đốt gốc thumb nhận directional swing. Đây là joint có ý nghĩa giải phẫu để dựng/chúc
     // cả ngón; xoay đốt ngọn để đổi hướng sẽ cho dáng cong vẹo thay vì thumbs-up/down tự nhiên.
@@ -368,6 +394,8 @@ function buildFingerChain(
     segments.push({
       joint: current.joint,
       flexAxisLocal: { x: flexAxisLocal.x, y: flexAxisLocal.y, z: flexAxisLocal.z },
+      ...(abductionAxisLocal ? { abductionAxisLocal: { x: abductionAxisLocal.x, y: abductionAxisLocal.y, z: abductionAxisLocal.z } } : {}),
+      ...(restAbductionRad !== undefined ? { restAbductionRad, abductionDirectionSign } : {}),
       directionalSwingLocal,
       hasChild: Boolean(next),
     });
@@ -389,7 +417,21 @@ export function buildHandFingerRig(
   avatarUpWorld: Vector3 = new Vector3(0, 1, 0),
 ): HandFingerRig {
   const palmDirectionWorld = resolvePalmDirectionWorld(side, handBone, lookup);
-  const chains = AVATAR_FINGER_NAMES.map((finger) => buildFingerChain(side, finger, palmDirectionWorld, avatarUpWorld, lookup));
+  const restPalmAcrossWorld = new Vector3();
+  const restPalmForwardWorld = new Vector3();
+  const indexRoot = lookup(fingerJointName(side, "index", "Proximal"));
+  const middleRoot = lookup(fingerJointName(side, "middle", "Proximal"));
+  const littleRoot = lookup(fingerJointName(side, "little", "Proximal"));
+  if (handBone && indexRoot && middleRoot && littleRoot) {
+    restPalmAcrossWorld.copy(worldPosition(indexRoot)).sub(worldPosition(littleRoot));
+    restPalmForwardWorld.copy(worldPosition(middleRoot)).sub(worldPosition(handBone));
+    if (restPalmAcrossWorld.lengthSq() > EPSILON) {
+      restPalmAcrossWorld.normalize();
+      restPalmForwardWorld.addScaledVector(restPalmAcrossWorld, -restPalmForwardWorld.dot(restPalmAcrossWorld));
+      if (restPalmForwardWorld.lengthSq() > EPSILON) restPalmForwardWorld.normalize(); else restPalmAcrossWorld.set(0,0,0);
+    }
+  }
+  const chains = AVATAR_FINGER_NAMES.map((finger) => buildFingerChain(side, finger, palmDirectionWorld, avatarUpWorld, lookup, restPalmAcrossWorld, restPalmForwardWorld));
   return {
     side,
     chains,
@@ -403,12 +445,14 @@ export function buildHandFingerRig(
 export function buildFingerRigProfile(
   modelGeneration: number,
   bones: Partial<Record<string, Object3D>>,
+  modelFingerprint: string | null = null,
 ): FingerRigProfile {
   const lookup: BoneLookup = (joint) => bones[joint];
   const avatarUpWorld = resolveAvatarUpWorld(bones);
   return {
-    version: 1,
+    version: 2,
     modelGeneration,
+    modelFingerprint,
     left: buildHandFingerRig("left", bones.leftHand, lookup, avatarUpWorld),
     right: buildHandFingerRig("right", bones.rightHand, lookup, avatarUpWorld),
   };

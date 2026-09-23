@@ -11,8 +11,20 @@
 .dev-camera-preview { position: relative; min-height: 0; }
 .dev-camera-preview p { position: absolute; inset: 0; display: grid; place-content: center; margin: 0; padding: 16px; border: 1px dashed #6956d8; border-radius: 12px; text-align: center; color: #ddd6fe; background: #171326; }
 .dev-camera-preview small { color: #a8a1bd; }
-.dev-stage video { transform: scaleX(-1); }
+/* Camera preview is selfie-mirrored, so mirror the avatar presentation as well.
+   Tracking/VRM bone names remain anatomical; only the on-screen view is mirrored. */
+.dev-stage canvas, .dev-stage video { transform: scaleX(-1); }
 .dev-panels { align-items: stretch; margin-top: 12px; } .dev-panels article { flex: 1 1 280px; padding: 12px; border-radius: 10px; background: #171326; }
 .dev-panels pre { max-height: 300px; overflow: auto; white-space: pre-wrap; } .dev-error { padding: 10px; color: #fecaca; background: #531d2d; }
+.dev-panels .finger-io-panel { flex: 1 1 100%; min-width: 0; }
+.finger-io-side + .finger-io-side { margin-top: 18px; }
+.finger-trace-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 14px; }
+.finger-trace-controls span { color: #c4b5fd; }
+.finger-io-scroll { overflow-x: auto; border: 1px solid #342a69; border-radius: 8px; }
+.finger-io-panel table { width: 100%; min-width: 1820px; border-collapse: collapse; font: 12px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.finger-io-panel th, .finger-io-panel td { padding: 6px 8px; border-bottom: 1px solid #2c2644; text-align: right; white-space: nowrap; }
+.finger-io-panel th:first-child, .finger-io-panel td:first-child, .finger-io-panel th:nth-child(2), .finger-io-panel td:nth-child(2) { text-align: left; }
+.finger-io-panel thead { position: sticky; top: 0; color: #ddd6fe; background: #241d3b; }
+.finger-io-panel .finger-io-stale { color: #c4b5a5; background: #1d1927; }
 .dev-controls select, .dev-controls input[type="text"], .dev-controls label > input:not([type]) { margin-left: 6px; padding: 5px; color: white; border: 1px solid #6956d8; background: #171326; }
 @media (max-width: 900px) { .dev-stage { grid-template-columns: 1fr; height: auto; } .dev-stage canvas { height: 48vh; } .dev-stage video { height: 280px; } }
