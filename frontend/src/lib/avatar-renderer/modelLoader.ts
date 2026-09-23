@@ -227,7 +227,7 @@ export class AvatarModelLoader {
     }
     const shoulderTranslationRig = vrm ? createShoulderTranslationRig({ leftShoulder: shoulderTranslationBones.left, rightShoulder: shoulderTranslationBones.right }, upperBodyRigProfile) : null;
     // Dựng sau khi mọi xương đã vào `bones`: rig ngón đọc hình học rest pose của chính model này.
-    const fingerRig = vrm ? buildFingerRigProfile(generation, bones) : null;
+    const fingerRig = vrm ? buildFingerRigProfile(generation, bones, rigFingerprint) : null;
     const morphTargets: LoadedAvatarModel["morphTargets"] = new Map();
     gltf.scene.traverse((node) => {
       if (!(node instanceof Mesh) || !node.morphTargetDictionary || !node.morphTargetInfluences) return;

@@ -1,10 +1,15 @@
 # AR4 — Kế hoạch triển khai Đầu, Cổ, Thân trên và Vai
 
-Trạng thái: **CORRECTIVE IMPLEMENTED — AUTOMATED GATE PASS — MANUAL RETEST/PERFORMANCE GATE PENDING**  
-Ngày lập/cập nhật: 2026-09-15  
+Trạng thái: **DONE — OWNER ACCEPTANCE 2026-09-16**
+
+Ngày lập/cập nhật: 2026-09-16
 Phạm vi nền đã triển khai: **AR4-T01 → AR4-T05** trong `docs/11_AVATAR_EVOLUTION_ROADMAP.md`; extension
 **AR4-T06 Hybrid Torso Fore/Aft Lean** đã được lập kế hoạch riêng tại `docs/AR4_T06_HYBRID_TORSO_LEAN_PLAN.md`
-và đang chờ AI review, chưa code.
+và đã hoàn tất implementation/automated gate.
+
+> **Biên bản đóng AR4:** Chủ dự án xác nhận AR4-T01→T06 hoàn thành ngày 2026-09-16 và cho phép chuyển sang
+> AR5-T01. Các manual matrix đa model và benchmark 60 giây/model chưa có bằng chứng được giữ dưới dạng
+> verification follow-up/deferred; owner acceptance không được diễn giải thành các phép đo này đã PASS.
 
 > Kế hoạch này khóa kiến trúc và công thức trước khi sửa runtime. AR3 đã code complete nhưng corrective giảm
 > độ nhạy gaze còn cần webcam retest. Có thể review AR4 ngay; chỉ bắt đầu behavioral code AR4 sau khi AR3 được

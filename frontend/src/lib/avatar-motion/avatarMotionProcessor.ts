@@ -54,8 +54,9 @@ import { computeLeanShoulderCommonGain,TorsoLeanSolver,type TorsoLeanResult } fr
 import { UpperBodyLifeMotion, type LifeMotionSnapshot } from "./upperBodyLifeMotion";
 import { UpperBodyMetricsCollector, type UpperBodyMetricSnapshot } from "./upperBodyMetrics";
 import { validateUpperBodyRigProfile, type UpperBodyRigProfileV1 } from "./upperBodyRigProfile";
+import { ContinuousFingerSolver, type ContinuousFingerJointDiagnostic } from "./continuousFingerSolver";
 
-export interface AvatarMotionProcessorOptions { filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; gestureEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
+export interface AvatarMotionProcessorOptions { filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
 
 export interface ShoulderVerticalDiagnosticSnapshot {
   raw: { left: number; right: number };
@@ -280,6 +281,7 @@ export class AvatarMotionProcessor {
   private constraints: boolean;
   private handTwistEnabled: boolean;
   private gestureEnabled: boolean;
+  private continuousFingerEnabled: boolean;
   private rigProfile: NormalizedAvatarRigProfile | null = null;
   private upperBodyRigProfile: UpperBodyRigProfileV1 | null = null;
   private readonly upperBodyCalibration = new UpperBodyNeutralCalibrator();
@@ -318,6 +320,8 @@ export class AvatarMotionProcessor {
     left: createFingerPoseTemporalState(), right: createFingerPoseTemporalState(),
   };
   private readonly lastGesturePose: Record<ArmSide, GesturePoseLabel> = { left: "rest", right: "rest" };
+  private readonly continuousFingerSolver:Record<ArmSide,ContinuousFingerSolver>={left:new ContinuousFingerSolver(),right:new ContinuousFingerSolver()};
+  private continuousFingerDiagnostics:Record<ArmSide,Partial<Record<AvatarFingerJointName,ContinuousFingerJointDiagnostic>>>={left:{},right:{}};
   private readonly armState: Record<ArmSide, ArmTemporalState> = { left: createArmTemporalState(), right: createArmTemporalState() };
   private readonly wristEvidenceState: Record<ArmSide, WristEvidenceState> = { left: createWristEvidenceState(), right: createWristEvidenceState() };
   private readonly lastGeometryDiagnostics: Partial<Record<ArmSide, GeometryDiagnostic>> = {};
@@ -378,6 +382,7 @@ export class AvatarMotionProcessor {
     // Mặc định TẮT: 3B.3 là tính năng đang nghiệm thu, không được đổi hành vi mặc định của
     // Phase 3B cho tới khi bốn cử chỉ đã qua manual webcam gate.
     this.gestureEnabled = options.gestureEnabled ?? false;
+    this.continuousFingerEnabled = options.continuousFingerEnabled ?? false;
   }
 
   setFiltered(enabled: boolean): void {
@@ -462,10 +467,23 @@ export class AvatarMotionProcessor {
     if (!enabled && this.ownedFingerJoints.size > 0) this.pendingFingerClear = true;
   }
   isGestureEnabled(): boolean { return this.gestureEnabled; }
+  setContinuousFingerEnabled(enabled:boolean):void{
+    if(this.continuousFingerEnabled===enabled)return;
+    this.continuousFingerEnabled=enabled;
+    this.continuousFingerSolver.left.reset();this.continuousFingerSolver.right.reset();
+    this.continuousFingerDiagnostics={left:{},right:{}};
+    // Dọn pose do pipeline trước sở hữu ở cả hai chiều chuyển chế độ; nếu không, một frame cũ có thể
+    // giữ bàn tay nắm khi bật continuous tracking nhưng frame camera đầu tiên chưa hợp lệ.
+    if(this.ownedFingerJoints.size>0)this.pendingFingerClear=true;
+  }
+  isContinuousFingerEnabled():boolean{return this.continuousFingerEnabled;}
+  getContinuousFingerDiagnostics(){return {left:{...this.continuousFingerDiagnostics.left},right:{...this.continuousFingerDiagnostics.right}};}
   /** Rig ngón đến từ model đang tải; đổi model thì phải nhả pose cũ vì chuỗi xương có thể khác. */
   setFingerRig(rig: FingerRigProfile | null): void {
     if (this.fingerRig === rig) return;
     this.fingerRig = rig;
+    this.continuousFingerSolver.left.reset();this.continuousFingerSolver.right.reset();
+    this.continuousFingerDiagnostics={left:{},right:{}};
     if (this.ownedFingerJoints.size > 0) this.pendingFingerClear = true;
   }
   getFingerRig(): FingerRigProfile | null { return this.fingerRig; }
@@ -908,7 +926,8 @@ export class AvatarMotionProcessor {
     } else this.diagnostics = null;
     // Phase 3B.3: chạy SAU nhánh arm và chỉ GHI THÊM khoá xương ngón. Không đọc, không sửa, không
     // ghi đè bất kỳ khoá arm nào ở trên — kể cả `leftHand`/`rightHand` (wrist thuộc Phase 3B).
-    this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
+    if(this.continuousFingerEnabled)this.applyContinuousFinger(jointRotations,frame,handContext,processedTimestampMs);
+    else this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
     const common = { sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics };
     return upperBody
       ? { ...common, version: 2, headRotation: upperBody.deltas.head ?? null, shoulderMotion: upperBody.shoulderMotion }
@@ -1572,6 +1591,26 @@ export class AvatarMotionProcessor {
    * Bất biến phải giữ qua mọi bước tiếp theo: hàm này CHỈ được ghi khoá xương ngón, và khi tắt
    * thì packet phải không còn khoá ngón nào (sau đúng một frame phát identity để nhả).
    */
+  private applyContinuousFinger(
+    jointRotations:AvatarPosePacketV1["jointRotations"],frame:RawTrackingFrameV1,hand:HandMotionContext,nowMs:number,
+  ):void{
+    if(this.pendingFingerClear){for(const joint of this.ownedFingerJoints)jointRotations[joint]=IDENTITY_QUATERNION;this.ownedFingerJoints.clear();this.pendingFingerClear=false;}
+    if(!this.fingerRig)return;
+    for(const side of ["left","right"] as const){
+      const match=hand.matchResult[side];
+      const candidate=hand.sampleClassification==="new-sample"&&match.matched&&match.candidateArrayIndex!==null?frame.rawHands[match.candidateArrayIndex]??null:null;
+      const palm=hand.palmBasisBySide[side];
+      const result=this.continuousFingerSolver[side].solve(
+        candidate?.worldLandmarks??null,palm?.worldBasis??null,palm?.worldGeometryQuality??0,
+        candidate?.sampledAtMs??null,nowMs,this.fingerRig[side],this.config.continuousFinger,
+        candidate?.landmarks??null,palm?.imageBasis??null,
+        frame.videoWidth&&frame.videoHeight?frame.videoHeight/frame.videoWidth:1,
+      );
+      this.continuousFingerDiagnostics[side]=result.diagnostics;
+      for(const [joint,rotation] of Object.entries(result.rotations) as Array<[AvatarFingerJointName,QuaternionData]>){jointRotations[joint]=rotation;this.ownedFingerJoints.add(joint);}
+    }
+  }
+
   private applyFingerGesture(
     jointRotations: AvatarPosePacketV1["jointRotations"],
     frame: RawTrackingFrameV1,
