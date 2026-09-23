@@ -34,16 +34,27 @@ import "./avatarRendererDevHarness.css";
 
 const DIAGNOSTIC_CONVERSION = "current" as const;
 const number = (value: number | null | undefined, digits = 1) => value === null || value === undefined || !Number.isFinite(value) ? "—" : value.toFixed(digits);
+const degrees = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(value) ? "—" : `${(value * 180 / Math.PI).toFixed(1)}°`;
+const vector = (value: {x:number;y:number;z:number}|null|undefined) => value ? `${value.x.toFixed(2)}, ${value.y.toFixed(2)}, ${value.z.toFixed(2)}` : "—";
+const quaternion = (value: {x:number;y:number;z:number;w:number}|null|undefined) => value ? `${value.x.toFixed(2)}, ${value.y.toFixed(2)}, ${value.z.toFixed(2)}, ${value.w.toFixed(2)}` : "—";
 
 export default function AvatarRendererDevHarness() {
   const videoRef = useRef<HTMLVideoElement>(null); const rendererRef = useRef<AvatarRenderer | null>(null); const helpersRef = useRef<Group | null>(null);
   const modelLoadRequestRef = useRef(0);
   const freezeTimerRef = useRef<number | null>(null);
-  const processorRef = useRef(new AvatarMotionProcessor()); const latestPacket = useRef<AvatarPosePacket | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
+  const processorRef = useRef(new AvatarMotionProcessor({continuousFingerEnabled:true})); const latestPacket = useRef<AvatarPosePacket | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
   const [filtered, setFiltered] = useState(true); const [constraints, setConstraints] = useState(true); const [smoothing, setSmoothing] = useState(true);
   const [handTwistEnabled, setHandTwistEnabled] = useState(true);
   // Phase 3B.3 — mặc định TẮT. Bật là hành động thử nghiệm có chủ đích của người test.
   const [gestureEnabled, setGestureEnabled] = useState(false);
+  // AR6 đang là pipeline cần nghiệm thu trên trang này: bật ngay từ frame đầu để không vô tình test
+  // classifier/preset legacy rồi tưởng đó là continuous tracking.
+  const [continuousFingerEnabled,setContinuousFingerEnabled]=useState(true);
+  const [continuousFingerDiagnostics,setContinuousFingerDiagnostics]=useState(()=>processorRef.current.getContinuousFingerDiagnostics());
+  const fingerTraceActiveRef=useRef(false);
+  const fingerTraceRef=useRef<Array<Record<string,unknown>>>([]);
+  const [fingerTraceActive,setFingerTraceActive]=useState(false);
+  const [fingerTraceCount,setFingerTraceCount]=useState(0);
   const [fingerRig, setFingerRig] = useState<FingerRigProfile | null>(null);
   const [gesturePoses, setGesturePoses] = useState<Record<"left" | "right", GesturePoseLabel>>({ left: "rest", right: "rest" });
   const [helpers, setHelpers] = useState(false); const [frozen, setFrozen] = useState(false);
@@ -94,7 +105,20 @@ export default function AvatarRendererDevHarness() {
   const processInput = useCallback((frame: RawTrackingFrameV1) => {
     const input = simulatedLoss ? { ...frame, face: { ...frame.face, state: "lost" as const }, leftHand: { ...frame.leftHand, state: "lost" as const }, rightHand: { ...frame.rightHand, state: "lost" as const }, pose: { ...frame.pose, state: "lost" as const } } : frame;
     const next = processorRef.current.process(input); latestPacket.current = next; rendererRef.current?.applyPose(next);
+    if(fingerTraceActiveRef.current&&fingerTraceRef.current.length<300){
+      const entry={capturedAtMs:performance.now(),frameTimestampMs:frame.frameTimestampMs,video:{width:frame.videoWidth,height:frame.videoHeight},handSamples:{left:frame.leftHand,right:frame.rightHand},rawHands:frame.rawHands,poseWrists:{left:frame.pose.landmarks?.[15]??null,right:frame.pose.landmarks?.[16]??null},handMotion:next.handMotion??null,continuousFinger:processorRef.current.getContinuousFingerDiagnostics(),jointRotations:next.jointRotations};
+      fingerTraceRef.current.push(entry);
+      if(fingerTraceRef.current.length%5===0)setFingerTraceCount(fingerTraceRef.current.length);
+      if(fingerTraceRef.current.length>=300){fingerTraceActiveRef.current=false;setFingerTraceActive(false);setFingerTraceCount(300);}
+    }
   }, [simulatedLoss]);
+  const startFingerTrace=useCallback(()=>{fingerTraceRef.current=[];fingerTraceActiveRef.current=true;setFingerTraceCount(0);setFingerTraceActive(true);},[]);
+  const stopFingerTrace=useCallback(()=>{fingerTraceActiveRef.current=false;setFingerTraceActive(false);setFingerTraceCount(fingerTraceRef.current.length);},[]);
+  const downloadFingerTrace=useCallback(()=>{
+    const payload={version:1,createdAt:new Date().toISOString(),avatarModelId,fingerRig,frames:fingerTraceRef.current};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:"application/json"}));
+    const anchor=document.createElement("a");anchor.href=url;anchor.download=`ar6-finger-trace-${Date.now()}.json`;anchor.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  },[avatarModelId,fingerRig]);
   const onFrame = useCallback((frame: RawTrackingFrameV1) => { if (frozenRaw.current) return; latestRaw.current = frame; processInput(frame); }, [processInput]);
   const onMetrics = useCallback((value: TrackingMetricsSnapshot) => { setTrackingMetrics(value); }, []);
   const onError = useCallback((reason: unknown) => setError(reason instanceof Error ? reason.message : "Tracking error"), []);
@@ -107,6 +131,8 @@ export default function AvatarRendererDevHarness() {
   useEffect(() => { processorRef.current.setConstraints(constraints); }, [constraints]);
   useEffect(() => { processorRef.current.setHandTwistEnabled(handTwistEnabled); }, [handTwistEnabled]);
   useEffect(() => { processorRef.current.setGestureEnabled(gestureEnabled); }, [gestureEnabled]);
+  useEffect(()=>{processorRef.current.setContinuousFingerEnabled(continuousFingerEnabled);},[continuousFingerEnabled]);
+  useEffect(()=>{if(!continuousFingerEnabled)return;const timer=window.setInterval(()=>setContinuousFingerDiagnostics(processorRef.current.getContinuousFingerDiagnostics()),100);return()=>window.clearInterval(timer);},[continuousFingerEnabled]);
   useEffect(() => { processorRef.current.setGazeMode(gazeMode); }, [gazeMode]);
   useEffect(() => { processorRef.current.setGazeAttentionStrength(gazeAttention); }, [gazeAttention]);
   // Nhãn cử chỉ cần nhịp nhanh hơn panel chung (400ms): ở 400ms người test không thấy được nhãn
@@ -318,7 +344,7 @@ export default function AvatarRendererDevHarness() {
     <section className="dev-controls">
       <button onClick={() => void toggleTracking()}>{trackingRunning ? "Stop tracking" : "Start tracking"}</button><button onClick={toggleRenderer}>{rendererRunning ? "Stop renderer" : "Start renderer"}</button><button onClick={reloadModel} disabled={modelLoading}>{modelLoading ? "Loading model…" : "Reload model"}</button><button onClick={() => { processorRef.current.calibrateFaceNeutral(); setFacialCalibration(processorRef.current.getFacialCalibration()); setUpperBodyCalibration(processorRef.current.getUpperBodyCalibration()); }}>Calibrate neutral face + upper body</button><span className={`facial-calibration-badge ${facialCalibration.state}`}>F1: {facialCalibration.state} · {facialCalibration.acceptedSamples}/{facialCalibration.requiredSamples} · {facialCalibration.collectionMode}</span><span className="eye-brow-badge">AR4: {upperBodyCalibration.state} · {upperBodyCalibration.acceptedPairs}/{upperBodyCalibration.requiredPairs} · {upperBodyCalibration.mode}</span><span className="eye-brow-badge">F2 blink L/R: {eyeBrowExpressions.blinkLeft.toFixed(2)}/{eyeBrowExpressions.blinkRight.toFixed(2)}{eyeBrowExpressions.unilateralCandidate ? ` · guard ${eyeBrowExpressions.unilateralCandidate}` : ""}</span>
       <button onClick={toggleFreeze} disabled={!frozen && !latestRaw.current}>{frozen ? "Unfreeze" : "Freeze current"}</button><button onClick={freezeAfterCountdown} disabled={frozen || freezeCountdown !== null || !latestRaw.current}>{freezeCountdown === null ? "Freeze in 5s" : `Freeze in ${freezeCountdown}s`}</button>
-      <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Dynamics/filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={handTwistEnabled} onChange={(e) => setHandTwistEnabled(e.target.checked)} /> Hand twist (2B-5)</label><label><input type="checkbox" checked={gestureEnabled} onChange={(e) => setGestureEnabled(e.target.checked)} /> Finger gesture (3B.3)</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Bone smoothing</label><label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
+      <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Dynamics/filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={handTwistEnabled} onChange={(e) => setHandTwistEnabled(e.target.checked)} /> Hand twist (2B-5)</label><label><input type="checkbox" checked={continuousFingerEnabled} onChange={(e)=>setContinuousFingerEnabled(e.target.checked)} /> Continuous fingers (AR6)</label><label><input type="checkbox" checked={gestureEnabled} disabled={continuousFingerEnabled} onChange={(e) => setGestureEnabled(e.target.checked)} /> Finger gesture (legacy)</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Bone smoothing</label><label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
       <label>Pose model <select value={poseModel} onChange={(e) => { if (trackingRunning) { tracking?.stop(); setTrackingRunning(false); } setPoseModel(e.target.value as PoseModelVariant); }}><option value="full">full (chính xác hơn)</option><option value="lite">lite (nhẹ hơn)</option></select></label>
       <label>Avatar model <select value={avatarModelId} onChange={(event) => selectAvatarModel(event.target.value)}>{DEV_AVATAR_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select></label>
       <label>Zoom <input type="range" min="0.5" max="3" step="0.05" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {zoom.toFixed(2)}x</label>
@@ -403,6 +429,8 @@ export default function AvatarRendererDevHarness() {
         trackingToRenderMs: rendererMetrics?.poseAgeMs ?? null,
       }} />
       <article><h2>Finger rig (3B.3)</h2>
+        <p>AR6 continuous: <strong>{continuousFingerEnabled?"ON":"OFF"}</strong></p>
+        {continuousFingerEnabled&&<details><summary>JSON diagnostic thô</summary><pre>{JSON.stringify(continuousFingerDiagnostics,null,2)}</pre></details>}
         <p>Gesture: <strong>{gestureEnabled ? "ON" : "OFF (Phase 3B nguyên trạng)"}</strong></p>
         {gestureEnabled && <p style={{ fontSize: "1.1em" }}>Nhãn — trái: <strong>{gesturePoses.left}</strong> · phải: <strong>{gesturePoses.right}</strong></p>}
         {fingerRig ? <>
@@ -413,6 +441,33 @@ export default function AvatarRendererDevHarness() {
           ))}
         </> : <p>Chưa có rig ngón (model chưa tải hoặc không phải VRM).</p>}
       </article>
+      {continuousFingerEnabled&&fingerRig&&<article className="finger-io-panel"><h2>AR6 finger input → output</h2>
+        <p><small>Input = góc từ landmark mới nhất. Target = sau hold/predict. Output = sau clamp + One-Euro. “2D reset” cho biết ảnh 2D đã bác flexion chiều sâu giả.</small></p>
+        <div className="finger-trace-controls">
+          {!fingerTraceActive?<button type="button" onClick={startFingerTrace}>Bắt đầu ghi AR6</button>:<button type="button" onClick={stopFingerTrace}>Dừng ghi</button>}
+          <button type="button" disabled={fingerTraceCount===0&&fingerTraceRef.current.length===0} onClick={downloadFingerTrace}>Tải JSON</button>
+          <span>{fingerTraceActive?"Đang ghi":"Đã dừng"} · {fingerTraceCount||fingerTraceRef.current.length}/300 frame</span>
+        </div>
+        {(["left","right"] as const).map((side)=><section key={side} className="finger-io-side">
+          <h3>{side==="left"?"Tay trái":"Tay phải"}</h3>
+          <div className="finger-io-scroll"><table><thead><tr>
+            <th>Khớp</th><th>Nguồn</th><th>Input</th><th>Target</th><th>Clamp</th><th>Output</th><th>Abd in</th><th>Abd rest</th><th>Abd delta</th><th>2D reset</th><th>Anatomy</th><th>Accepted</th><th>Joint conf.</th><th>Reject</th><th>Flex axis</th><th>Abd axis</th><th>Quaternion output</th>
+          </tr></thead><tbody>
+            {fingerRig[side].chains.flatMap((chain)=>chain.segments.map((segment)=>{
+              const diagnostic=continuousFingerDiagnostics[side][segment.joint];
+              const output=packet?.jointRotations[segment.joint];
+              return <tr key={segment.joint} className={diagnostic?.source!=="observed"?"finger-io-stale":""}>
+                <td>{segment.joint.replace(side,"")}</td><td>{diagnostic?.source??"—"}</td>
+                <td>{degrees(diagnostic?.observedAngleRad)}</td><td>{degrees(diagnostic?.targetAngleRad)}</td>
+                <td>{degrees(diagnostic?.constrainedAngleRad)}{diagnostic?.limited?" !":""}</td><td>{degrees(diagnostic?.angleRad)}</td>
+                <td>{degrees(diagnostic?.observedAbductionRad)}</td><td>{degrees(segment.restAbductionRad)}</td><td>{degrees(diagnostic?.appliedAbductionRad)}</td>
+                <td>{diagnostic?.imageExtensionOverride?"YES":"no"}</td><td>{diagnostic?.anatomicalPriorApplied?"YES":"no"}</td><td>{diagnostic?.measurementAccepted?"YES":"no"}</td><td>{number(diagnostic?.measurementConfidence,2)}</td><td>{diagnostic?.rejectionReason??"—"}</td>
+                <td>{vector(segment.flexAxisLocal)}</td><td>{vector(segment.abductionAxisLocal)}</td><td>{quaternion(output)}</td>
+              </tr>;
+            }))}
+          </tbody></table></div>
+        </section>)}
+      </article>}
       <article><h2>Capability</h2>{modelLoading && <p>Đang tải model mới; model hiện tại vẫn được giữ cho tới khi swap thành công.</p>}{capability ? <pre>{JSON.stringify(capability, null, 2)}</pre> : !modelLoading && <p>Chưa có model sẵn sàng.</p>}</article>
       <article><h2>Tracking state</h2>{packet && Object.entries(packet.tracking).map(([name, state]) => <p key={name}>{name}: {state.sourceState} → {state.outputState}</p>)}</article>
       <article><h2>Phase 3B.3 — Thu fixture cử chỉ</h2>
