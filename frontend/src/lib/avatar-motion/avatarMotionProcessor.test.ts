@@ -108,7 +108,7 @@ describe("AvatarMotionProcessor", () => {
       const packet=processor.process(moved);expect(packet.version).toBe(2);expect(packet.headRotation).not.toBeNull();expect(packet.jointRotations.chest).toBeDefined();expect(packet.jointRotations.neck).toBeDefined();
       const serialized=JSON.stringify(packet);expect(serialized).not.toContain("landmarks");expect(serialized).not.toContain("facialTransform");expect(Object.values(packet.jointRotations).flatMap(Object.values).every(Number.isFinite)).toBe(true);
     });
-    it("calibrates from face and shoulders only, then keeps upward head pitch positive",()=>{
+    it("calibrates from face and shoulders only, then converts MediaPipe pitch to semantic pitch",()=>{
       let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
       for(let index=0;index<30;index+=1){now=100+index*33;const input=frame();input.frameTimestampMs=now;input.face.sampledAtMs=now;input.pose.sampledAtMs=now;input.pose.worldLandmarks![23].visibility=0;input.pose.worldLandmarks![24].visibility=0;processor.process(input);}
       expect(processor.getUpperBodyCalibration()).toMatchObject({state:"calibrated",mode:"shoulder-only",acceptedPairs:30,acceptedFullTorsoPairs:0});
@@ -122,7 +122,7 @@ describe("AvatarMotionProcessor", () => {
       for(let index=0;index<30;index+=1){now=100+index*33;processor.process(upperFrame(now));}
       now+=33;const moved=upperFrame(now),angle=.3,c=Math.cos(angle),s=Math.sin(angle);
       setPoseLandmark(moved,11,.2*c,.3,-.2*s);setPoseLandmark(moved,12,-.2*c,.3,.2*s);
-      moved.face.facialTransform!.data=[c,0,s,0,0,1,0,0,-s,0,c,0,0,0,0,1];
+      moved.face.facialTransform!.data=[c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1];
       const packet=processor.process(moved);expect(packet.version).toBe(2);expect(packet.jointRotations.chest?.y).toBeGreaterThan(0);expect(Math.abs(packet.headRotation?.y??0)).toBeLessThan(.01);
     });
     it("emits a conservative forward lean without hips and keeps depth-only at the ambiguous cap",()=>{

@@ -1,7 +1,7 @@
 # AR4-T06 — Hybrid Torso Fore/Aft Lean cho khung gọi video
 
 Ngày lập: 2026-09-15  
-Trạng thái: **CODE COMPLETE — AUTOMATED PASS — MANUAL CORRECTIVE VISUAL PASS (1 VRM); FULL MATRIX/PERFORMANCE PENDING**  
+Trạng thái: **DONE — OWNER ACCEPTANCE 2026-09-16; VERIFICATION FOLLOW-UP DEFERRED**
 Phụ thuộc: AR4-T01–T05 và AR4-T03.1 vertical shrug  
 Ước tính: **16–24 giờ code/test + manual tuning trên ít nhất 3 VRM**
 
@@ -440,8 +440,9 @@ Chạy cả `shoulder-only` và `full-torso`, Dynamics/filter ON, trên ít nh�
 |---|---|---|---|
 | Corrective fore/aft visual + TL-U9A | `reference-avatar-2.vrm`, `shoulder-only` | **PASS — chủ dự án xác nhận** | Chúi tới: lean `shoulder-proxy`, raw/final `6°/6°`, confidence `0.68`, `commonMotionGain=0`, shoulder raw gần `0/-0.01`; avatar không còn co vai/rụt cổ bất tự nhiên. Ngả sau được chủ dự án xác nhận đạt về cảm nhận hình ảnh |
 
-Kết quả này đóng manual corrective trên model đang thử, nhưng chưa thay thế TL-U1→TL-U17 trên ít nhất ba VRM và
-benchmark LIVE 60 giây/model trong điều kiện DONE.
+Kết quả này đóng manual corrective trên model đang thử. Ngày 2026-09-16, chủ dự án xác nhận AR4-T06 và toàn bộ
+AR4 hoàn thành, cho phép chuyển sang AR5-T01. TL-U1→TL-U17 trên ít nhất ba VRM và benchmark LIVE 60 giây/model
+chưa có bằng chứng được giữ làm verification follow-up/deferred; không ghi nhận các mục này là đã PASS.
 
 ## 16. Điều kiện DONE
 

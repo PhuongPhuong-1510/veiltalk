@@ -844,40 +844,50 @@ Một task chỉ được đánh dấu ✅ khi tất cả automated gate, manual
 
 | Task | Công việc | Acceptance criteria | Phụ thuộc | Ước tính |
 |---|---|---|---|---:|
-| **AR4-T01 — CORRECTIVE CODE COMPLETE; MANUAL RETEST PENDING** | Head–neck–spine distribution | Packet V2, Face+shoulder neutral, source hysteresis/transition và capability redistribution đã nối; pitch Face và Pose yaw thống nhất; V1 giữ head legacy tới khi calibration sẵn sàng. Chờ U1/U2 đa model | AR1-T04 | 12–18h |
-| **AR4-T02 — CORRECTIVE CODE COMPLETE; CURL N/A; MANUAL RETEST PENDING** | Torso motion | `shoulder-only` là baseline cho khung gọi thường; `full-torso` chỉ khi ≥80% calibration pair có hông tốt, mất hông blend 220 ms. Curl disabled. Chờ U3–U5/U6A | AR4-T01 | 10–16h |
-| **AR4-T03 — VERTICAL SHRUG CODE COMPLETE; MANUAL RETEST PENDING** | Shoulder/clavicle/scapula | Shrug một/cả hai vai dùng image-space vai–tai, fallback mũi–tâm vai, aspect correction và scale-invariant shoulder span, không bắt buộc hông; world-space chỉ giữ rotation/reach/depth. AR4-T03.1 thêm Packet V2 full-state scalar và local shoulder translation theo current torso-up, scale rig theo hai gốc upper-arm, có head-tilt gate, no-drift rest assignment và bounded reach assist. Chờ U6–U8 cùng VS-U1–VS-U16 | AR4-T02 | 14–22h |
-| **AR4-T04 — CODE COMPLETE; MANUAL PENDING** | Breathing, idle và settle | Pause-safe breathing, speechChest riêng, faithful/cinematic sway và exact-neutral lifecycle đã nối. Chờ U1/U10/U12 | AR4-T03 | 8–12h |
-| **AR4-T05 — TOOLING/AUTOMATED COMPLETE; MANUAL/PERF PENDING** | Upper-body gate | DEV panel có V2/calibration/life/jitter/solver/clamp và vertical shoulder telemetry; automated gate PASS. Còn U1–U13 + VS-U1–VS-U16 trên ≥3 VRM và benchmark 60 giây/model | AR4-T04 | 6–10h |
-| **AR4-T06 — PLAN/AI REVIEW PENDING** | Hybrid torso fore/aft lean | `full-torso` đo shoulder–hip world angle; `shoulder-only` dùng proxy bảo thủ từ relative image scale + stable Pose depth, có ambiguity cap, session-mode lock, head-relative recompute và arm/shoulder regression. Không root/chest translation | AR4-T05 | 16–24h |
+| **AR4-T01 ✅ — DONE** | Head–neck–spine distribution | Packet V2, Face+shoulder neutral, source hysteresis/transition và capability redistribution đã nối; pitch Face và Pose yaw thống nhất; V1 giữ head legacy tới khi calibration sẵn sàng. Chủ dự án nghiệm thu AR4 ngày 2026-09-16 | AR1-T04 | 12–18h |
+| **AR4-T02 ✅ — DONE; CURL N/A** | Torso motion | `shoulder-only` là baseline cho khung gọi thường; `full-torso` chỉ khi ≥80% calibration pair có hông tốt, mất hông blend 220 ms. Curl disabled/N/A. Chủ dự án nghiệm thu AR4 ngày 2026-09-16 | AR4-T01 | 10–16h |
+| **AR4-T03 ✅ — DONE** | Shoulder/clavicle/scapula | Shrug một/cả hai vai dùng image-space vai–tai, fallback mũi–tâm vai, aspect correction và scale-invariant shoulder span, không bắt buộc hông; AR4-T03.1 thêm vertical shoulder translation và bounded reach assist. Chủ dự án nghiệm thu AR4 ngày 2026-09-16 | AR4-T02 | 14–22h |
+| **AR4-T04 ✅ — DONE** | Breathing, idle và settle | Pause-safe breathing, speechChest riêng, faithful/cinematic sway và exact-neutral lifecycle đã nối. Chủ dự án nghiệm thu AR4 ngày 2026-09-16 | AR4-T03 | 8–12h |
+| **AR4-T05 ✅ — DONE BY OWNER ACCEPTANCE** | Upper-body gate | DEV telemetry và automated gate PASS. Chủ dự án xác nhận đủ điều kiện đóng AR4 ngày 2026-09-16; full matrix đa model và benchmark chưa có bằng chứng được giữ làm verification follow-up, không chặn AR5 | AR4-T04 | 6–10h |
+| **AR4-T06 ✅ — DONE BY OWNER ACCEPTANCE** | Hybrid torso fore/aft lean | Code/automated gate hoàn tất; corrective fore/aft visual PASS trên model đã thử. Chủ dự án đóng task ngày 2026-09-16; full TL-U1→TL-U17 đa model và benchmark được deferred, không được diễn giải là đã chạy PASS | AR4-T05 | 16–24h |
 
-Kế hoạch chi tiết và công thức AR4-T01–T05 đã lập tại
-`docs/AR4_HEAD_NECK_TORSO_SHOULDER_IMPLEMENTATION_PLAN.md`, trạng thái
-**CORRECTIVE IMPLEMENTED — AUTOMATED GATE PASS — MANUAL RETEST/PERFORMANCE GATE PENDING**.
-Kế hoạch AR4-T06 nằm tại `docs/AR4_T06_HYBRID_TORSO_LEAN_PLAN.md`, trạng thái
-**PLANNED — AI REVIEW PENDING — CHƯA CODE**.
-Automated frontend ngày 2026-09-15: **76 test files / 766 tests**, lint và production build PASS. Manual đầu tiên
-FAIL; corrective đã khóa source-frame timestamp, shoulder-only calibration, Face pitch/Pose yaw và shrug không cần hông.
-AR4 vẫn chưa DONE trước khi manual retest được chủ dự án xác nhận.
+Kế hoạch chi tiết nằm tại `docs/AR4_HEAD_NECK_TORSO_SHOULDER_IMPLEMENTATION_PLAN.md` và
+`docs/AR4_T06_HYBRID_TORSO_LEAN_PLAN.md`. **AR4-T01→T06 đã DONE theo xác nhận trực tiếp của chủ dự án
+ngày 2026-09-16.** Xác nhận này cho phép chuyển dependency sang AR5. Full manual matrix đa model và benchmark
+60 giây/model chưa có bằng chứng vẫn được ghi trung thực là verification follow-up/deferred, không suy diễn thành PASS.
 
-### AR5 — Cánh tay và cổ tay hoàn chỉnh
+### AR5 — Cánh tay và cổ tay hoàn chỉnh — TẠM GÁC
 
-| Task | Công việc | Acceptance criteria | Phụ thuộc | Ước tính |
-|---|---|---|---|---:|
-| **AR5-T01** | Anatomical arm constraints | Shoulder cone, elbow flexion, elbow-side hysteresis, pole continuity và upper-arm twist theo rig | AR1-T04,AR4-T06 | 14–22h |
-| **AR5-T02** | Reachability solver | Vai/ngực/thân hỗ trợ mục tiêu ngoài tầm; hai tay dùng chung torso nhưng state độc lập; bone length invariant | AR5-T01 | 12–20h |
-| **AR5-T03** | Wrist 3-DoF | Flex/extend, radial/ulnar, pronation/supination; twist distribution; palm absolute; clamp và confidence riêng | AR5-T02 | 12–20h |
-| **AR5-T04** | Pose–Hand fusion và reacquire | Source hysteresis, wrist fusion, partial observation và recovery không giật | AR5-T03 | 10–16h |
-| **AR5-T05** | Arm/wrist gate | Hai tay, cross-body, gần mặt, partial wrist/elbow và reload trên ≥3 VRM; metric flip, elbow switch, bone error, jitter, reacquire | AR5-T04 | 8–12h |
-
-### AR6 — Ngón tay liên tục
+> **OWNER PRIORITY UPDATE — 2026-09-23:** AR5-T01→T05 được tạm gác để ưu tiên hoàn thiện AR6 Finger
+> trên baseline arm/wrist hiện hành. Quyết định này chỉ đổi thứ tự triển khai, không đánh dấu bất kỳ task AR5
+> nào là `DONE` và không xóa corrective plan của AR5-T01. Khi quay lại AR5, phải chạy regression toàn bộ AR6,
+> đặc biệt ownership `leftHand`/`rightHand`, forearm twist, palm orientation và loss/reacquire, trước khi nghiệm thu.
 
 | Task | Công việc | Acceptance criteria | Phụ thuộc | Ước tính |
 |---|---|---|---|---:|
-| **AR6-T01** | Continuous four-finger solver | MCP flex/abduction, PIP/DIP, coupling, per-joint limit/filter/confidence; không cong ngược/móng vuốt | AR5-T05 | 16–24h |
+| **AR5-T01 — DEFERRED; IMPLEMENTATION ROLLED BACK** | Anatomical arm constraints | Lần triển khai thử ngày 2026-09-16 gây lỗi chuyển động tay và đã được gỡ; runtime hiện trở về baseline `main`. Kế hoạch toán/code được giữ cho corrective review sau AR6; AR5-T01 chưa DONE | AR1-T04,AR4-T06 | 14–22h |
+| **AR5-T02 — DEFERRED** | Reachability solver | Vai/ngực/thân hỗ trợ mục tiêu ngoài tầm; hai tay dùng chung torso nhưng state độc lập; bone length invariant | AR5-T01 | 12–20h |
+| **AR5-T03 — DEFERRED** | Wrist 3-DoF | Flex/extend, radial/ulnar, pronation/supination; twist distribution; palm absolute; clamp và confidence riêng | AR5-T02 | 12–20h |
+| **AR5-T04 — DEFERRED** | Pose–Hand fusion và reacquire | Source hysteresis, wrist fusion, partial observation và recovery không giật | AR5-T03 | 10–16h |
+| **AR5-T05 — DEFERRED** | Arm/wrist gate | Hai tay, cross-body, gần mặt, partial wrist/elbow và reload trên ≥3 VRM; metric flip, elbow switch, bone error, jitter, reacquire | AR5-T04 | 8–12h |
+
+### AR6 — Ngón tay liên tục — ƯU TIÊN TIẾP THEO
+
+> AR6 được phép bắt đầu trước AR5-T05 theo owner waiver ngày 2026-09-23, sử dụng arm/wrist baseline hiện hành.
+> Trong thời gian AR5 còn deferred, AR6 không được thay ownership forearm/wrist, không tự bổ sung reachability
+> hoặc wrist 3-DoF, và phải giữ finger output tách khỏi các khóa arm hiện có. Việc hoàn thành AR6 không thay thế
+> AR5; AR7/R1 vẫn phải đợi cả AR5-T05 và AR6-T04.
+
+| Task | Công việc | Acceptance criteria | Phụ thuộc | Ước tính |
+|---|---|---|---|---:|
+| **AR6-T01 — NEXT** | Continuous four-finger solver | MCP flex/abduction, PIP/DIP, coupling, per-joint limit/filter/confidence; không cong ngược/móng vuốt | Owner waiver: baseline P4-T10/AR4; AR5-T05 deferred | 16–24h |
 | **AR6-T02** | Continuous thumb solver | CMC opposition/abduction, MCP/IP flex và thumb-tip direction theo rig; không dùng công thức bốn ngón | AR6-T01 | 12–20h |
 | **AR6-T03** | Finger occlusion handling | Hold/predict/synergy prior/DIP inference/safe fade; không bật giữa preset; semantic gesture chỉ là lớp bổ trợ | AR6-T02 | 12–18h |
 | **AR6-T04** | Finger gate | Xòe/nắm/chỉ/co từng ngón/xoay palm; occlusion/reacquire; ≥3 VRM; jitter và joint violation trong ngưỡng duyệt | AR6-T03 | 8–12h |
+
+Kế hoạch production chi tiết, toán đã hiệu chỉnh, migration khỏi gesture preset và gate T01→T04 nằm tại
+`docs/AR6_CONTINUOUS_FINGER_TRACKING_IMPLEMENTATION_PLAN.md`. AR6 bắt đầu trực tiếp bằng production modules;
+không có pha prototype riêng. Automated/manual gate vẫn là điều kiện bắt buộc để đánh dấu `DONE`.
 
 ### AR7 — Benchmark Reliable Avatar
 
@@ -985,18 +995,22 @@ trước khi code task tương ứng; không tự đặt ngưỡng sau khi đã 
 
 ## 8. Trình tự ưu tiên và điểm bắt đầu
 
-Thứ tự bắt buộc là:
+Thứ tự nền tảng ban đầu là:
 
 `AR0 → AR1 → (AR2, AR3) → AR4 → AR5 → AR6 → AR7/R1 → AR8 → AR9 → AR10 → AR11/R2 → AR12/R3`
+
+Theo quyết định ưu tiên của chủ dự án ngày 2026-09-23, thứ tự triển khai hiện hành được điều chỉnh thành:
+
+`AR4 → AR6 → quay lại AR5 → AR7/R1`
 
 AR2 và AR3 chỉ có thể chạy song song sau AR1; các nhánh còn lại giữ dependency trong bảng. AR13
 có thể bắt đầu sau R1 nhưng contact visual cue phải đợi AR9. AR14 luôn deferred cho tới khi điều kiện
 riêng được đáp ứng và có phê duyệt.
 
-**Bước tiếp theo: chạy unified manual gate AR3-T01–T04.** Kế hoạch tại
-`docs/AR3_EYE_GAZE_ATTENTION_IMPLEMENTATION_PLAN.md`: chạy E1–E12 trên ít nhất ba VRM capability-diverse,
-đối chiếu T02 capability/no-op và lặp lại các case liên quan trong faithful/cinematic. Convergence và prediction
-chưa thuộc v1.
+**Bước tiếp theo: AR6-T01 — Continuous four-finger solver.** Bắt đầu bằng contract/capability của finger rig,
+MCP flex/abduction và PIP/DIP cho bốn ngón; giữ output finger tách khỏi arm/wrist baseline. Sau AR6-T04, quay lại
+corrective review AR5-T01 và triển khai tuần tự AR5-T01→T05. Không bắt đầu AR7/R1 trước khi cả AR5-T05 và
+AR6-T04 được xác nhận `DONE`.
 
 Không bắt đầu contact, hair interaction hoặc AI completion để che lỗi khi foundation arm/wrist chưa qua
 gate. Nếu manual gate phát hiện lỗi foundation, mở corrective subtask dưới AR0 và đóng lỗi trước AR0-T02.

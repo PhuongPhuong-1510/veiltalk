@@ -178,6 +178,18 @@ export interface AvatarMotionConfig {
     temporal: GestureTemporalConfig;
     pose: FingerPoseTemporalConfig;
   };
+  continuousFinger: {
+    holdMs:number; predictionEndMs:number; safeReturnEndMs:number; maxPredictionRadiansPerMs:number;
+    imageExtensionFacingThreshold:number;
+    observationDeadband:{extendedRadians:number;curledRadians:number;fullCurlRadians:number};
+    measurementValidation:{windowSize:number;minimumConfidence:number;boneLengthToleranceRatio:number};
+    filter:OneEuroParameters;
+    humanObservationLimits:{
+      mcp:{min:number;max:number}; pip:{min:number;max:number}; dip:{min:number;max:number};
+      thumb:{min:number;max:number}; abduction:{min:number;max:number};
+      thumbAbduction:{min:number;max:number}; thumbOpposition:{min:number;max:number};
+    };
+  };
 }
 
 /** Các duration là giá trị hiệu chỉnh ban đầu, chưa phải ngưỡng chính thức của SRS. */
@@ -368,4 +380,5 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     temporal: DEFAULT_GESTURE_TEMPORAL_CONFIG,
     pose: DEFAULT_FINGER_POSE_TEMPORAL_CONFIG,
   },
+  continuousFinger:{holdMs:80,predictionEndMs:180,safeReturnEndMs:450,maxPredictionRadiansPerMs:.008,imageExtensionFacingThreshold:.55,observationDeadband:{extendedRadians:1.5*Math.PI/180,curledRadians:2*Math.PI/180,fullCurlRadians:70*Math.PI/180},measurementValidation:{windowSize:3,minimumConfidence:.35,boneLengthToleranceRatio:.35},filter:{minCutoff:1.4,beta:.08,derivativeCutoff:1},humanObservationLimits:{mcp:{min:-15*Math.PI/180,max:90*Math.PI/180},pip:{min:-5*Math.PI/180,max:105*Math.PI/180},dip:{min:-5*Math.PI/180,max:85*Math.PI/180},thumb:{min:-20*Math.PI/180,max:80*Math.PI/180},abduction:{min:-25*Math.PI/180,max:25*Math.PI/180},thumbAbduction:{min:-70*Math.PI/180,max:70*Math.PI/180},thumbOpposition:{min:-30*Math.PI/180,max:30*Math.PI/180}}},
 };
