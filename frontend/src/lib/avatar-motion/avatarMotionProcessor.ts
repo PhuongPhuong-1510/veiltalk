@@ -286,6 +286,7 @@ export class AvatarMotionProcessor {
   private continuousFingerEnabled: boolean;
   private readonly contactRuntime=new ContactRuntime();
   private contactShadowEnabled=false;
+  private contactCorrectionEnabled=false;
   private lastContactRenderAtMs:number|null=null;
   private rigProfile: NormalizedAvatarRigProfile | null = null;
   private upperBodyRigProfile: UpperBodyRigProfileV1 | null = null;
@@ -484,8 +485,10 @@ export class AvatarMotionProcessor {
     if(this.ownedFingerJoints.size>0)this.pendingFingerClear=true;
   }
   isContinuousFingerEnabled():boolean{return this.continuousFingerEnabled;}
-  setContactShadowEnabled(enabled:boolean):void{this.contactShadowEnabled=enabled;if(!enabled)this.contactRuntime.reset();}
+  setContactShadowEnabled(enabled:boolean):void{this.contactShadowEnabled=enabled;if(!enabled){this.contactCorrectionEnabled=false;this.contactRuntime.reset();}}
   isContactShadowEnabled():boolean{return this.contactShadowEnabled;}
+  setContactCorrectionEnabled(enabled:boolean):void{this.contactCorrectionEnabled=enabled;if(enabled)this.contactShadowEnabled=true;}
+  isContactCorrectionEnabled():boolean{return this.contactCorrectionEnabled;}
   getContactDiagnostics(){return this.contactRuntime.snapshot();}
   getContinuousFingerDiagnostics(){return {left:{...this.continuousFingerDiagnostics.left},right:{...this.continuousFingerDiagnostics.right}};}
   /** Rig ngón đến từ model đang tải; đổi model thì phải nhả pose cũ vì chuỗi xương có thể khác. */
@@ -968,7 +971,7 @@ export class AvatarMotionProcessor {
     } else this.diagnostics = null;
     // Phase 3B.3: chạy SAU nhánh arm và chỉ GHI THÊM khoá xương ngón. Không đọc, không sửa, không
     // ghi đè bất kỳ khoá arm nào ở trên — kể cả `leftHand`/`rightHand` (wrist thuộc Phase 3B).
-    if(this.contactShadowEnabled){const renderDt=this.lastContactRenderAtMs===null?0:Math.max(0,Math.min(100,processedTimestampMs-this.lastContactRenderAtMs));this.lastContactRenderAtMs=processedTimestampMs;for(const side of ["left","right"] as const){const match=handContext.matchResult[side];const candidate=match.matched&&match.candidateArrayIndex!==null?frame.rawHands[match.candidateArrayIndex]??null:null;this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,false);}}
+    if(this.contactShadowEnabled){const renderDt=this.lastContactRenderAtMs===null?0:Math.max(0,Math.min(100,processedTimestampMs-this.lastContactRenderAtMs));this.lastContactRenderAtMs=processedTimestampMs;for(const side of ["left","right"] as const){const match=handContext.matchResult[side];const candidate=match.matched&&match.candidateArrayIndex!==null?frame.rawHands[match.candidateArrayIndex]??null:null;this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,this.contactCorrectionEnabled);}}
     if(this.continuousFingerEnabled)this.applyContinuousFinger(jointRotations,frame,handContext,processedTimestampMs);
     else this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
     const common = { sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics };

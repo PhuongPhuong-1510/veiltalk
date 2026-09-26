@@ -98,11 +98,21 @@ describe("AvatarMotionProcessor", () => {
       baseline.setRigProfile(rigProfile);
       shadow.setRigProfile(rigProfile);
       expect(shadow.isContactShadowEnabled()).toBe(false);
+      expect(shadow.isContactCorrectionEnabled()).toBe(false);
       shadow.setContactShadowEnabled(true);
       expect(shadow.process(structuredClone(input)).jointRotations).toEqual(
         baseline.process(structuredClone(input)).jointRotations,
       );
       expect(shadow.getContactDiagnostics()).toBeDefined();
+    });
+
+    it("keeps correction opt-in and turns it off when shadow processing is disabled",()=>{
+      const processor=new AvatarMotionProcessor();
+      processor.setContactCorrectionEnabled(true);
+      expect(processor.isContactShadowEnabled()).toBe(true);
+      expect(processor.isContactCorrectionEnabled()).toBe(true);
+      processor.setContactShadowEnabled(false);
+      expect(processor.isContactCorrectionEnabled()).toBe(false);
     });
 
     it("clears shadow diagnostics on reset", () => {

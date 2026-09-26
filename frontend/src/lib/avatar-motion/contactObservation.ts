@@ -29,5 +29,9 @@ export function observeHumanContact(input:ContactObservationInput):HumanContactO
   const components=[chosen.probe.confidence,chosen.region.confidence,overlap,motion,orientation,input.depth.confidence,continuity];
   const confidence=hardRejections.length?0:components.reduce((product,value)=>product*Math.max(.05,value),1)**(1/components.length);
   const evidence:ContactEvidenceBreakdown={handGeometry:chosen.probe.confidence,bodyRegion:chosen.region.confidence,overlap,motion,orientation,depth:input.depth.confidence,continuity,finalConfidence:confidence,hardRejections};
-  return{side:input.side,region:chosen.region.region,probe:chosen.probe.probe,imagePoint:chosen.probe.point,imageNormal:chosen.probe.contactNormal,overlap,approachVelocity:input.approachVelocity??null,depth:input.depth,confidence,evidence,sampledAtMs:input.sampledAtMs};
+  const regionUv={
+    x:Math.max(-1,Math.min(1,(chosen.probe.point.x-chosen.region.center.x)/Math.max(1e-6,chosen.region.radius.x))),
+    y:Math.max(-1,Math.min(1,(chosen.probe.point.y-chosen.region.center.y)/Math.max(1e-6,chosen.region.radius.y))),
+  };
+  return{side:input.side,region:chosen.region.region,probe:chosen.probe.probe,imagePoint:chosen.probe.point,regionUv,imageNormal:chosen.probe.contactNormal,overlap,approachVelocity:input.approachVelocity??null,depth:input.depth,confidence,evidence,sampledAtMs:input.sampledAtMs};
 }

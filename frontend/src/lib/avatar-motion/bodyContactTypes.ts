@@ -36,6 +36,8 @@ export interface HumanContactObservation {
   region:BodyContactRegion;
   probe:HandContactProbe;
   imagePoint:ContactPoint2;
+  /** Contact point in the selected semantic patch, normalized to [-1, 1]. */
+  regionUv:ContactPoint2;
   imageNormal:ContactPoint2|null;
   overlap:number;
   approachVelocity:number|null;

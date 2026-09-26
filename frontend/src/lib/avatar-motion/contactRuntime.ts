@@ -2,7 +2,7 @@ import { Quaternion } from "three";
 import type { RawNormalizedLandmarkV1,RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
 import type { QuaternionData } from "./avatarPoseTypes";
 import type { ArmSide } from "./avatarMotionDiagnostics";
-import type { BodyContactRegion,ContactPoint2,HumanContactObservation } from "./bodyContactTypes";
+import type { BodyContactRegion,ContactEvidenceBreakdown,ContactPoint2,HumanContactObservation } from "./bodyContactTypes";
 import { fuseContactDepthEvidence } from "./contactDepthRelation";
 import { observeHumanContact } from "./contactObservation";
 import { createContactTemporalState,updateContactEvidence,updateContactVisualInfluence,type ContactTemporalState } from "./contactTemporal";
@@ -11,10 +11,10 @@ import { mapContactAnchor } from "./contactAnchorMapping";
 import { solveContactPoseCorrection,type ContactPoseCorrection } from "./contactPoseCorrection";
 import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 
-export interface ContactRuntimeDiagnostic {side:ArmSide;phase:ContactTemporalState["phase"];region:BodyContactRegion|null;probe:string|null;confidence:number;depthRelation:string;influence:number;correctionReason:ContactPoseCorrection["reason"]|"inactive";anchorError:number|null;normalErrorDegrees:number|null}
+export interface ContactRuntimeDiagnostic {side:ArmSide;phase:ContactTemporalState["phase"];region:BodyContactRegion|null;regionUv:ContactPoint2|null;probe:string|null;confidence:number;evidence:ContactEvidenceBreakdown|null;depthRelation:string;influence:number;correctionRequested:boolean;correctionApplied:boolean;correctionReason:ContactPoseCorrection["reason"]|"inactive";anchorError:number|null;normalErrorDegrees:number|null}
 interface SideMemory {temporal:ContactTemporalState;previousPoint:ContactPoint2|null;previousAt:number|null;previousRegion:BodyContactRegion|null;stableRegionSamples:number;observation:HumanContactObservation|null}
 const memory=():SideMemory=>({temporal:createContactTemporalState(),previousPoint:null,previousAt:null,previousRegion:null,stableRegionSamples:0,observation:null});
-const diagnostic=(side:ArmSide):ContactRuntimeDiagnostic=>({side,phase:"idle",region:null,probe:null,confidence:0,depthRelation:"unknown",influence:0,correctionReason:"inactive",anchorError:null,normalErrorDegrees:null});
+const diagnostic=(side:ArmSide):ContactRuntimeDiagnostic=>({side,phase:"idle",region:null,regionUv:null,probe:null,confidence:0,evidence:null,depthRelation:"unknown",influence:0,correctionRequested:false,correctionApplied:false,correctionReason:"inactive",anchorError:null,normalErrorDegrees:null});
 const qBlend=(a:QuaternionData|undefined,b:QuaternionData,t:number):QuaternionData=>{const qa=a?new Quaternion(a.x,a.y,a.z,a.w):new Quaternion(),qb=new Quaternion(b.x,b.y,b.z,b.w);qa.slerp(qb,Math.max(0,Math.min(1,t))).normalize();return{x:qa.x,y:qa.y,z:qa.z,w:qa.w};};
 
 export class ContactRuntime {
@@ -38,10 +38,10 @@ export class ContactRuntime {
     state.temporal=updateContactVisualInfluence(state.temporal,renderDtMs);
     let correction:ContactPoseCorrection|null=null;
     if(enabled&&this.profile&&this.rig&&state.observation&&state.temporal.visualInfluence>0&&(state.temporal.phase==="touch"||state.temporal.phase==="hold"||state.temporal.phase==="slide")){
-      const anchor=mapContactAnchor(this.rig.surfaces[state.observation.region]);correction=solveContactPoseCorrection(this.profile,this.rig,side,anchor,state.observation.probe);
+      const anchor=mapContactAnchor(this.rig.surfaces[state.observation.region],state.observation.regionUv);correction=solveContactPoseCorrection(this.profile,this.rig,side,anchor,state.observation.probe);
       if(correction.accepted)for(const[joint,rotation]of Object.entries(correction.rotations))jointRotations[joint]=qBlend(jointRotations[joint],rotation!,state.temporal.visualInfluence);
     }
-    this.diagnostics[side]={side,phase:state.temporal.phase,region:state.observation?.region??state.temporal.region,probe:state.observation?.probe??null,confidence:state.observation?.confidence??0,depthRelation:state.observation?.depth.relation??"unknown",influence:state.temporal.visualInfluence,correctionReason:correction?.reason??"inactive",anchorError:correction?.anchorError??null,normalErrorDegrees:correction?correction.normalErrorRadians*180/Math.PI:null};
+    this.diagnostics[side]={side,phase:state.temporal.phase,region:state.observation?.region??state.temporal.region,regionUv:state.observation?.regionUv??null,probe:state.observation?.probe??null,confidence:state.observation?.confidence??0,evidence:state.observation?.evidence??null,depthRelation:state.observation?.depth.relation??"unknown",influence:state.temporal.visualInfluence,correctionRequested:enabled,correctionApplied:Boolean(correction?.accepted&&state.temporal.visualInfluence>0),correctionReason:correction?.reason??"inactive",anchorError:correction?.anchorError??null,normalErrorDegrees:correction?correction.normalErrorRadians*180/Math.PI:null};
     void renderNowMs;
   }
 }
