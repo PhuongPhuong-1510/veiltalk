@@ -162,7 +162,8 @@ export function createRigProfile(modelGeneration: number, fingerprint: string, b
       };
     }
   }
-  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, joints, ...(collisionReference ? { collisionReference } : {}) };
+  const hands=(["left","right"] as const).every(side=>bones[`${side}Hand`]?.parent)?Object.fromEntries((["left","right"] as const).map(side=>{const hand=bones[`${side}Hand`]!;hand.updateWorldMatrix(true,false);return[side,{restLocalRotation:quaternionData(hand.quaternion.clone().normalize()),restWorldRotation:quaternionData(hand.getWorldQuaternion(new Quaternion()).normalize()),restWorldPosition:vectorData(hand.getWorldPosition(new Vector3())),parentRestWorldRotation:quaternionData(hand.parent!.getWorldQuaternion(new Quaternion()).normalize())}];})) as NormalizedAvatarRigProfile["hands"]:undefined;
+  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, joints, ...(collisionReference ? { collisionReference } : {}),...(hands?{hands}:{}) };
   return validateRigProfile(profile) ? freezeRigProfile(profile) : null;
 }
 
