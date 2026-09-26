@@ -21,6 +21,7 @@ import { OneEuroVectorFilter } from "./oneEuroFilter";
 import type { AvatarJointName } from "./avatarPoseTypes";
 import { TrackingLossStateMachine } from "./trackingLoss";
 import { createArmTemporalState, updateSegmentTemporalOutput, type ArmTemporalState, type ArmLossState } from "./armTemporalState";
+import { updateRobustMeasurement } from "./adaptiveBodyProfile";
 import { angularDeltaDegrees, vectorAngularDeltaDegrees } from "./motionMath";
 import { buildIdleArmPose, type IdleArmPose } from "./idleArmPose";
 import type { ArmSide, AvatarMotionDiagnosticSnapshot, HandSampleClassification, HandTrackingEpochResetReason, MotionSampleDisposition, PoleSource, TorsoBasisSource } from "./avatarMotionDiagnostics";
@@ -358,6 +359,8 @@ export class AvatarMotionProcessor {
     this.eyeBrowExpressions = new EyeBrowExpressionProcessor({
       blinkEnter: this.config.face.blinkEnter,
       blinkExit: this.config.face.blinkExit,
+      blinkOutputOnset: this.config.face.blinkOutputOnset,
+      blinkOutputFull: this.config.face.blinkOutputFull,
       unilateralConfirmMs: this.config.face.unilateralBlinkConfirmMs,
       browEmotionFallbackGain: this.config.face.browEmotionFallbackGain,
       browInputOnset: this.config.face.browInputOnset,
@@ -375,7 +378,7 @@ export class AvatarMotionProcessor {
     this.shoulderTemporal = { left: new UpperBodyQuaternionTemporal(temporalConfig), right: new UpperBodyQuaternionTemporal(temporalConfig) };
     const verticalTemporalConfig = { maximumTimestampGapMs: this.config.filter.maxTimestampGapMs, attackMs: 85, releaseMs: 180, holdMs: 120, returnMs: 250, reacquireMs: 100 };
     this.shoulderVerticalTemporal = { left: new UpperBodyScalarTemporal(verticalTemporalConfig), right: new UpperBodyScalarTemporal(verticalTemporalConfig) };
-    this.torsoLeanTemporal = new UpperBodyScalarTemporal({ maximumTimestampGapMs:this.config.filter.maxTimestampGapMs,attackMs:1,releaseMs:1,holdMs:160,returnMs:420,reacquireMs:220 });
+    this.torsoLeanTemporal = new UpperBodyScalarTemporal({ maximumTimestampGapMs:this.config.filter.maxTimestampGapMs,attackMs:140,releaseMs:220,holdMs:160,returnMs:420,reacquireMs:220 });
     this.filtered = options.filtered ?? true;
     this.constraints = options.constraints ?? true;
     this.handTwistEnabled = options.handTwistEnabled ?? true;
@@ -500,6 +503,10 @@ export class AvatarMotionProcessor {
     this.upperBodyRigProfile = profile;
     this.upperBodyCalibration.setModelFingerprint(profile?.modelFingerprint ?? null);
     this.resetUpperBodyState();
+    // F1 learns automatically, but AR4 previously stayed idle until the DEV-only
+    // button was pressed. Begin paired collection when the model rig is ready;
+    // the button remains available to explicitly re-anchor neutral later.
+    if (profile) this.upperBodyCalibration.begin(profile.modelFingerprint);
   }
   getUpperBodyCalibration(): UpperBodyCalibrationSnapshot { return this.upperBodyCalibration.snapshot(); }
   getUpperBodyLifeMotion(): LifeMotionSnapshot { return this.lifeMotion.snapshot(); }
@@ -589,7 +596,7 @@ export class AvatarMotionProcessor {
         // động giả cho trục này; yaw/roll vẫn giữ từ đường vai 3D.
         const lean=this.torsoLeanSolver.solve({mode:calibration.mode==="full-torso"?"full-torso":"shoulder-only",worldLandmarks:poseLandmarks,imageLandmarks:frame.pose.landmarks,faceLandmarks:frame.face.landmarks,fullTorsoBasis,imageAspectRatio:this.poseImageAspectRatio(frame),sampledAtMs:frame.pose.sampledAtMs,headPitch:headPoseForShoulder?.x??0,torsoYaw:observedRotation.y,torsoRoll:observedRotation.z,commonShoulderVertical:0});
         const leanObservation=lean.source!=="unavailable"?lean.angle:null;
-        const leanTemporal=this.torsoLeanTemporal.update(leanObservation,leanObservation!==null?frame.pose.sampledAtMs:null,nowMs,false);
+        const leanTemporal=this.torsoLeanTemporal.update(leanObservation,leanObservation!==null?frame.pose.sampledAtMs:null,nowMs,this.filtered);
         this.torsoLeanDiagnostics={...lean,filteredAngle:leanTemporal.value,state:leanTemporal.state};
         torsoObservationMode=lean.source==="full-torso"?"full-torso":"shoulder-only";
         rawTorso=quaternionExp({x:leanTemporal.value,y:observedRotation.y,z:observedRotation.z});
@@ -834,9 +841,17 @@ export class AvatarMotionProcessor {
           const name = names[segment];
           const segmentGeometryValid = segment === "upper" ? chainGeometryValid : lowerGeometryValid;
           const solvedDelta = segmentGeometryValid ? acceptedGeometry?.deltas[name] ?? null : null;
+          // Shoulder+elbow are current observations, so a missing wrist is only a
+          // partial loss. The lower-arm delta is parent-local: holding it keeps the
+          // last bend relative to the moving upper arm. Give this case a longer
+          // window than a generic chain loss; otherwise the forearm returns to the
+          // avatar rest pose after 250 ms and looks as if the user straightened it.
+          const holdMs = segment === "lower" && chainGeometryValid && !lowerGeometryValid
+            ? this.config.loss.partialWristHoldMs
+            : this.config.loss.holdMs;
           segmentTemporal[segment] = isTrackedDuplicate
             ? { output: state.segments[segment].currentOutputDelta, state: state.segments[segment].lossState, progress: this.diagnostics?.arms[side].transitionProgress ?? 1 }
-            : updateSegmentTemporalOutput(state.segments[segment], solvedDelta, Boolean(solvedDelta && isNewSample), processedTimestampMs, this.config.loss.holdMs, this.config.loss.returnMs, this.config.loss.recoveryMs, wristEvidence.effectiveGraceMs, this.idlePose?.[side][segment], trackingReacquired);
+            : updateSegmentTemporalOutput(state.segments[segment], solvedDelta, Boolean(solvedDelta && isNewSample), processedTimestampMs, holdMs, this.config.loss.returnMs, this.config.loss.recoveryMs, wristEvidence.effectiveGraceMs, this.idlePose?.[side][segment], trackingReacquired);
           jointRotations[name] = segmentTemporal[segment].output;
         }
         const lowerName = names.lower;
@@ -858,7 +873,12 @@ export class AvatarMotionProcessor {
           upperArmAngularDeltaDeg: null, lowerArmAngularDeltaDeg: null, poleAngularDeltaDeg: null, poleSourceChanged: false, trackingReacquired: false,
           observation: { upperDirectionValid: false, lowerDirectionValid: false, poleValid: false, twistObservable: false, upperRejectionReason: "no-sampled-pose", lowerRejectionReason: "no-sampled-pose", poleRejectionReason: "no-sampled-pose" },
           elbowInference: { source: "unavailable" as const, confidence: 0, durationMs: 0, inferredPosition: null, calibratedUpperLength: state.calibratedLength.upper, calibratedLowerLength: state.calibratedLength.lower, shoulderWristDistance: null, reachRatio: null, distanceFromPreviousElbow: null } };
-        armDiagnostics[side] = { ...base, lossState: temporalState, transitionProgress: temporalProgress,
+        const lowerRelativeHold = chainGeometryValid && !lowerGeometryValid && state.segments.lower.lastValidDelta !== null;
+        armDiagnostics[side] = { ...base,
+          confidenceFlags: lowerRelativeHold && !(base.confidenceFlags as string[]).includes("lower-relative-hold")
+            ? [...base.confidenceFlags, "lower-relative-hold"]
+            : base.confidenceFlags,
+          lossState: temporalState, transitionProgress: temporalProgress,
           invalidDurationMs: state.invalidCandidateStartedAtMs === null ? 0 : processedTimestampMs - state.invalidCandidateStartedAtMs,
           validRecoveryDurationMs: state.validCandidateStartedAtMs === null ? 0 : processedTimestampMs - state.validCandidateStartedAtMs,
           sampleDisposition, segmentLossState: { upper: segmentTemporal.upper.state, lower: segmentTemporal.lower.state },
@@ -877,6 +897,20 @@ export class AvatarMotionProcessor {
             source: geometry?.elbowSource ?? (temporalState === "held" ? "held" : temporalState === "returning" ? "returning" : state.elbowSource),
             durationMs: state.inferenceStartedAtMs === null ? 0 : processedTimestampMs - state.inferenceStartedAtMs,
             calibratedUpperLength: state.calibratedLength.upper, calibratedLowerLength: state.calibratedLength.lower },
+          bodyProfile: {
+            upper: {
+              acceptedSamples: state.lengthProfile.upper.acceptedSamples,
+              rejectedSamples: state.lengthProfile.upper.rejectedSamples,
+              confidence: state.lengthProfile.upper.confidence,
+              medianAbsoluteDeviation: state.lengthProfile.upper.medianAbsoluteDeviation,
+            },
+            lower: {
+              acceptedSamples: state.lengthProfile.lower.acceptedSamples,
+              rejectedSamples: state.lengthProfile.lower.rejectedSamples,
+              confidence: state.lengthProfile.lower.confidence,
+              medianAbsoluteDeviation: state.lengthProfile.lower.medianAbsoluteDeviation,
+            },
+          },
           wristEvidence: {
             source: wristEvidence.source,
             sourceChanged: wristEvidence.sourceChanged,
@@ -1502,11 +1536,17 @@ export class AvatarMotionProcessor {
   }
   private updateLengthCalibration(state: ArmTemporalState, lengths: { upper: number; lower: number }): void {
     for (const segment of ["upper", "lower"] as const) {
-      const samples = state.lengthSamples[segment]; samples.push(lengths[segment]);
-      if (samples.length > this.config.armFrame.calibrationWindowSamples) samples.shift();
-      if (samples.length >= this.config.armFrame.calibrationMinimumSamples) {
-        const sorted = [...samples].sort((a, b) => a - b); const middle = Math.floor(sorted.length / 2);
-        state.calibratedLength[segment] = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+      const profile = updateRobustMeasurement(state.lengthProfile[segment], lengths[segment], {
+        minimumSamples: this.config.armFrame.calibrationMinimumSamples,
+        windowSamples: this.config.armFrame.calibrationWindowSamples,
+        outlierSigma: this.config.armFrame.calibrationOutlierSigma,
+        minimumRelativeTolerance: this.config.armFrame.calibrationMinimumRelativeTolerance,
+      });
+      // Keep the legacy arrays populated for existing diagnostics while the robust profile
+      // becomes the single owner of acceptance and the calibrated median.
+      state.lengthSamples[segment] = [...profile.state.samples];
+      if (profile.state.samples.length >= this.config.armFrame.calibrationMinimumSamples) {
+        state.calibratedLength[segment] = profile.state.value;
       }
     }
   }

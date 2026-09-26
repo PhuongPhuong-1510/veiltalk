@@ -90,6 +90,12 @@ function edgeOnLeftHand(timestamp: number): RawHandCandidateV1 {
 
 describe("AvatarMotionProcessor", () => {
   describe("AR4 V2 upper-body pipeline",()=>{
+    it("starts paired calibration automatically when an upper-body rig becomes available",()=>{
+      const processor=new AvatarMotionProcessor({filtered:false,now:()=>100});
+      expect(processor.getUpperBodyCalibration().state).toBe("idle");
+      processor.setUpperBodyRigProfile(upperBodyProfile);
+      expect(processor.getUpperBodyCalibration()).toMatchObject({state:"collecting",acceptedPairs:0,mode:"pending"});
+    });
     it("keeps legacy V1 until an upper-body profile is explicitly installed",()=>{
       expect(new AvatarMotionProcessor({filtered:false,now:()=>100}).process(frame()).version).toBe(1);
     });
@@ -913,8 +919,12 @@ describe("AvatarMotionProcessor", () => {
       const diagnostic = processor.getLastDiagnostics()!.armStability.left;
       expect(diagnostic.poseUpperTargetAngularDeltaRadians).toBeGreaterThan(0);
       expect(diagnostic.poseLowerTargetAngularDeltaRadians).toBeGreaterThan(0);
-      expect(diagnostic.poseUpperAppliedAngularDeltaRadians).toBeCloseTo(diagnostic.poseUpperTargetAngularDeltaRadians!, 7);
-      expect(diagnostic.poseLowerAppliedAngularDeltaRadians).toBeCloseTo(diagnostic.poseLowerTargetAngularDeltaRadians!, 7);
+      // Sub-degree upper-arm landmark noise is intentionally absorbed by the
+      // resting deadband instead of being emitted to the avatar.
+      expect(diagnostic.poseUpperTargetAngularDeltaRadians).toBeLessThan(.75 * Math.PI / 180);
+      expect(diagnostic.poseUpperAppliedAngularDeltaRadians).toBeLessThan(1e-7);
+      expect(diagnostic.poseLowerTargetAngularDeltaRadians).toBeLessThan(.75 * Math.PI / 180);
+      expect(diagnostic.poseLowerAppliedAngularDeltaRadians).toBeLessThan(1e-7);
       expect(diagnostic.elbowSourceChanged).toBe(false);
       expect(diagnostic.poleBranchChanged).toBe(false);
       expect(diagnostic.trusted).toBe(false);
@@ -1298,12 +1308,21 @@ describe("AvatarMotionProcessor", () => {
       expect(partialPacket.jointRotations[current.lowerName]).toEqual(initialPacket.jointRotations[current.lowerName]);
       expect(processor.getLastDiagnostics()?.arms[current.side].segmentLossState).toEqual({ upper: "active", lower: "active" });
 
-      // Che lâu: chỉ lower đi vào return; upper vẫn bám người thật.
+      // Che lâu hơn generic hold (250 ms): lower vẫn giữ góc gập tương đối với
+      // upper vì vai và khuỷu vẫn là bằng chứng hiện tại.
       now = 450;
       processor.process(partial(450, -.8));
       const lateState = processor.getLastDiagnostics()?.arms[current.side].segmentLossState;
       expect(lateState?.upper).toBe("active");
-      expect(lateState?.lower).toBe("returning");
+      expect(lateState?.lower).toBe("held");
+      expect(processor.getLastDiagnostics()?.arms[current.side].confidenceFlags).toContain("lower-relative-hold");
+
+      // Không giữ vô hạn: nếu wrist mất thật sự lâu, lower mới trở về rest từ từ.
+      now = 1_700;
+      processor.process(partial(1_700, -.8));
+      const expiredState = processor.getLastDiagnostics()?.arms[current.side].segmentLossState;
+      expect(expiredState?.upper).toBe("active");
+      expect(expiredState?.lower).not.toBe("held");
     }
   });
 

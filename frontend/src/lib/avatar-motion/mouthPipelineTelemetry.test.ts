@@ -34,6 +34,12 @@ describe("mouth pipeline telemetry", () => {
     });
   });
 
+  it("retains pucker, cheek-puff and frown peaks for webcam diagnosis", () => {
+    const telemetry = new MouthPipelineTelemetry();
+    telemetry.record({ sampledAtMs: 10, raw: { mouthPucker: .7, cheekPuff: .8, mouthFrownLeft: .5, mouthFrownRight: .7 }, calibrated: { mouthPucker: .6, cheekPuff: .65, mouthFrownLeft: .4, mouthFrownRight: .6 }, mouth: mouth(0), dynamics: dynamics(0, 0, 0) });
+    expect(telemetry.snapshot().window.peaks).toMatchObject({ rawPucker: .7, calibratedPucker: .6, rawCheekPuff: .8, calibratedCheekPuff: .65, rawFrown: .6, calibratedFrown: .5 });
+  });
+
   it("uses geometry without smile or viseme feedback to form the diagnostic activity candidate", () => {
     const telemetry = new MouthPipelineTelemetry();
     telemetry.record({ sampledAtMs: 10, raw: {}, calibrated: {}, mouth: mouth(.1, .7, .4, 0, 1), dynamics: dynamics(1, 1, 1) });

@@ -23,6 +23,16 @@ const NEUTRAL_GUARD_CHANNELS = [
   "browDownLeft", "browDownRight", "browInnerUp",
 ] as const;
 
+// Manual calibration may be a little more permissive than automatic collection for
+// naturally asymmetric faces, but it must not absorb an intentional expression into
+// the neutral baseline. These are the gestures users most often hold while pressing
+// the calibration button.
+const MANUAL_HARD_GUARD_CHANNELS = [
+  "eyeBlinkLeft", "eyeBlinkRight", "jawOpen", "cheekPuff",
+  "mouthPucker", "mouthFunnel", "mouthPressLeft", "mouthPressRight",
+  "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft", "mouthFrownRight",
+] as const;
+
 const median = (values: readonly number[]): number => {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -48,7 +58,8 @@ export class FacialNeutralCalibrator {
     const values = Object.fromEntries(Object.entries(input).map(([name, value]) => [name, clamp01(value)]));
     const neutralCandidate = this.isNeutralCandidate(values);
     const wasReady = this.ready;
-    if (!wasReady && (this.collectionMode === "manual" || neutralCandidate)) this.collect(values);
+    const calibrationCandidate = this.collectionMode === "manual" ? this.isManualCandidate(values) : neutralCandidate;
+    if (!wasReady && calibrationCandidate) this.collect(values);
     else if (!wasReady) this.rejectedSamples += 1;
     if (!this.ready) return values;
 
@@ -79,6 +90,11 @@ export class FacialNeutralCalibrator {
 
   private isNeutralCandidate(input: Readonly<Record<string, number>>): boolean {
     return NEUTRAL_GUARD_CHANNELS.every((name) => (input[name] ?? 0) <= this.config.neutralActivationLimit);
+  }
+
+  private isManualCandidate(input: Readonly<Record<string, number>>): boolean {
+    const hardLimit = Math.max(0.45, this.config.neutralActivationLimit * 2);
+    return MANUAL_HARD_GUARD_CHANNELS.every((name) => (input[name] ?? 0) <= hardLimit);
   }
 
   private collect(input: Readonly<Record<string, number>>): void {

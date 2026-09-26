@@ -3,6 +3,7 @@ import type { MouthExpressionSnapshot } from "./mouthExpression";
 
 export const MOUTH_TELEMETRY_CHANNELS = [
   "jawOpen", "mouthClose", "mouthPucker", "mouthFunnel",
+  "cheekPuff", "mouthFrownLeft", "mouthFrownRight", "browInnerUp",
   "mouthStretchLeft", "mouthStretchRight",
   "mouthUpperUpLeft", "mouthUpperUpRight",
   "mouthLowerDownLeft", "mouthLowerDownRight",
@@ -49,6 +50,12 @@ export interface MouthPipelineTelemetryWindow {
   peaks: Readonly<{
     rawJawOpen: number;
     calibratedJawOpen: number;
+    rawPucker: number;
+    calibratedPucker: number;
+    rawCheekPuff: number;
+    calibratedCheekPuff: number;
+    rawFrown: number;
+    calibratedFrown: number;
     visibleOpening: number;
     speechActivity: number;
     boostedAmplitude: number;
@@ -153,6 +160,12 @@ export class MouthPipelineTelemetry {
         peaks: {
           rawJawOpen: max((sample) => sample.raw.jawOpen),
           calibratedJawOpen: max((sample) => sample.calibrated.jawOpen),
+          rawPucker: max((sample) => sample.raw.mouthPucker),
+          calibratedPucker: max((sample) => sample.calibrated.mouthPucker),
+          rawCheekPuff: max((sample) => sample.raw.cheekPuff),
+          calibratedCheekPuff: max((sample) => sample.calibrated.cheekPuff),
+          rawFrown: max((sample) => (sample.raw.mouthFrownLeft + sample.raw.mouthFrownRight) / 2),
+          calibratedFrown: max((sample) => (sample.calibrated.mouthFrownLeft + sample.calibrated.mouthFrownRight) / 2),
           visibleOpening: max((sample) => sample.speechActivity.visibleOpening),
           speechActivity: max((sample) => sample.speechActivity.candidate),
           boostedAmplitude: max((sample) => sample.corrective.boostedAmplitude),

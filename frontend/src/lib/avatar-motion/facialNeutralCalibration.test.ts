@@ -40,4 +40,15 @@ describe("F1 facial neutral calibration", () => {
     for (let index = 0; index < 3; index += 1) calibrator.process({ jawOpen: .26, browInnerUp: .3 });
     expect(calibrator.snapshot()).toMatchObject({ state: "ready", collectionMode: "manual", acceptedSamples: 3, rejectedSamples: 0 });
   });
+
+  it("does not absorb a deliberate pucker, cheek puff, or frown into manual neutral", () => {
+    const calibrator = new FacialNeutralCalibrator(config);
+    calibrator.beginCalibration();
+    calibrator.process({ mouthPucker: .9 });
+    calibrator.process({ cheekPuff: .8 });
+    calibrator.process({ mouthFrownLeft: .8, mouthFrownRight: .8 });
+    expect(calibrator.snapshot()).toMatchObject({ state: "collecting", acceptedSamples: 0, rejectedSamples: 3 });
+    for (let index = 0; index < 3; index += 1) calibrator.process({ jawOpen: .1, browInnerUp: .25 });
+    expect(calibrator.snapshot().state).toBe("ready");
+  });
 });

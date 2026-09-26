@@ -12,7 +12,18 @@ export interface OneEuroParameters { minCutoff: number; beta: number; derivative
 
 export interface AvatarMotionConfig {
   freshnessMs: { face: number; hand: number; pose: number };
-  loss: { holdMs: number; returnMs: number; recoveryMs: number };
+  loss: {
+    holdMs: number;
+    /**
+     * Keep the last parent-local forearm pose longer when shoulder and elbow are
+     * still observed but the wrist alone is occluded. Unlike a generic tracking
+     * loss, the upper arm is still anchored to current evidence, so returning the
+     * forearm to rest early creates a visibly false straight arm.
+     */
+    partialWristHoldMs: number;
+    returnMs: number;
+    recoveryMs: number;
+  };
   face: {
     neutralCalibrationSamples: number;
     neutralDeadZone: number;
@@ -21,6 +32,8 @@ export interface AvatarMotionConfig {
     neutralAdaptiveWindow: number;
     blinkEnter: number;
     blinkExit: number;
+    blinkOutputOnset: number;
+    blinkOutputFull: number;
     unilateralBlinkConfirmMs: number;
     browEmotionFallbackGain: number;
     browInputOnset: number;
@@ -90,6 +103,8 @@ export interface AvatarMotionConfig {
     longGapDiscontinuityMs: number;
     calibrationMinimumSamples: number;
     calibrationWindowSamples: number;
+    calibrationOutlierSigma: number;
+    calibrationMinimumRelativeTolerance: number;
     elbowInferenceTimeoutMs: number;
     elbowInferenceReachSlackRatio: number;
     /**
@@ -195,7 +210,7 @@ export interface AvatarMotionConfig {
 /** Các duration là giá trị hiệu chỉnh ban đầu, chưa phải ngưỡng chính thức của SRS. */
 export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
   freshnessMs: { face: 100, hand: 150, pose: 150 },
-  loss: { holdMs: 250, returnMs: 500, recoveryMs: 180 },
+  loss: { holdMs: 250, partialWristHoldMs: 1_500, returnMs: 500, recoveryMs: 180 },
   face: {
     neutralCalibrationSamples: 30,
     neutralDeadZone: 0.015,
@@ -204,6 +219,8 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     neutralAdaptiveWindow: 0.06,
     blinkEnter: 0.55,
     blinkExit: 0.25,
+    blinkOutputOnset: 0.05,
+    blinkOutputFull: 0.75,
     unilateralBlinkConfirmMs: 45,
     browEmotionFallbackGain: 1,
     browInputOnset: 0.04,
@@ -268,7 +285,7 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
           openFull: 0.5,
           closedGain: 0.45,
           openGain: 0.6,
-          frownGain: 0.55,
+          frownGain: 0.75,
           vowelSuppression: 0.75,
           lipShapeSuppression: 0.8,
         },
@@ -298,7 +315,10 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
   },
   filter: {
     head: { minCutoff: 1.1, beta: 0.12, derivativeCutoff: 1 },
-    arms: { minCutoff: 1, beta: 0.2, derivativeCutoff: 1 },
+    // Arm landmarks are noticeably noisier than head landmarks, especially near
+    // the edge of the camera. Prefer a stable resting silhouette over following
+    // every sub-frame correction from Pose Landmarker.
+    arms: { minCutoff: 0.7, beta: 0.06, derivativeCutoff: 1 },
     wrist: { minCutoff: 1.4, beta: 0.25, derivativeCutoff: 1 },
     pole: { minCutoff: 0.8, beta: 0.12, derivativeCutoff: 1 },
     maxTimestampGapMs: 1_000,
@@ -306,13 +326,13 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
   armFrame: {
     minimumPoseVisibility: 0.5,
     visibilityEnter: 0.6,
-    visibilityExit: 0.3,
+    visibilityExit: 0.45,
     minimumSegmentLength: 0.02,
     minimumSegmentRatio: 0.35,
     maximumSegmentRatio: 2.85,
     shoulderOuterBoundsMargin: 0.2,
-    elbowOuterBoundsMargin: 0.08,
-    wristOuterBoundsMargin: 0.04,
+    elbowOuterBoundsMargin: 0,
+    wristOuterBoundsMargin: 0,
     edgeWarningMargin: 0.04,
     elbowOffsetEnterMagnitude: 0.015,
     elbowOffsetExitMagnitude: 0.03,
@@ -330,6 +350,8 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
     longGapDiscontinuityMs: 1_000,
     calibrationMinimumSamples: 3,
     calibrationWindowSamples: 30,
+    calibrationOutlierSigma: 3,
+    calibrationMinimumRelativeTolerance: 0.18,
     elbowInferenceTimeoutMs: 1_200,
     elbowInferenceReachSlackRatio: 0.12,
     elbowInferenceMinimumBendQuality: 0.15,

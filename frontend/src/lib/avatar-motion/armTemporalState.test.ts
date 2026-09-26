@@ -16,6 +16,18 @@ describe("arm hold, return and recovery", () => {
   });
 });
 
+describe("arm rest deadband", () => {
+  it("holds sub-degree pose jitter but lets deliberate motion accumulate past the threshold", () => {
+    const state = createSegmentTemporalState();
+    const resting = updateSegmentTemporalOutput(state, rotation(.5), true, 0, 250, 500, 180);
+    const jitter = updateSegmentTemporalOutput(state, rotation(.505), true, 33, 250, 500, 180);
+    expect(jitter.output).toEqual(resting.output);
+
+    const moved = updateSegmentTemporalOutput(state, rotation(.53), true, 66, 250, 500, 180);
+    expect(moved.output).not.toEqual(resting.output);
+  });
+});
+
 describe("Mức 1B-1: quaternion hemisphere continuity trong updateSegmentTemporalOutput", () => {
   it("keeps output continuous when the solver flips sign for the same rotation on consecutive frames", () => {
     // q và -q biểu diễn CÙNG một rotation. Nếu solver (nguồn ngoài, không kiểm soát được dấu

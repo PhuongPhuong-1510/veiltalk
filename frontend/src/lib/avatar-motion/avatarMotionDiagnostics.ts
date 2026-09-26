@@ -163,6 +163,11 @@ export interface ArmFrameDiagnostic {
     calibratedUpperLength: number | null; calibratedLowerLength: number | null;
     shoulderWristDistance: number | null; reachRatio: number | null; distanceFromPreviousElbow: number | null;
   };
+  /** Passive, local-only body profile used by elbow inference; no raw landmark history is retained. */
+  bodyProfile?: {
+    upper: { acceptedSamples: number; rejectedSamples: number; confidence: number; medianAbsoluteDeviation: number | null };
+    lower: { acceptedSamples: number; rejectedSamples: number; confidence: number; medianAbsoluteDeviation: number | null };
+  };
   /** P4-T10 corrective: vì sao solver chọn mặt phẳng gập này và có dùng vùng mặt/collision rig hay không. */
   spatial?: {
     candidateCount: number;

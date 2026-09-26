@@ -3,6 +3,8 @@ import { clamp01 } from "./coordinateAdapter";
 export interface EyeBrowExpressionConfig {
   blinkEnter: number;
   blinkExit: number;
+  blinkOutputOnset: number;
+  blinkOutputFull: number;
   unilateralConfirmMs: number;
   browEmotionFallbackGain: number;
   browInputOnset: number;
@@ -121,7 +123,18 @@ export class EyeBrowExpressionProcessor {
       }
     }
     if (raw < this.config.blinkEnter || state.closed) state.unilateralCandidateSinceMs = null;
-    if (!state.closed) return 0;
-    return clamp01((raw - this.config.blinkExit) / Math.max(1e-4, this.config.blinkEnter - this.config.blinkExit));
+
+    // MediaPipe's eyeBlink coefficient is continuous: values between open and
+    // closed describe a partially lowered eyelid. Keep that amplitude instead
+    // of using the hysteresis state as an on/off gate. The state is still useful
+    // for diagnostics and for rejecting a single-frame, high unilateral spike.
+    const awaitingUnilateralConfirmation =
+      raw >= this.config.blinkEnter
+      && !bilateral
+      && !state.closed
+      && state.unilateralCandidateSinceMs !== null;
+    return awaitingUnilateralConfirmation
+      ? 0
+      : remapActivation(raw, this.config.blinkOutputOnset, this.config.blinkOutputFull);
   }
 }

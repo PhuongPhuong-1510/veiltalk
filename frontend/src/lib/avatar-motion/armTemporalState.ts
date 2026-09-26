@@ -3,6 +3,7 @@ import type { ArmSide, ElbowSource, PoleSource } from "./avatarMotionDiagnostics
 import type { ControlledArmJoint } from "./normalizedRigProfile";
 import { IDENTITY_QUATERNION } from "./avatarPoseTypes";
 import { slerpQuaternionData } from "./motionMath";
+import { createRobustMeasurementState, type RobustMeasurementState } from "./adaptiveBodyProfile";
 
 /**
  * Mức 1B-1 (theo tư vấn chuyên gia): `q` và `-q` biểu diễn cùng một rotation nhưng khi gán
@@ -16,6 +17,13 @@ function sameHemisphere(previous: QuaternionData | null, next: QuaternionData): 
   if (!previous) return next;
   const dot = previous.x * next.x + previous.y * next.y + previous.z * next.z + previous.w * next.w;
   return dot < 0 ? { x: -next.x, y: -next.y, z: -next.z, w: -next.w } : next;
+}
+
+const ARM_REST_DEADBAND_RADIANS = 0.75 * Math.PI / 180;
+
+function quaternionAngularDistance(a: QuaternionData, b: QuaternionData): number {
+  const dot = Math.min(1, Math.abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w));
+  return 2 * Math.acos(dot);
 }
 
 export type ArmLossState = "idle" | "active" | "held" | "returning" | "recovering";
@@ -45,6 +53,7 @@ export interface ArmTemporalState {
   previousSecondary: { upper: { x: number; y: number; z: number } | null; lower: { x: number; y: number; z: number } | null };
   lengthSamples: { upper: number[]; lower: number[] };
   calibratedLength: { upper: number | null; lower: number | null };
+  lengthProfile: { upper: RobustMeasurementState; lower: RobustMeasurementState };
   previousObservedElbow: { x: number; y: number; z: number } | null;
   /** Phase 3B partial-arm: mỏ neo phía gập khuỷu, giữ qua các frame để elbow inference không lật phía. */
   previousElbowDirection: { x: number; y: number; z: number } | null;
@@ -62,6 +71,7 @@ export const createArmTemporalState = (): ArmTemporalState => ({
   segments: { upper: createSegmentTemporalState(), lower: createSegmentTemporalState() },
   previousPrimary: { upper: null, lower: null }, previousSecondary: { upper: null, lower: null },
   lengthSamples: { upper: [], lower: [] }, calibratedLength: { upper: null, lower: null }, previousObservedElbow: null, previousElbowDirection: null, inferenceStartedAtMs: null,
+  lengthProfile: { upper: createRobustMeasurementState(), lower: createRobustMeasurementState() },
   elbowSource: "unavailable", elbowWasVisible: false, wristWasVisible: false,
 });
 
@@ -72,6 +82,15 @@ export function updateSegmentTemporalOutput(state: SegmentTemporalState, solved:
     // hemisphere sẽ đi đường vòng dài) lẫn khi gán thẳng (progress=1, không qua slerp nào cả).
     const continuityReference = state.currentOutputDelta;
     const solvedContinuous = sameHemisphere(continuityReference, solved);
+    // Pose landmarks keep moving by fractions of a degree even when the user is
+    // sitting still. Do not continuously excite the arm rig with that noise.
+    // Comparing against the emitted value (rather than the previous raw sample)
+    // still lets deliberate slow motion accumulate and cross the deadband.
+    if (state.lossState === "active" && quaternionAngularDistance(continuityReference, solvedContinuous) < ARM_REST_DEADBAND_RADIANS) {
+      state.lastValidDelta = continuityReference;
+      state.lastValidAtMs = nowMs;
+      return { output: continuityReference, state: "active", progress: 1 };
+    }
     // Mức 1B-2 (theo tư vấn chuyên gia): tracking chưa hề "mất" theo lossState (geometry vẫn
     // solved liên tục mỗi frame) khi nguồn dữ liệu hình học đổi loại — ví dụ elbowSource đổi
     // từ inferred sang observed, hay poleSource đổi từ rest/previous sang fresh/hand. Trước

@@ -32,4 +32,16 @@ describe("AR4 paired upper-body calibration",()=>{
     for(let index=0;index<5;index+=1)expect(calibration.process({...sample(),faceSampledAtMs:100+index,poseSampledAtMs:100+index,fullTorsoRotation:index<4?identity:null,fullTorsoQuality:index<4?1:0})).toBe(true);
     expect(calibration.snapshot()).toMatchObject({state:"calibrated",mode:"full-torso",acceptedFullTorsoPairs:4});
   });
+  it("extends calibration beyond the target while neutral evidence is unstable",()=>{
+    const calibration=new UpperBodyNeutralCalibrator(30,50,.5,3_000,1*Math.PI/180);calibration.begin("model");
+    for(let index=0;index<30;index+=1){const yaw=index%2===0?.15:-.15;expect(calibration.process({...sample(),faceRotation:q(yaw),shoulderRotation:q(yaw),faceSampledAtMs:100+index*33,poseSampledAtMs:100+index*33})).toBe(true);}
+    expect(calibration.snapshot()).toMatchObject({state:"collecting",acceptedPairs:30,completionReason:"collecting"});
+    for(let index=30;index<60;index+=1)calibration.process({...sample(),faceRotation:q(index%2===0?.15:-.15),shoulderRotation:q(index%2===0?.15:-.15),faceSampledAtMs:100+index*33,poseSampledAtMs:100+index*33});
+    expect(calibration.snapshot()).toMatchObject({state:"calibrated",acceptedPairs:60,completionReason:"maximum-samples"});
+  });
+  it("can finish after 24 stable samples on a slow camera once one second elapsed",()=>{
+    const calibration=new UpperBodyNeutralCalibrator();calibration.begin("model");
+    for(let index=0;index<24;index+=1)calibration.process({...sample(),faceSampledAtMs:100+index*50,poseSampledAtMs:100+index*50});
+    expect(calibration.snapshot()).toMatchObject({state:"calibrated",acceptedPairs:24,completionReason:"stable"});
+  });
 });

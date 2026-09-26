@@ -3,23 +3,45 @@ import { EyeBrowExpressionProcessor, type EyeBrowExpressionConfig } from "./eyeB
 
 const config: EyeBrowExpressionConfig = {
   blinkEnter: .55, blinkExit: .25, unilateralConfirmMs: 45,
+  blinkOutputOnset: .05, blinkOutputFull: .75,
   browEmotionFallbackGain: 1, browInputOnset: .05, browInputFull: .45,
 };
 
 describe("F2 eye and brow expressions", () => {
-  it("accepts a bilateral blink immediately and releases it with hysteresis", () => {
+  it("preserves continuous eyelid amplitude while tracking closed state with hysteresis", () => {
     const processor = new EyeBrowExpressionProcessor(config);
+    const partial = processor.process({ eyeBlinkLeft: .4, eyeBlinkRight: .35 }, 84);
+    expect(partial.blinkLeft).toBeCloseTo(.5);
+    expect(partial.blinkRight).toBeCloseTo(3 / 7);
+    expect(processor.snapshot()).toMatchObject({ leftClosed: false, rightClosed: false });
+
     const closing = processor.process({ eyeBlinkLeft: .8, eyeBlinkRight: .75 }, 100);
-    expect(closing.blinkLeft).toBe(1); expect(closing.blinkRight).toBe(1);
-    expect(processor.process({ eyeBlinkLeft: .4, eyeBlinkRight: .4 }, 116).blinkLeft).toBeGreaterThan(0);
-    expect(processor.process({ eyeBlinkLeft: .2, eyeBlinkRight: .2 }, 132)).toMatchObject({ blinkLeft: 0, blinkRight: 0 });
+    expect(closing).toMatchObject({ blinkLeft: 1, blinkRight: 1 });
+    expect(processor.snapshot()).toMatchObject({ leftClosed: true, rightClosed: true });
+
+    const reopening = processor.process({ eyeBlinkLeft: .4, eyeBlinkRight: .4 }, 116);
+    expect(reopening.blinkLeft).toBeCloseTo(.5);
+    expect(reopening.blinkRight).toBeCloseTo(.5);
+    expect(processor.snapshot()).toMatchObject({ leftClosed: true, rightClosed: true });
+    const reopened = processor.process({ eyeBlinkLeft: .2, eyeBlinkRight: .2 }, 132);
+    expect(reopened.blinkLeft).toBeCloseTo(3 / 14);
+    expect(reopened.blinkRight).toBeCloseTo(3 / 14);
+    expect(processor.snapshot()).toMatchObject({ leftClosed: false, rightClosed: false });
+  });
+
+  it("does not turn the blink-enter threshold into full eyelid closure", () => {
+    const processor = new EyeBrowExpressionProcessor(config);
+    expect(processor.process({ eyeBlinkLeft: .55, eyeBlinkRight: .55 }, 100)).toMatchObject({
+      blinkLeft: 5 / 7,
+      blinkRight: 5 / 7,
+    });
   });
 
   it("rejects a one-frame unilateral spike but accepts an intentional wink after confirmation", () => {
     const processor = new EyeBrowExpressionProcessor(config);
     expect(processor.process({ eyeBlinkLeft: .9, eyeBlinkRight: .05 }, 100).blinkLeft).toBe(0);
     expect(processor.snapshot().unilateralCandidate).toBe("left");
-    expect(processor.process({ eyeBlinkLeft: .05, eyeBlinkRight: .05 }, 116).blinkLeft).toBe(0);
+    expect(processor.process({ eyeBlinkLeft: .05, eyeBlinkRight: .05 }, 116)).toMatchObject({ blinkLeft: 0, blinkRight: 0 });
     expect(processor.snapshot().unilateralCandidate).toBeNull();
     processor.process({ eyeBlinkLeft: .9, eyeBlinkRight: .05 }, 200);
     expect(processor.process({ eyeBlinkLeft: .9, eyeBlinkRight: .05 }, 250).blinkLeft).toBeGreaterThan(.8);

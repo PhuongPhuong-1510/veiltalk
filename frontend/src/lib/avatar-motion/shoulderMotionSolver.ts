@@ -30,7 +30,7 @@ export class ShoulderMotionSolver {
   private neutral: ShoulderNeutral | null = null;
   private neutralSamples=0;
   captureNeutral(landmarks:RawNormalizedLandmarkV1[]|null,basis:TorsoBasis|null,verticalLandmarks=landmarks,imageAspectRatio=1):boolean {
-    const measurement=this.measureWorld(landmarks,basis),verticalMeasurement=this.measureVertical(verticalLandmarks,imageAspectRatio);
+    const measurement=this.measureWorld(landmarks,basis,verticalLandmarks),verticalMeasurement=this.measureVertical(verticalLandmarks,imageAspectRatio);
     if(!measurement||!verticalMeasurement)return false;
     const alpha=1/(this.neutralSamples+1);
     const averageGap=(side:"left"|"right")=>verticalMeasurement.headGap[side]===null?this.neutral?.headGap[side]??null:this.neutral?.headGap[side]===null||this.neutral?.headGap[side]===undefined?verticalMeasurement.headGap[side]:this.neutral.headGap[side]!+alpha*(verticalMeasurement.headGap[side]!-this.neutral.headGap[side]!);
@@ -43,7 +43,7 @@ export class ShoulderMotionSolver {
   }
   solve(landmarks:RawNormalizedLandmarkV1[]|null,basis:TorsoBasis|null,profile:UpperBodyRigProfileV1,headPose:Vector3Data|null=null,verticalLandmarks=landmarks,imageAspectRatio=1,commonMotionGainInput=1):ShoulderMotionResult {
     const projectionBasis=this.neutral&&basis?{...basis,up:this.neutral.up,forward:this.neutral.forward}:basis;
-    const layer:UpperBodyLayer={};const measurement=this.measureWorld(landmarks,projectionBasis);const verticalMeasurement=this.measureVertical(verticalLandmarks,imageAspectRatio);
+    const layer:UpperBodyLayer={};const measurement=this.measureWorld(landmarks,projectionBasis,verticalLandmarks);const verticalMeasurement=this.measureVertical(verticalLandmarks,imageAspectRatio);
     const elevation={left:0,right:0};const protraction={left:0,right:0};const vertical={left:0,right:0};
     const verticalSource:ShoulderMotionResult["verticalSource"]={left:"unavailable",right:"unavailable"};
     const earGapConfidence={left:0,right:0};
@@ -88,15 +88,19 @@ export class ShoulderMotionSolver {
     return {layer,elevation,protraction,vertical,verticalSource,earGapConfidence,commonMotionGain,directBilateralProtractionObservable:false};
   }
   reset():void{this.neutral=null;this.neutralSamples=0;}
-  private measureWorld(landmarks:RawNormalizedLandmarkV1[]|null,basis:TorsoBasis|null){
+  private measureWorld(landmarks:RawNormalizedLandmarkV1[]|null,basis:TorsoBasis|null,imageLandmarks:RawNormalizedLandmarkV1[]|null=landmarks){
     const confidence=(index:number)=>{const value=landmarks?.[index];if(!value)return 0;return value.visibility===null?1:clamp(value.visibility,0,1);};
     const visible=(index:number)=>confidence(index)>=.5;
     if(!landmarks||!basis||![11,12].every(visible))return null;
     const ls=point(landmarks[11]),rs=point(landmarks[12]);
     const span=sub(ls,rs),width=length(span);if(width<=1e-5)return null;
     const spanForward=dot(span,basis.forward);
+    const reliableReach=(elbowIndex:number,wristIndex:number)=>{
+      const elbow=imageLandmarks?.[elbowIndex],wrist=imageLandmarks?.[wristIndex];
+      return visible(elbowIndex)&&visible(wristIndex)&&Boolean(elbow&&wrist&&elbow.x>=0&&elbow.x<=1&&elbow.y>=0&&elbow.y<=1&&wrist.x>=0&&wrist.x<=1&&wrist.y>=0&&wrist.y<=1);
+    };
     const reach=(shoulder:Vector3Data,elbow:Vector3Data,wrist:Vector3Data)=>{const upper=normalize(sub(elbow,shoulder));return {up:upper?smoothstep(.25,.75,dot(upper,basis.up)):0,forward:smoothstep(.15,.65,dot(sub(wrist,shoulder),basis.forward)/width)};};
-    const left=visible(13)&&visible(15)?reach(ls,point(landmarks[13]),point(landmarks[15])):{up:0,forward:0},right=visible(14)&&visible(16)?reach(rs,point(landmarks[14]),point(landmarks[16])):{up:0,forward:0};
+    const left=reliableReach(13,15)?reach(ls,point(landmarks[13]),point(landmarks[15])):{up:0,forward:0},right=reliableReach(14,16)?reach(rs,point(landmarks[14]),point(landmarks[16])):{up:0,forward:0};
     return {spanForward,width,reachUp:{left:left.up,right:right.up},reachForward:{left:left.forward,right:right.forward}};
   }
   private measureVertical(landmarks:RawNormalizedLandmarkV1[]|null,imageAspectRatio:number){
