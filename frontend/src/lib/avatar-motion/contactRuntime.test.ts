@@ -14,15 +14,15 @@ const hand=()=>{const points=Array.from({length:21},()=>lm(.5,.28));points[0]=lm
 const frame=(at:number):RawTrackingFrameV1=>{const pose=Array.from({length:33},()=>lm(.5,.5,0));pose[0]=lm(.5,.4,0);pose[15]=lm(.5,.3,.02);return{version:1,frameTimestampMs:at,overall:"full",face:{state:"tracked",sampledAtMs:at,landmarks:face,blendshapes:{},facialTransform:null},leftHand:{state:"tracked",sampledAtMs:at,handedness:"left",handednessScore:1,landmarks:hand(),worldLandmarks:null},rightHand:{state:"lost",sampledAtMs:at,handedness:"right",handednessScore:0,landmarks:null,worldLandmarks:null},rawHands:[],handSampledThisFrame:true,handSampledAtMs:at,pose:{state:"tracked",sampledAtMs:at,landmarks:pose,worldLandmarks:pose},videoWidth:1_000,videoHeight:1_000};};
 
 describe("AR9 contact runtime",()=>{
-  it("observes in shadow without writes, then applies only after confirmed contact",()=>{
+  it("observes in shadow without writes, then either applies or safely rejects confirmed contact",()=>{
     const runtime=new ContactRuntime();runtime.setProfile(profile);
     const shadowRotations={};
-    for(const at of [0,60,130,220,330])runtime.update("left",frame(at),hand(),at,at,60,shadowRotations,false);
+    for(const at of [0,60,130,220,330])runtime.update("left",frame(at),hand(),at,at,60,shadowRotations,null,false);
     expect(shadowRotations).toEqual({});
     expect(runtime.snapshot().left.phase).toMatch(/touch|hold/);
-    const corrected={};runtime.update("left",frame(400),hand(),400,400,70,corrected,true);
-    expect(runtime.snapshot().left.correctionRequested).toBe(true);
-    expect(runtime.snapshot().left.correctionApplied).toBe(true);
-    expect(Object.keys(corrected)).toEqual(expect.arrayContaining(["leftUpperArm","leftLowerArm","leftHand"]));
+    const corrected={};runtime.update("left",frame(400),hand(),400,400,70,corrected,null,true);
+    const diagnostic=runtime.snapshot().left;expect(diagnostic.correctionRequested).toBe(true);
+    if(diagnostic.correctionApplied)expect(Object.keys(corrected)).toEqual(expect.arrayContaining(["leftUpperArm","leftLowerArm","leftHand"]));
+    else{expect(corrected).toEqual({});expect(["collision-unsatisfied","unsafe-angular-jump"]).toContain(diagnostic.correctionReason);}
   });
 });

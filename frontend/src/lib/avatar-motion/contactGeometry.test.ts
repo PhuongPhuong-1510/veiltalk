@@ -2,11 +2,11 @@ import { describe,expect,it } from "vitest";
 import { mapContactAnchor } from "./contactAnchorMapping";
 import { solveContactWristTarget } from "./contactWristTarget";
 import { solveContactArmIk } from "./contactArmIk";
-import { capsuleSpherePenetration,resolveContactCollisionFailSafe } from "./contactCollision";
+import { capsuleCapsulePenetration,capsuleSpherePenetration,resolveContactCollisionFailSafe } from "./contactCollision";
 
 describe("contact target and IK geometry",()=>{
   it("aligns a probe-specific normal and compensates wrist-to-probe offset",()=>{
-    const anchor=mapContactAnchor({region:"leftCheek",center:{x:0,y:1,z:0},radii:{x:.3,y:.4,z:.2},parent:"head",confidence:1});
+    const anchor=mapContactAnchor({region:"leftCheek",center:{x:0,y:1,z:0},radii:{x:.3,y:.4,z:.2},right:{x:1,y:0,z:0},up:{x:0,y:1,z:0},forward:{x:0,y:0,z:1},parent:"head",confidence:1});
     const solved=solveContactWristTarget(anchor,{probe:"palmCenter",frameOffset:{x:0,y:.12,z:0},contactNormal:{x:0,y:0,z:1},tangentHint:{x:0,y:1,z:0}})!;
     expect(solved.normalErrorRadians).toBeLessThan(1e-6);
     expect(Math.hypot(solved.probePoint.x-anchor.point.x,solved.probePoint.y-anchor.point.y,solved.probePoint.z-anchor.point.z)).toBeLessThan(1e-6);
@@ -19,5 +19,9 @@ describe("contact target and IK geometry",()=>{
   it("bounds collision correction and fails closed",()=>{
     expect(capsuleSpherePenetration({start:{x:-1,y:0,z:0},end:{x:1,y:0,z:0},radius:.1},{center:{x:0,y:0,z:0},radius:.2}).penetration).toBeCloseTo(.3);
     expect(resolveContactCollisionFailSafe(1,.4,.2)).toEqual({influence:0,accepted:false,reason:"collision-unsatisfied"});
+  });
+  it("detects finite arm-to-torso capsule penetration",()=>{
+    const collision=capsuleCapsulePenetration({start:{x:-1,y:0,z:0},end:{x:1,y:0,z:0},radius:.1},{start:{x:0,y:-1,z:0},end:{x:0,y:1,z:0},radius:.2});
+    expect(collision.valid).toBe(true);expect(collision.penetration).toBeCloseTo(.3);
   });
 });

@@ -27,4 +27,12 @@ describe("human body regions",()=>{
     ],"leftCheek");
     expect(selected?.region).toBe("leftCheek");
   });
+  it("covers mouth and ears but never guesses posterior contact without an independent cue",()=>{
+    const front=evaluateHumanBodyRegions({faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,imageMirrored:true},{x:.5,y:.575});
+    expect(front.some(value=>value.region==="mouth")).toBe(true);
+    expect(front.some(value=>value.region==="leftEar"||value.region==="rightEar")).toBe(true);
+    expect(front.some(value=>value.region==="backHead")).toBe(false);
+    const posterior=evaluateHumanBodyRegions({faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,imageMirrored:true,posteriorContactHint:.8},{x:.5,y:.45});
+    expect(posterior.some(value=>value.region==="backHead")).toBe(true);
+  });
 });

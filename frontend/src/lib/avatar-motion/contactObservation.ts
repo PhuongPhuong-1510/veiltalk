@@ -33,5 +33,6 @@ export function observeHumanContact(input:ContactObservationInput):HumanContactO
     x:Math.max(-1,Math.min(1,(chosen.probe.point.x-chosen.region.center.x)/Math.max(1e-6,chosen.region.radius.x))),
     y:Math.max(-1,Math.min(1,(chosen.probe.point.y-chosen.region.center.y)/Math.max(1e-6,chosen.region.radius.y))),
   };
-  return{side:input.side,region:chosen.region.region,probe:chosen.probe.probe,imagePoint:chosen.probe.point,regionUv,imageNormal:chosen.probe.contactNormal,overlap,approachVelocity:input.approachVelocity??null,depth:input.depth,confidence,evidence,sampledAtMs:input.sampledAtMs};
+  const tangentAngleRadians=chosen.probe.tangentHint?Math.atan2(chosen.probe.tangentHint.x,-chosen.probe.tangentHint.y):null;
+  return{side:input.side,region:chosen.region.region,probe:chosen.probe.probe,imagePoint:chosen.probe.point,regionUv,imageNormal:chosen.probe.contactNormal,tangentAngleRadians,overlap,approachVelocity:input.approachVelocity??null,depth:input.depth,confidence,evidence,sampledAtMs:input.sampledAtMs};
 }

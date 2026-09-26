@@ -9,13 +9,15 @@ import { createContactTemporalState,updateContactEvidence,updateContactVisualInf
 import { buildAvatarContactRig,type AvatarContactRig } from "./avatarContactRig";
 import { mapContactAnchor } from "./contactAnchorMapping";
 import { solveContactPoseCorrection,type ContactPoseCorrection } from "./contactPoseCorrection";
+import { poseContactAnchor } from "./posedContactAnchor";
 import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 
 export interface ContactRuntimeDiagnostic {side:ArmSide;phase:ContactTemporalState["phase"];region:BodyContactRegion|null;regionUv:ContactPoint2|null;probe:string|null;confidence:number;evidence:ContactEvidenceBreakdown|null;depthRelation:string;influence:number;correctionRequested:boolean;correctionApplied:boolean;correctionReason:ContactPoseCorrection["reason"]|"inactive";anchorError:number|null;normalErrorDegrees:number|null}
-interface SideMemory {temporal:ContactTemporalState;previousPoint:ContactPoint2|null;previousAt:number|null;previousRegion:BodyContactRegion|null;stableRegionSamples:number;observation:HumanContactObservation|null}
-const memory=():SideMemory=>({temporal:createContactTemporalState(),previousPoint:null,previousAt:null,previousRegion:null,stableRegionSamples:0,observation:null});
+interface SideMemory {temporal:ContactTemporalState;previousPoint:ContactPoint2|null;previousAt:number|null;previousRegion:BodyContactRegion|null;stableRegionSamples:number;observation:HumanContactObservation|null;lastCorrection:ContactPoseCorrection|null;appliedRotations:Partial<Record<string,QuaternionData>>}
+const memory=():SideMemory=>({temporal:createContactTemporalState(),previousPoint:null,previousAt:null,previousRegion:null,stableRegionSamples:0,observation:null,lastCorrection:null,appliedRotations:{}});
 const diagnostic=(side:ArmSide):ContactRuntimeDiagnostic=>({side,phase:"idle",region:null,regionUv:null,probe:null,confidence:0,evidence:null,depthRelation:"unknown",influence:0,correctionRequested:false,correctionApplied:false,correctionReason:"inactive",anchorError:null,normalErrorDegrees:null});
 const qBlend=(a:QuaternionData|undefined,b:QuaternionData,t:number):QuaternionData=>{const qa=a?new Quaternion(a.x,a.y,a.z,a.w):new Quaternion(),qb=new Quaternion(b.x,b.y,b.z,b.w);qa.slerp(qb,Math.max(0,Math.min(1,t))).normalize();return{x:qa.x,y:qa.y,z:qa.z,w:qa.w};};
+const rateLimit=(previous:QuaternionData,target:QuaternionData,maxRadians:number):QuaternionData=>{const from=new Quaternion(previous.x,previous.y,previous.z,previous.w).normalize(),to=new Quaternion(target.x,target.y,target.z,target.w).normalize(),angle=from.angleTo(to);if(angle<=maxRadians||angle<1e-8)return target;from.slerp(to,maxRadians/angle).normalize();return{x:from.x,y:from.y,z:from.z,w:from.w};};
 
 export class ContactRuntime {
   private rig:AvatarContactRig|null=null;private profile:NormalizedAvatarRigProfile|null=null;private sides:Record<ArmSide,SideMemory>={left:memory(),right:memory()};
@@ -23,7 +25,7 @@ export class ContactRuntime {
   setProfile(profile:NormalizedAvatarRigProfile|null){this.profile=profile;this.rig=profile?buildAvatarContactRig(profile):null;this.reset();}
   reset(){this.sides={left:memory(),right:memory()};this.diagnostics={left:diagnostic("left"),right:diagnostic("right")};}
   snapshot(){return structuredClone(this.diagnostics);}
-  update(side:ArmSide,frame:RawTrackingFrameV1,handLandmarks:RawNormalizedLandmarkV1[]|null,sampledAtMs:number|null,renderNowMs:number,renderDtMs:number,jointRotations:Partial<Record<string,QuaternionData>>,enabled:boolean){
+  update(side:ArmSide,frame:RawTrackingFrameV1,handLandmarks:RawNormalizedLandmarkV1[]|null,sampledAtMs:number|null,renderNowMs:number,renderDtMs:number,jointRotations:Partial<Record<string,QuaternionData>>,headRotation:QuaternionData|null,enabled:boolean){
     const state=this.sides[side],isNew=sampledAtMs!==null&&(state.temporal.lastDetectorTimestampMs===null||sampledAtMs>state.temporal.lastDetectorTimestampMs);
     if(isNew&&sampledAtMs!==null){
       const unknown=fuseContactDepthEvidence({occlusion:null,scaleChange:null,motionConsistency:null,posePrior:null,history:null});
@@ -36,12 +38,17 @@ export class ContactRuntime {
       state.observation=observation;state.temporal=updateContactEvidence(state.temporal,observation,sampledAtMs);if(observation){state.previousPoint=observation.imagePoint;state.previousRegion=observation.region;}state.previousAt=sampledAtMs;
     }else if(sampledAtMs!==null&&state.temporal.lastDetectorTimestampMs!==null&&sampledAtMs>state.temporal.lastDetectorTimestampMs)state.temporal=updateContactEvidence(state.temporal,null,sampledAtMs);
     state.temporal=updateContactVisualInfluence(state.temporal,renderDtMs);
+    if(!enabled){state.lastCorrection=null;state.appliedRotations={};}
     let correction:ContactPoseCorrection|null=null;
-    if(enabled&&this.profile&&this.rig&&state.observation&&state.temporal.visualInfluence>0&&(state.temporal.phase==="touch"||state.temporal.phase==="hold"||state.temporal.phase==="slide")){
-      const anchor=mapContactAnchor(this.rig.surfaces[state.observation.region],state.observation.regionUv);correction=solveContactPoseCorrection(this.profile,this.rig,side,anchor,state.observation.probe);
-      if(correction.accepted)for(const[joint,rotation]of Object.entries(correction.rotations))jointRotations[joint]=qBlend(jointRotations[joint],rotation!,state.temporal.visualInfluence);
+    const active=state.temporal.phase==="touch"||state.temporal.phase==="hold"||state.temporal.phase==="slide";
+    if(enabled&&this.profile&&this.rig&&state.observation&&state.temporal.visualInfluence>0&&active){
+      const restAnchor=mapContactAnchor(this.rig.surfaces[state.observation.region],state.observation.regionUv,state.observation.tangentAngleRadians??0),anchor=poseContactAnchor(restAnchor,this.profile,jointRotations,headRotation);correction=solveContactPoseCorrection(this.profile,this.rig,side,anchor,state.observation.probe,jointRotations);
+      state.lastCorrection=correction.accepted?correction:null;
     }
-    this.diagnostics[side]={side,phase:state.temporal.phase,region:state.observation?.region??state.temporal.region,regionUv:state.observation?.regionUv??null,probe:state.observation?.probe??null,confidence:state.observation?.confidence??0,evidence:state.observation?.evidence??null,depthRelation:state.observation?.depth.relation??"unknown",influence:state.temporal.visualInfluence,correctionRequested:enabled,correctionApplied:Boolean(correction?.accepted&&state.temporal.visualInfluence>0),correctionReason:correction?.reason??"inactive",anchorError:correction?.anchorError??null,normalErrorDegrees:correction?correction.normalErrorRadians*180/Math.PI:null};
+    const usable=correction?.accepted?correction:!active?state.lastCorrection:null;
+    if(enabled&&usable&&state.temporal.visualInfluence>0){for(const[joint,rotation]of Object.entries(usable.rotations)){const baseline=jointRotations[joint],desired=qBlend(baseline,rotation!,state.temporal.visualInfluence),previous=state.appliedRotations[joint]??baseline??desired,maxRate=joint.endsWith("Hand")?420:joint.includes("LowerArm")?320:260,limited=rateLimit(previous,desired,maxRate*Math.PI/180*Math.max(0,renderDtMs)/1_000);jointRotations[joint]=limited;state.appliedRotations[joint]=limited;}}
+    if(state.temporal.visualInfluence<=0){state.lastCorrection=null;state.appliedRotations={};}
+    this.diagnostics[side]={side,phase:state.temporal.phase,region:state.observation?.region??state.temporal.region,regionUv:state.observation?.regionUv??null,probe:state.observation?.probe??null,confidence:state.observation?.confidence??0,evidence:state.observation?.evidence??null,depthRelation:state.observation?.depth.relation??"unknown",influence:state.temporal.visualInfluence,correctionRequested:enabled,correctionApplied:Boolean(enabled&&usable&&state.temporal.visualInfluence>0),correctionReason:correction?.reason??(usable?.reason??"inactive"),anchorError:(correction??usable)?.anchorError??null,normalErrorDegrees:(correction??usable)?(correction??usable)!.normalErrorRadians*180/Math.PI:null};
     void renderNowMs;
   }
 }

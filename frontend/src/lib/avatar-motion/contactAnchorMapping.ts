@@ -6,13 +6,15 @@ import type { AvatarContactSurface } from "./avatarContactRig";
 export interface AvatarContactAnchor {region:AvatarContactSurface["region"];point:Vector3Data;normal:Vector3Data;tangent:Vector3Data;parent:AvatarContactSurface["parent"]}
 const data=(v:Vector3):Vector3Data=>({x:v.x,y:v.y,z:v.z});
 /** Ellipsoid front patch mapping. uv is clamped semantic patch space, never a raw camera coordinate. */
-export function mapContactAnchor(surface:AvatarContactSurface,uv:ContactPoint2={x:0,y:0}):AvatarContactAnchor{
+export function mapContactAnchor(surface:AvatarContactSurface,uv:ContactPoint2={x:0,y:0},tangentAngleRadians=0):AvatarContactAnchor{
   const u=Math.max(-1,Math.min(1,uv.x)),v=Math.max(-1,Math.min(1,uv.y));
   const radii=new Vector3(surface.radii.x,surface.radii.y,surface.radii.z),center=new Vector3(surface.center.x,surface.center.y,surface.center.z);
+  const right=new Vector3(surface.right.x,surface.right.y,surface.right.z).normalize(),up=new Vector3(surface.up.x,surface.up.y,surface.up.z).normalize(),forward=new Vector3(surface.forward.x,surface.forward.y,surface.forward.z).normalize();
   const z=Math.sqrt(Math.max(0,1-u*u*.55-v*v*.55));
   const local=new Vector3(u*radii.x*.7,v*radii.y*.7,z*radii.z);
-  const point=center.clone().add(local);
-  const normal=new Vector3(local.x/(radii.x*radii.x),local.y/(radii.y*radii.y),local.z/(radii.z*radii.z)).normalize();
-  let tangent=new Vector3(0,1,0).addScaledVector(normal,-normal.y);if(tangent.lengthSq()<1e-8)tangent.set(1,0,0).addScaledVector(normal,-normal.x);tangent.normalize();
+  const point=center.clone().addScaledVector(right,local.x).addScaledVector(up,local.y).addScaledVector(forward,local.z);
+  const normal=right.clone().multiplyScalar(local.x/(radii.x*radii.x)).addScaledVector(up,local.y/(radii.y*radii.y)).addScaledVector(forward,local.z/(radii.z*radii.z)).normalize();
+  let vertical=up.clone().addScaledVector(normal,-up.dot(normal)),horizontal=right.clone().addScaledVector(normal,-right.dot(normal));if(vertical.lengthSq()<1e-8)vertical=right.clone().addScaledVector(normal,-right.dot(normal));vertical.normalize();if(horizontal.lengthSq()<1e-8)horizontal=new Vector3().crossVectors(vertical,normal);horizontal.normalize();
+  const tangent=vertical.multiplyScalar(Math.cos(tangentAngleRadians)).addScaledVector(horizontal,Math.sin(tangentAngleRadians)).normalize();
   return{region:surface.region,point:data(point),normal:data(normal),tangent:data(tangent),parent:surface.parent};
 }

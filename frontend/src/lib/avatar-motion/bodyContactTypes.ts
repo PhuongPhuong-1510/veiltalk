@@ -1,6 +1,6 @@
 import type { RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
 
-export type BodyContactRegion = "headTop"|"forehead"|"leftCheek"|"rightCheek"|"chin"|"neck"|"leftShoulder"|"rightShoulder"|"upperChest";
+export type BodyContactRegion = "headTop"|"forehead"|"leftCheek"|"rightCheek"|"mouth"|"chin"|"leftEar"|"rightEar"|"backHead"|"neck"|"backNeck"|"leftShoulder"|"rightShoulder"|"upperChest"|"lowerChest"|"abdomen";
 export type HandContactProbe = "palmCenter"|"ulnarEdge"|"radialEdge";
 export type ContactDepthRelation = "in-front-separated"|"surface-compatible"|"behind"|"unknown";
 export type ContactPhase = "idle"|"approach"|"near"|"touch"|"hold"|"slide"|"release";
@@ -39,6 +39,7 @@ export interface HumanContactObservation {
   /** Contact point in the selected semantic patch, normalized to [-1, 1]. */
   regionUv:ContactPoint2;
   imageNormal:ContactPoint2|null;
+  tangentAngleRadians:number|null;
   overlap:number;
   approachVelocity:number|null;
   depth:ContactDepthEvidence;
@@ -53,6 +54,8 @@ export interface HumanBodyRegionInput {
   videoWidth:number;
   videoHeight:number;
   headYawRadians?:number|null;
+  /** Optional independent cue (0..1); posterior regions are never guessed from 2D overlap alone. */
+  posteriorContactHint?:number|null;
   /** True only when landmark x has already been mirrored before entering this module. CSS video mirroring does not count. */
   imageMirrored?:boolean;
 }
