@@ -50,6 +50,8 @@ export default function AvatarRendererDevHarness() {
   // AR6 đang là pipeline cần nghiệm thu trên trang này: bật ngay từ frame đầu để không vô tình test
   // classifier/preset legacy rồi tưởng đó là continuous tracking.
   const [continuousFingerEnabled,setContinuousFingerEnabled]=useState(true);
+  const [contactShadowEnabled,setContactShadowEnabled]=useState(true);
+  const [contactDiagnostics,setContactDiagnostics]=useState(()=>processorRef.current.getContactDiagnostics());
   const [continuousFingerDiagnostics,setContinuousFingerDiagnostics]=useState(()=>processorRef.current.getContinuousFingerDiagnostics());
   const fingerTraceActiveRef=useRef(false);
   const fingerTraceRef=useRef<Array<Record<string,unknown>>>([]);
@@ -132,6 +134,7 @@ export default function AvatarRendererDevHarness() {
   useEffect(() => { processorRef.current.setHandTwistEnabled(handTwistEnabled); }, [handTwistEnabled]);
   useEffect(() => { processorRef.current.setGestureEnabled(gestureEnabled); }, [gestureEnabled]);
   useEffect(()=>{processorRef.current.setContinuousFingerEnabled(continuousFingerEnabled);},[continuousFingerEnabled]);
+  useEffect(()=>{processorRef.current.setContactShadowEnabled(contactShadowEnabled);},[contactShadowEnabled]);
   useEffect(()=>{if(!continuousFingerEnabled)return;const timer=window.setInterval(()=>setContinuousFingerDiagnostics(processorRef.current.getContinuousFingerDiagnostics()),100);return()=>window.clearInterval(timer);},[continuousFingerEnabled]);
   useEffect(() => { processorRef.current.setGazeMode(gazeMode); }, [gazeMode]);
   useEffect(() => { processorRef.current.setGazeAttentionStrength(gazeAttention); }, [gazeAttention]);
@@ -147,6 +150,7 @@ export default function AvatarRendererDevHarness() {
   useEffect(() => { rendererRef.current?.setVerticalOffset(verticalOffset); }, [verticalOffset]);
   useEffect(() => {
     const timer = window.setInterval(() => {
+      setContactDiagnostics(processorRef.current.getContactDiagnostics());
       const renderer = rendererRef.current; const raw = frozenRaw.current ?? latestRaw.current; setPacket(latestPacket.current); setMotionDiagnostics(processorRef.current.getLastDiagnostics()); setFacialCalibration(processorRef.current.getFacialCalibration()); setUpperBodyCalibration(processorRef.current.getUpperBodyCalibration()); setUpperBodyLife(processorRef.current.getUpperBodyLifeMotion()); setUpperBodyMetrics(processorRef.current.getUpperBodyMetrics()); setShoulderVertical(processorRef.current.getShoulderVerticalDiagnostics());setTorsoLean(processorRef.current.getTorsoLeanDiagnostics()); setEyeBrowExpressions(processorRef.current.getEyeBrowExpressions()); setMouthExpressions(processorRef.current.getMouthExpressions()); setFacialDynamics(processorRef.current.getFacialDynamics()); setMouthTelemetry(processorRef.current.getMouthPipelineTelemetry()); setGazeDiagnostics(processorRef.current.getGazeDiagnostics()); setGazeMetrics(processorRef.current.getGazeMetrics()); setGazeEyelidDiagnostic(processorRef.current.getGazeEyelidDiagnostic()); if (!renderer) return;
       setAppliedFacialExpressions(renderer.getAppliedFacialExpressions());
       setAppliedShoulderTranslation(renderer.getAppliedShoulderTranslation());
@@ -430,6 +434,11 @@ export default function AvatarRendererDevHarness() {
         processorToDrawMs: rendererMetrics?.processorInputToDrawMs ?? null,
         trackingToRenderMs: rendererMetrics?.poseAgeMs ?? null,
       }} />
+      <article><h2>AR9 hand-body contact (shadow)</h2>
+        <label><input type="checkbox" checked={contactShadowEnabled} onChange={(event)=>setContactShadowEnabled(event.target.checked)} /> Quan sát tiếp xúc, không sửa pose</label>
+        <p>Trạng thái: <strong>{contactShadowEnabled?"ON — diagnostic only":"OFF"}</strong></p>
+        <details open={contactShadowEnabled}><summary>Contact diagnostics</summary><pre>{JSON.stringify(contactDiagnostics,null,2)}</pre></details>
+      </article>
       <article><h2>Finger rig (3B.3)</h2>
         <p>AR6 continuous: <strong>{continuousFingerEnabled?"ON":"OFF"}</strong></p>
         {continuousFingerEnabled&&<details><summary>JSON diagnostic thô</summary><pre>{JSON.stringify(continuousFingerDiagnostics,null,2)}</pre></details>}

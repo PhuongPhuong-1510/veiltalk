@@ -14,13 +14,14 @@ import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 export interface ContactRuntimeDiagnostic {side:ArmSide;phase:ContactTemporalState["phase"];region:BodyContactRegion|null;probe:string|null;confidence:number;depthRelation:string;influence:number;correctionReason:ContactPoseCorrection["reason"]|"inactive";anchorError:number|null;normalErrorDegrees:number|null}
 interface SideMemory {temporal:ContactTemporalState;previousPoint:ContactPoint2|null;previousAt:number|null;previousRegion:BodyContactRegion|null;stableRegionSamples:number;observation:HumanContactObservation|null}
 const memory=():SideMemory=>({temporal:createContactTemporalState(),previousPoint:null,previousAt:null,previousRegion:null,stableRegionSamples:0,observation:null});
+const diagnostic=(side:ArmSide):ContactRuntimeDiagnostic=>({side,phase:"idle",region:null,probe:null,confidence:0,depthRelation:"unknown",influence:0,correctionReason:"inactive",anchorError:null,normalErrorDegrees:null});
 const qBlend=(a:QuaternionData|undefined,b:QuaternionData,t:number):QuaternionData=>{const qa=a?new Quaternion(a.x,a.y,a.z,a.w):new Quaternion(),qb=new Quaternion(b.x,b.y,b.z,b.w);qa.slerp(qb,Math.max(0,Math.min(1,t))).normalize();return{x:qa.x,y:qa.y,z:qa.z,w:qa.w};};
 
 export class ContactRuntime {
   private rig:AvatarContactRig|null=null;private profile:NormalizedAvatarRigProfile|null=null;private sides:Record<ArmSide,SideMemory>={left:memory(),right:memory()};
-  private diagnostics:Record<ArmSide,ContactRuntimeDiagnostic>={left:{side:"left",phase:"idle",region:null,probe:null,confidence:0,depthRelation:"unknown",influence:0,correctionReason:"inactive",anchorError:null,normalErrorDegrees:null},right:{side:"right",phase:"idle",region:null,probe:null,confidence:0,depthRelation:"unknown",influence:0,correctionReason:"inactive",anchorError:null,normalErrorDegrees:null}};
+  private diagnostics:Record<ArmSide,ContactRuntimeDiagnostic>={left:diagnostic("left"),right:diagnostic("right")};
   setProfile(profile:NormalizedAvatarRigProfile|null){this.profile=profile;this.rig=profile?buildAvatarContactRig(profile):null;this.reset();}
-  reset(){this.sides={left:memory(),right:memory()};}
+  reset(){this.sides={left:memory(),right:memory()};this.diagnostics={left:diagnostic("left"),right:diagnostic("right")};}
   snapshot(){return structuredClone(this.diagnostics);}
   update(side:ArmSide,frame:RawTrackingFrameV1,handLandmarks:RawNormalizedLandmarkV1[]|null,sampledAtMs:number|null,renderNowMs:number,renderDtMs:number,jointRotations:Partial<Record<string,QuaternionData>>,enabled:boolean){
     const state=this.sides[side],isNew=sampledAtMs!==null&&(state.temporal.lastDetectorTimestampMs===null||sampledAtMs>state.temporal.lastDetectorTimestampMs);

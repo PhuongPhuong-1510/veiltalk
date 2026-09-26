@@ -89,6 +89,34 @@ function edgeOnLeftHand(timestamp: number): RawHandCandidateV1 {
 }
 
 describe("AvatarMotionProcessor", () => {
+  describe("AR9 contact shadow safety", () => {
+    it("is disabled by default and never changes pose output while observing contact", () => {
+      const input = frame();
+      input.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left")];
+      const baseline = new AvatarMotionProcessor({ filtered: false, now: () => 120 });
+      const shadow = new AvatarMotionProcessor({ filtered: false, now: () => 120 });
+      baseline.setRigProfile(rigProfile);
+      shadow.setRigProfile(rigProfile);
+      expect(shadow.isContactShadowEnabled()).toBe(false);
+      shadow.setContactShadowEnabled(true);
+      expect(shadow.process(structuredClone(input)).jointRotations).toEqual(
+        baseline.process(structuredClone(input)).jointRotations,
+      );
+      expect(shadow.getContactDiagnostics()).toBeDefined();
+    });
+
+    it("clears shadow diagnostics on reset", () => {
+      const processor = new AvatarMotionProcessor({ filtered: false, now: () => 120 });
+      processor.setRigProfile(rigProfile);
+      processor.setContactShadowEnabled(true);
+      const input = frame();
+      input.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left")];
+      processor.process(input);
+      processor.reset();
+      expect(processor.getContactDiagnostics()).toEqual(new AvatarMotionProcessor().getContactDiagnostics());
+    });
+  });
+
   describe("AR4 V2 upper-body pipeline",()=>{
     it("starts paired calibration automatically when an upper-body rig becomes available",()=>{
       const processor=new AvatarMotionProcessor({filtered:false,now:()=>100});

@@ -56,6 +56,7 @@ import { UpperBodyLifeMotion, type LifeMotionSnapshot } from "./upperBodyLifeMot
 import { UpperBodyMetricsCollector, type UpperBodyMetricSnapshot } from "./upperBodyMetrics";
 import { validateUpperBodyRigProfile, type UpperBodyRigProfileV1 } from "./upperBodyRigProfile";
 import { ContinuousFingerSolver, type ContinuousFingerJointDiagnostic } from "./continuousFingerSolver";
+import { ContactRuntime } from "./contactRuntime";
 
 export interface AvatarMotionProcessorOptions { filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
 
@@ -283,6 +284,9 @@ export class AvatarMotionProcessor {
   private handTwistEnabled: boolean;
   private gestureEnabled: boolean;
   private continuousFingerEnabled: boolean;
+  private readonly contactRuntime=new ContactRuntime();
+  private contactShadowEnabled=false;
+  private lastContactRenderAtMs:number|null=null;
   private rigProfile: NormalizedAvatarRigProfile | null = null;
   private upperBodyRigProfile: UpperBodyRigProfileV1 | null = null;
   private readonly upperBodyCalibration = new UpperBodyNeutralCalibrator();
@@ -480,6 +484,9 @@ export class AvatarMotionProcessor {
     if(this.ownedFingerJoints.size>0)this.pendingFingerClear=true;
   }
   isContinuousFingerEnabled():boolean{return this.continuousFingerEnabled;}
+  setContactShadowEnabled(enabled:boolean):void{this.contactShadowEnabled=enabled;if(!enabled)this.contactRuntime.reset();}
+  isContactShadowEnabled():boolean{return this.contactShadowEnabled;}
+  getContactDiagnostics(){return this.contactRuntime.snapshot();}
   getContinuousFingerDiagnostics(){return {left:{...this.continuousFingerDiagnostics.left},right:{...this.continuousFingerDiagnostics.right}};}
   /** Rig ngón đến từ model đang tải; đổi model thì phải nhả pose cũ vì chuỗi xương có thể khác. */
   setFingerRig(rig: FingerRigProfile | null): void {
@@ -494,6 +501,7 @@ export class AvatarMotionProcessor {
     if (profile && !validateRigProfile(profile)) throw new Error("Normalized avatar rig profile không hợp lệ.");
     if (this.rigProfile === profile) return;
     this.rigProfile = profile;
+    this.contactRuntime.setProfile(profile);this.lastContactRenderAtMs=null;
     this.idlePose = profile ? { left: buildIdleArmPose(profile, "left"), right: buildIdleArmPose(profile, "right") } : null;
     this.resetArmState(); this.resetHandTrackingState("rig-profile-change"); this.resetHandSampleClassification(); this.resetFilters(); this.resetFacialState(true);
   }
@@ -960,6 +968,7 @@ export class AvatarMotionProcessor {
     } else this.diagnostics = null;
     // Phase 3B.3: chạy SAU nhánh arm và chỉ GHI THÊM khoá xương ngón. Không đọc, không sửa, không
     // ghi đè bất kỳ khoá arm nào ở trên — kể cả `leftHand`/`rightHand` (wrist thuộc Phase 3B).
+    if(this.contactShadowEnabled){const renderDt=this.lastContactRenderAtMs===null?0:Math.max(0,Math.min(100,processedTimestampMs-this.lastContactRenderAtMs));this.lastContactRenderAtMs=processedTimestampMs;for(const side of ["left","right"] as const){const match=handContext.matchResult[side];const candidate=match.matched&&match.candidateArrayIndex!==null?frame.rawHands[match.candidateArrayIndex]??null:null;this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,false);}}
     if(this.continuousFingerEnabled)this.applyContinuousFinger(jointRotations,frame,handContext,processedTimestampMs);
     else this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
     const common = { sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics };
@@ -1441,9 +1450,11 @@ export class AvatarMotionProcessor {
   }
 
   reset(): void {
+    this.contactRuntime.reset(); this.lastContactRenderAtMs = null;
     this.sequence = 0; this.resetArmState(); this.resetHandTrackingState("processor-reset"); this.resetHandSampleClassification(); this.resetFilters(); this.resetFacialState(true); this.resetUpperBodyState(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
   dispose(): void {
+    this.contactRuntime.reset(); this.lastContactRenderAtMs = null;
     this.rigProfile = null;
     this.upperBodyRigProfile = null;
     this.facialModelFingerprint = null;
