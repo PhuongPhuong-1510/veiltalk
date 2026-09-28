@@ -10,8 +10,8 @@ const compatible=fuseContactDepthEvidence({occlusion:.8,scaleChange:.7,motionCon
 
 describe("shadow contact observation",()=>{
   it("reports a head-top palm observation without touching avatar joints",()=>{
-    const result=observeHumanContact({side:"left",faceLandmarks:face,handLandmarks:hand(),videoWidth:1_000,videoHeight:1_000,sampledAtMs:100,depth:compatible,continuity:.8,approachVelocity:0});
-    expect(result).toMatchObject({side:"left",region:"headTop",probe:"palmCenter"});
+    const result=observeHumanContact({side:"left",faceLandmarks:face,handLandmarks:hand(),videoWidth:1_000,videoHeight:1_000,sampledAtMs:100,depth:compatible,continuity:.8,normalVelocity:0,tangentVelocity:0});
+    expect(result).toMatchObject({side:"left",probe:"palmCenter",surfaceFamily:"head"});
     expect(result!.regionUv.x).toBeGreaterThanOrEqual(-1);expect(result!.regionUv.x).toBeLessThanOrEqual(1);
     expect(result!.regionUv.y).toBeGreaterThanOrEqual(-1);expect(result!.regionUv.y).toBeLessThanOrEqual(1);
     expect(result!.confidence).toBeGreaterThan(.5);

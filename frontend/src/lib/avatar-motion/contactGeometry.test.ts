@@ -6,7 +6,8 @@ import { capsuleCapsulePenetration,capsuleSpherePenetration,resolveContactCollis
 
 describe("contact target and IK geometry",()=>{
   it("aligns a probe-specific normal and compensates wrist-to-probe offset",()=>{
-    const anchor=mapContactAnchor({region:"leftCheek",center:{x:0,y:1,z:0},radii:{x:.3,y:.4,z:.2},right:{x:1,y:0,z:0},up:{x:0,y:1,z:0},forward:{x:0,y:0,z:1},parent:"head",confidence:1});
+    const local=mapContactAnchor({region:"leftCheek",centerLocal:{x:0,y:1,z:0},radii:{x:.3,y:.4,z:.2},uAxisLocal:{x:1,y:0,z:0},vAxisLocal:{x:0,y:1,z:0},outwardLocal:{x:0,y:0,z:1},parentJoint:"head",confidence:1});
+    const anchor={region:local.region,point:local.pointLocal,normal:local.normalLocal,tangent:local.tangentLocal,parentJoint:local.parentJoint};
     const solved=solveContactWristTarget(anchor,{probe:"palmCenter",frameOffset:{x:0,y:.12,z:0},contactNormal:{x:0,y:0,z:1},tangentHint:{x:0,y:1,z:0}})!;
     expect(solved.normalErrorRadians).toBeLessThan(1e-6);
     expect(Math.hypot(solved.probePoint.x-anchor.point.x,solved.probePoint.y-anchor.point.y,solved.probePoint.z-anchor.point.z)).toBeLessThan(1e-6);

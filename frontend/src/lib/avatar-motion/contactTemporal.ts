@@ -7,12 +7,6 @@ export interface ContactTemporalConfig {
   occlusionGraceMs:number; acquireBlendMs:number; releaseBlendMs:number;
   /** Generic near gate in normalized patch distance. Keeps approach from stalling at semantic boundaries. */
   nearSignedDistance?:number;
-  /** Conservative fallback for monocular depth=unknown. */
-  unknownTouchConfirmMs?:number;
-  unknownTouchMinOverlap?:number;
-  unknownTouchMinConfidence?:number;
-  unknownTouchMaxNormalVelocity?:number;
-  unknownTouchMaxTangentVelocity?:number;
 }
 
 export const DEFAULT_CONTACT_TEMPORAL_CONFIG:ContactTemporalConfig={
@@ -21,8 +15,6 @@ export const DEFAULT_CONTACT_TEMPORAL_CONFIG:ContactTemporalConfig={
   slideEnterVelocity:.16,slideExitVelocity:.08,slideConfirmMs:80,
   occlusionGraceMs:250,acquireBlendMs:180,releaseBlendMs:220,
   nearSignedDistance:.55,
-  unknownTouchConfirmMs:320,unknownTouchMinOverlap:.78,unknownTouchMinConfidence:.82,
-  unknownTouchMaxNormalVelocity:.11,unknownTouchMaxTangentVelocity:.12,
 };
 
 export interface ContactTemporalState {
@@ -46,14 +38,6 @@ export const createContactTemporalState=():ContactTemporalState=>({
 const activePhase=(phase:ContactPhase)=>phase==="touch"||phase==="hold"||phase==="slide";
 const transition=(state:ContactTemporalState,phase:ContactPhase,at:number):ContactTemporalState=>({...state,phase,phaseSinceMs:at,candidateSinceMs:at,motionCandidateSinceMs:null});
 const conditionSince=(since:number|null|undefined,ok:boolean,at:number)=>ok?(since??at):null;
-const stableUnknownContact=(observation:HumanContactObservation,config:ContactTemporalConfig)=>{
-  if(observation.depth.relation!=="unknown"||observation.evidence.hardRejections.length)return false;
-  const minOverlap=config.unknownTouchMinOverlap??.78,minConfidence=config.unknownTouchMinConfidence??.82;
-  const maxNormal=config.unknownTouchMaxNormalVelocity??.11,maxTangent=config.unknownTouchMaxTangentVelocity??.12;
-  return observation.overlap>=minOverlap&&observation.confidence>=minConfidence&&
-    observation.normalVelocity!==null&&Math.abs(observation.normalVelocity)<=maxNormal&&
-    observation.tangentVelocity!==null&&observation.tangentVelocity<=maxTangent;
-};
 
 /** Detector-clock update. Duplicate/reversed samples never advance dwell timers. */
 export function updateContactEvidence(state:ContactTemporalState,observation:HumanContactObservation|null,sampledAtMs:number,config:ContactTemporalConfig=DEFAULT_CONTACT_TEMPORAL_CONFIG):ContactTemporalState{
@@ -80,13 +64,10 @@ export function updateContactEvidence(state:ContactTemporalState,observation:Hum
   }
 
   if(activePhase(next.phase)&&observation!.depth.relation!=="surface-compatible"){
-    // A long-lived, stationary, deeply overlapping observation may remain active when monocular
-    // depth is unknown. This is deliberately stricter than normal touch acquisition so a hand that
-    // merely passes near the body cannot become sticky contact.
-    if(!stableUnknownContact(observation!,config)){
-      const age=next.lastSurfaceCompatibleAtMs===null||next.lastSurfaceCompatibleAtMs===undefined?Infinity:sampledAtMs-next.lastSurfaceCompatibleAtMs;
-      if(age>config.occlusionGraceMs)return transition(next,"release",sampledAtMs);
-    }
+    // Unknown may preserve an already confirmed contact only for the grace period. It can never
+    // acquire contact; without a recent compatible sample the safe result is release.
+    const age=next.lastSurfaceCompatibleAtMs===null||next.lastSurfaceCompatibleAtMs===undefined?Infinity:sampledAtMs-next.lastSurfaceCompatibleAtMs;
+    if(age>config.occlusionGraceMs)return transition(next,"release",sampledAtMs);
   }
 
   if(next.phase==="idle"||next.phase==="release"){
@@ -109,12 +90,10 @@ export function updateContactEvidence(state:ContactTemporalState,observation:Hum
 
   if(next.phase==="near"){
     const direct=observation!.confidence>=config.touchConfidence&&observation!.depth.relation==="surface-compatible";
-    const conservativeUnknown=stableUnknownContact(observation!,config);
     next.touchConditionSinceMs=conditionSince(next.touchConditionSinceMs,direct,sampledAtMs);
-    next.unknownTouchConditionSinceMs=conditionSince(next.unknownTouchConditionSinceMs,conservativeUnknown,sampledAtMs);
+    next.unknownTouchConditionSinceMs=null;
     const directReady=direct&&sampledAtMs-(next.touchConditionSinceMs??sampledAtMs)>=config.touchConfirmMs;
-    const unknownReady=conservativeUnknown&&sampledAtMs-(next.unknownTouchConditionSinceMs??sampledAtMs)>=(config.unknownTouchConfirmMs??320);
-    if(directReady||unknownReady){
+    if(directReady){
       next=transition(next,"touch",sampledAtMs);next.touchConditionSinceMs=null;next.unknownTouchConditionSinceMs=null;
     }
     return next;

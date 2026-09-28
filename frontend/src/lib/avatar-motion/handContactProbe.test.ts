@@ -9,7 +9,9 @@ describe("rigid hand contact probes",()=>{
   it("builds palm and both rigid edges without a fingertip probe",()=>{
     const probes=observeRigidHandContactProbes(hand(),1_000,1_000);
     expect(probes.map(value=>value.probe)).toEqual(["palmCenter","radialEdge","ulnarEdge"]);
-    expect(probes.every(value=>value.confidence>0&&value.contactNormal)).toBe(true);
+    expect(probes.every(value=>value.confidence>0)).toBe(true);
+    expect(probes.find(value=>value.probe==="palmCenter")?.contactNormal).toBeNull();
+    expect(probes.filter(value=>value.probe!=="palmCenter").every(value=>value.contactNormal!==null)).toBe(true);
   });
   it("rejects degenerate or incomplete palm geometry",()=>{
     expect(observeRigidHandContactProbes([],1_000,1_000)).toEqual([]);

@@ -138,6 +138,31 @@ const isFiniteVec = (v: Vec3 | undefined | null): v is Vec3 =>
 
   Boolean(v) && Number.isFinite(v!.x) && Number.isFinite(v!.y) && Number.isFinite(v!.z);
 
+export interface FingerExtensionEvidence {
+  valid:boolean;
+  straightness:number;
+  normalizedReach:number;
+  confidence:number;
+}
+
+/** Scale-invariant extension evidence. It describes shape only, never absolute hand depth. */
+export function computeFingerExtensionEvidence(
+  landmarks:RawWorldLandmarkV1[]|null|undefined,
+  finger:AvatarFingerName,
+):FingerExtensionEvidence {
+  const chain=FINGER_LANDMARK_CHAIN[finger];
+  const points=landmarks?chain.map(index=>landmarks[index]):[];
+  if(points.length!==4||!points.every(isFiniteVec))return{valid:false,straightness:0,normalizedReach:0,confidence:0};
+  const segments=[subtract(points[1]!,points[0]!),subtract(points[2]!,points[1]!),subtract(points[3]!,points[2]!)];
+  const lengths=segments.map(length),arc=lengths.reduce((sum,value)=>sum+value,0);
+  if(!(arc>EPSILON)||lengths.some(value=>value<=EPSILON))return{valid:false,straightness:0,normalizedReach:0,confidence:0};
+  const alignment=(a:Vec3,b:Vec3)=>Math.max(0,Math.min(1,dot(a,b)/(length(a)*length(b))));
+  const straightness=(alignment(segments[0]!,segments[1]!)+alignment(segments[1]!,segments[2]!))*.5;
+  const normalizedReach=Math.max(0,Math.min(1,length(subtract(points[3]!,points[0]!))/arc));
+  const confidence=Math.max(0,Math.min(1,straightness*normalizedReach));
+  return{valid:true,straightness,normalizedReach,confidence};
+}
+
 
 
 /**

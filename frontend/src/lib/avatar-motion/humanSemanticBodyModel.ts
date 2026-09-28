@@ -90,7 +90,6 @@ const finite = (value:number) => Number.isFinite(value);
 const midpoint = (a:ContactPoint2,b:ContactPoint2):ContactPoint2 => ({x:(a.x+b.x)*.5,y:(a.y+b.y)*.5});
 const lerpPoint = (a:ContactPoint2,b:ContactPoint2,t:number):ContactPoint2 => ({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
 const distance = (a:ContactPoint2,b:ContactPoint2) => Math.hypot(a.x-b.x,a.y-b.y);
-const average = (points:ContactPoint2[]):ContactPoint2 => ({x:points.reduce((s,p)=>s+p.x,0)/points.length,y:points.reduce((s,p)=>s+p.y,0)/points.length});
 const quantile = (values:number[],ratio:number) => {
   const sorted=[...values].sort((a,b)=>a-b);
   return sorted[Math.max(0,Math.min(sorted.length-1,Math.round((sorted.length-1)*ratio)))]!;
@@ -147,15 +146,6 @@ function buildHead(input:HumanBodyRegionInput, aspect:number):HumanHeadSurfaceMo
     imagePoint(input.faceLandmarks?.[FACE_INDEX.eyeB],aspect),
     {x:minX+.28*faceWidth,y:minY+.38*faceHeight},{x:maxX-.28*faceWidth,y:minY+.38*faceHeight},
   );
-  const mouthPair=orderedByX(
-    imagePoint(input.faceLandmarks?.[FACE_INDEX.mouthLeft],aspect),
-    imagePoint(input.faceLandmarks?.[FACE_INDEX.mouthRight],aspect),
-    {x:nose.x-.18*faceWidth,y:mouth.y},{x:nose.x+.18*faceWidth,y:mouth.y},
-  );
-
-  const contourSemantic=semanticSides(contourPair.imageLeft,contourPair.imageRight,Boolean(input.imageMirrored));
-  const eyeSemantic=semanticSides(eyePair.imageLeft,eyePair.imageRight,Boolean(input.imageMirrored));
-
   const cheekY=(eyePair.imageLeft.y+eyePair.imageRight.y)*.225+mouth.y*.55;
   const imageLeftCheek={x:nose.x+(contourPair.imageLeft.x-nose.x)*.57,y:cheekY};
   const imageRightCheek={x:nose.x+(contourPair.imageRight.x-nose.x)*.57,y:cheekY};
@@ -271,6 +261,7 @@ export function classifyHeadAnatomy(
   head:HumanHeadSurfaceModel,
   point:ContactPoint2,
   posteriorHeadHint=0,
+  headYawRadians=0,
 ):HeadSemanticClassification {
   const familyUv={x:(point.x-head.center.x)/Math.max(1e-6,head.radius.x),y:(point.y-head.center.y)/Math.max(1e-6,head.radius.y)};
   const w=head.faceWidth,h=head.faceHeight,a=head.anchors;
@@ -340,7 +331,10 @@ export function classifyHeadAnatomy(
   const regionUv=solved.region==="headTop"||solved.region==="backHead"
     ? {x:familyUv.x,y:solved.region==="headTop"?(familyUv.y+.70)/.42:familyUv.y}
     : {x:(point.x-anchorForRegion.point.x)/Math.max(1e-6,rx),y:(point.y-anchorForRegion.point.y)/Math.max(1e-6,ry)};
-  return {anatomicalLabel:label,solverRegion:solved.region,correctionEligible:solved.eligible,familyUv,regionUv,confidence:clamp01(confidence*head.confidence),source};
+  const yawStrength=clamp01(Math.abs(headYawRadians)/(Math.PI*.42));
+  const farSide=(headYawRadians>0&&(label.startsWith("left")))||(headYawRadians<0&&(label.startsWith("right")));
+  const yawConfidence=farSide?1-.62*yawStrength:1;
+  return {anatomicalLabel:label,solverRegion:solved.region,correctionEligible:solved.eligible,familyUv,regionUv,confidence:clamp01(confidence*head.confidence*yawConfidence),source};
 }
 
 export function pointSegmentNormalizedDistance(point:ContactPoint2,start:ContactPoint2,end:ContactPoint2,radius:number):{signedDistance:number;uv:ContactPoint2;t:number} {

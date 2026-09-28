@@ -27,6 +27,21 @@ export interface HandBasisResult {
   normal: Vector3Data;
 }
 
+export interface HandViewQuality {
+  cameraFacingQuality:number;
+  edgeOnRisk:number;
+}
+
+/** Quality only; it never turns Hand-world coordinates into camera/world position. */
+export function computeHandViewQuality(basis:HandBasisResult):HandViewQuality {
+  const magnitude=Math.hypot(basis.normal.x,basis.normal.y,basis.normal.z);
+  if(!(magnitude>1e-8))return{cameraFacingQuality:0,edgeOnRisk:1};
+  // MediaPipe Hand world uses camera Z as its viewing axis. Below 0.1 is effectively edge-on;
+  // normalize the remaining usable range so callers can degrade evidence continuously.
+  const facing=Math.max(0,Math.min(1,(Math.abs(basis.normal.z)/magnitude-.1)/.9));
+  return{cameraFacingQuality:facing,edgeOnRisk:1-facing};
+}
+
 export interface HandPalmBasisConfig {
   /** Độ dài tối thiểu của palmAcross/palmForward thô trước khi Gram-Schmidt, để tránh chuẩn hoá vector gần-zero. */
   minRawVectorLength: number;

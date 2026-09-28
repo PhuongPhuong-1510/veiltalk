@@ -13,7 +13,7 @@ const midpoint=(a:ContactPoint2,b:ContactPoint2):ContactPoint2=>({x:(a.x+b.x)*.5
 
 function headCandidate(input:HumanBodyRegionInput,model:HumanSemanticBodyModel,point:ContactPoint2):HumanBodyRegionCandidate|null{
   const head=model.head;if(!head)return null;
-  const semantic=classifyHeadAnatomy(head,point,input.posteriorHeadContactHint??input.posteriorContactHint??0);
+  const semantic=classifyHeadAnatomy(head,point,input.posteriorHeadContactHint??input.posteriorContactHint??0,input.headYawRadians??0);
   const familyDistance=ellipseSignedDistance(point,head.center,head.radius);
   const outside=Math.max(0,familyDistance);
   const selectionBias=(1-semantic.confidence)*.26+outside*.20+(semantic.correctionEligible?0:.10);

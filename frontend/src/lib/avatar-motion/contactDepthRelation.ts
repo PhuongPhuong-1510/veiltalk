@@ -20,6 +20,16 @@ export function fuseContactDepthEvidence(
     rejectionReason:hardRelation==="behind"?"behind-evidence":"separated-evidence",
   };
 
+  // Only cues with a defined direction may reject a candidate. Occlusion ordering is strong;
+  // scale separation needs corroborating motion and history before it becomes a hard relation.
+  if(available(sources.occlusion)&&sources.occlusion<=-.75)return{
+    relation:"behind",confidence:clamp01(-sources.occlusion),sources,rejectionReason:"behind-evidence",
+  };
+  if(available(sources.scaleChange)&&sources.scaleChange<=-.65&&
+    (sources.motionConsistency??0)>=.55&&(sources.history??0)>=.55)return{
+    relation:"in-front-separated",confidence:clamp01(-sources.scaleChange),sources,rejectionReason:"separated-evidence",
+  };
+
   const motion=sources.motionConsistency,pose=sources.posePrior,history=sources.history;
   const temporalStable=(motion??0)>=.55&&(history??0)>=.6;
   // A weak Pose prior must not veto a long-lived stationary contact. It may prevent the fast path

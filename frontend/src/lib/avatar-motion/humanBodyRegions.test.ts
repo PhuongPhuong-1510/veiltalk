@@ -12,9 +12,9 @@ describe("human body regions",()=>{
     expect(selectHumanBodyRegion(evaluateHumanBodyRegions(input,{x:.445,y:.54}))?.region).toBe("leftCheek");
   });
   it("reduces the far-cheek confidence at large yaw",()=>{
-    const candidates=evaluateHumanBodyRegions({faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,headYawRadians:1.2,imageMirrored:true},{x:.44,y:.54});
-    const left=candidates.find(value=>value.region==="leftCheek")!,right=candidates.find(value=>value.region==="rightCheek")!;
-    expect(left.confidence).toBeLessThan(right.confidence);
+    const frontal=selectHumanBodyRegion(evaluateHumanBodyRegions({faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,headYawRadians:0,imageMirrored:true},{x:.44,y:.54}))!;
+    const yawed=selectHumanBodyRegion(evaluateHumanBodyRegions({faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,headYawRadians:1.2,imageMirrored:true},{x:.44,y:.54}))!;
+    expect(yawed.anatomicalConfidence).toBeLessThan(frontal.anatomicalConfidence!);
   });
   it("maps image side to anatomical cheek explicitly instead of inheriting CSS mirroring",()=>{
     const candidates=evaluateHumanBodyRegions({faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,imageMirrored:false},{x:.445,y:.54});
@@ -28,11 +28,13 @@ describe("human body regions",()=>{
     expect(selected?.region).toBe("leftCheek");
   });
   it("covers mouth and ears but never guesses posterior contact without an independent cue",()=>{
-    const front=evaluateHumanBodyRegions({faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,imageMirrored:true},{x:.5,y:.575});
-    expect(front.some(value=>value.region==="mouth")).toBe(true);
-    expect(front.some(value=>value.region==="leftEar"||value.region==="rightEar")).toBe(true);
+    const input={faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,imageMirrored:true};
+    const front=evaluateHumanBodyRegions(input,{x:.5,y:.575});
+    const ear=evaluateHumanBodyRegions(input,{x:.39,y:.5});
+    expect(front.some(value=>value.anatomicalLabel==="mouth")).toBe(true);
+    expect(ear.some(value=>value.anatomicalLabel==="leftEar"||value.anatomicalLabel==="rightEar")).toBe(true);
     expect(front.some(value=>value.region==="backHead")).toBe(false);
-    const posterior=evaluateHumanBodyRegions({faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,imageMirrored:true,posteriorContactHint:.8},{x:.5,y:.45});
-    expect(posterior.some(value=>value.region==="backHead")).toBe(true);
+    const posterior=evaluateHumanBodyRegions({...input,posteriorHeadContactHint:.8},{x:.5,y:.45});
+    expect(posterior.some(value=>value.anatomicalLabel==="backHead")).toBe(true);
   });
 });
