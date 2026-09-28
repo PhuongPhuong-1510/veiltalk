@@ -1,72 +1,99 @@
-import type { ContactPoint2, HumanBodyRegionCandidate, HumanBodyRegionInput, BodyContactRegion } from "./bodyContactTypes";
+import type {
+  BodyContactRegion, BodyContactSurfaceFamily, ContactPoint2, HumanBodyRegionCandidate, HumanBodyRegionInput,
+} from "./bodyContactTypes";
+import {
+  buildHumanSemanticBodyModel, classifyHeadAnatomy, pointSegmentNormalizedDistance,
+  type HumanSemanticBodyModel,
+} from "./humanSemanticBodyModel";
 
-const finite=(value:number)=>Number.isFinite(value);
 const clamp01=(value:number)=>Math.max(0,Math.min(1,value));
-const quantile=(values:number[],ratio:number)=>{const sorted=[...values].sort((a,b)=>a-b);return sorted[Math.max(0,Math.min(sorted.length-1,Math.round((sorted.length-1)*ratio)))]!;};
 const ellipseSignedDistance=(point:ContactPoint2,center:ContactPoint2,radius:ContactPoint2)=>Math.hypot((point.x-center.x)/Math.max(1e-6,radius.x),(point.y-center.y)/Math.max(1e-6,radius.y))-1;
+const distance=(a:ContactPoint2,b:ContactPoint2)=>Math.hypot(a.x-b.x,a.y-b.y);
+const midpoint=(a:ContactPoint2,b:ContactPoint2):ContactPoint2=>({x:(a.x+b.x)*.5,y:(a.y+b.y)*.5});
 
-interface RegionPrimitive {region:BodyContactRegion;center:ContactPoint2;radius:ContactPoint2;confidence:number}
-
-function facePrimitives(input:HumanBodyRegionInput):RegionPrimitive[]{
-  const face=(input.faceLandmarks??[]).filter(point=>finite(point.x)&&finite(point.y));
-  if(face.length<8||!(input.videoWidth>0&&input.videoHeight>0))return[];
-  const aspect=input.videoHeight/input.videoWidth,xs=face.map(point=>point.x),ys=face.map(point=>point.y*aspect);
-  const minX=quantile(xs,.02),maxX=quantile(xs,.98),minY=quantile(ys,.02),maxY=quantile(ys,.98);
-  const width=maxX-minX,height=maxY-minY;if(width<=1e-5||height<=1e-5)return[];
-  const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
-  const yaw=Math.max(-Math.PI/2,Math.min(Math.PI/2,input.headYawRadians??0));
-  const yawRatio=Math.abs(yaw)/(Math.PI/2),nearIsImageRight=yaw>0;
-  const cheekConfidence=(imageRight:boolean)=>clamp01(imageRight===nearIsImageRight?1:1-.75*yawRatio);
-  const imageLeftCheek:BodyContactRegion=input.imageMirrored?"leftCheek":"rightCheek";
-  const imageRightCheek:BodyContactRegion=input.imageMirrored?"rightCheek":"leftCheek";
-  const imageLeftEar:BodyContactRegion=input.imageMirrored?"leftEar":"rightEar";
-  const imageRightEar:BodyContactRegion=input.imageMirrored?"rightEar":"leftEar";
-  const posterior=clamp01(input.posteriorHeadContactHint??input.posteriorContactHint??0),frontGain=1-.68*posterior;
-  const regions:RegionPrimitive[]=[
-    {region:"headTop",center:{x:cx,y:minY-.17*height},radius:{x:.38*width,y:.25*height},confidence:.72*(1-.2*yawRatio)},
-    {region:"forehead",center:{x:cx,y:minY+.23*height},radius:{x:.34*width,y:.22*height},confidence:.9*(1-.25*yawRatio)*frontGain},
-    {region:imageLeftCheek,center:{x:cx-.24*width,y:cy+.08*height},radius:{x:.28*width,y:.3*height},confidence:.9*cheekConfidence(false)*frontGain},
-    {region:imageRightCheek,center:{x:cx+.24*width,y:cy+.08*height},radius:{x:.28*width,y:.3*height},confidence:.9*cheekConfidence(true)*frontGain},
-    {region:"mouth",center:{x:cx,y:minY+.69*height},radius:{x:.24*width,y:.13*height},confidence:.86*(1-.25*yawRatio)*frontGain},
-    {region:"chin",center:{x:cx,y:maxY-.08*height},radius:{x:.27*width,y:.18*height},confidence:.82*(1-.2*yawRatio)*frontGain},
-    {region:imageLeftEar,center:{x:minX-.03*width,y:cy+.01*height},radius:{x:.14*width,y:.28*height},confidence:.72*cheekConfidence(false)},
-    {region:imageRightEar,center:{x:maxX+.03*width,y:cy+.01*height},radius:{x:.14*width,y:.28*height},confidence:.72*cheekConfidence(true)},
-  ];
-  if(posterior>=.2)regions.push({region:"backHead",center:{x:cx,y:minY+.35*height},radius:{x:.62*width,y:.55*height},confidence:.28+.52*posterior});
-  return regions;
+function headCandidate(input:HumanBodyRegionInput,model:HumanSemanticBodyModel,point:ContactPoint2):HumanBodyRegionCandidate|null{
+  const head=model.head;if(!head)return null;
+  const semantic=classifyHeadAnatomy(head,point,input.posteriorHeadContactHint??input.posteriorContactHint??0);
+  const familyDistance=ellipseSignedDistance(point,head.center,head.radius);
+  const outside=Math.max(0,familyDistance);
+  const selectionBias=(1-semantic.confidence)*.26+outside*.20+(semantic.correctionEligible?0:.10);
+  return{
+    region:semantic.solverRegion,anatomicalLabel:semantic.anatomicalLabel,anatomicalSource:semantic.source,
+    anatomicalConfidence:semantic.confidence,correctionEligible:semantic.correctionEligible,
+    center:head.center,radius:head.radius,signedDistance:familyDistance,confidence:head.confidence,
+    rawUv:semantic.regionUv,familyUv:semantic.familyUv,surfaceFamily:"head",selectionBias,modelConfidence:model.confidence,
+  };
 }
 
-function posePrimitives(input:HumanBodyRegionInput):RegionPrimitive[]{
-  const pose=input.poseLandmarks;if(!pose||!(input.videoWidth>0&&input.videoHeight>0))return[];
-  const left=pose[11],right=pose[12];if(!left||!right||![left.x,left.y,right.x,right.y].every(finite))return[];
-  const aspect=input.videoHeight/input.videoWidth,shoulderWidth=Math.abs(right.x-left.x);if(shoulderWidth<1e-5)return[];
-  const center={x:(left.x+right.x)/2,y:(left.y+right.y)*.5*aspect};
-  const posteriorNeck=clamp01(input.posteriorNeckContactHint??0),neckFrontGain=1-.6*posteriorNeck;
-  // IMPORTANT: head-posterior evidence must never down-rank chest/abdomen. Those surfaces live at a
-  // different body depth than the nose, so sharing one posterior scalar causes chest contacts to
-  // disappear whenever the wrist is naturally behind the face in Z.
-  const regions:RegionPrimitive[]=[
-    {region:"leftShoulder",center:{x:left.x,y:left.y*aspect},radius:{x:.16*shoulderWidth,y:.16*shoulderWidth},confidence:.8},
-    {region:"rightShoulder",center:{x:right.x,y:right.y*aspect},radius:{x:.16*shoulderWidth,y:.16*shoulderWidth},confidence:.8},
-    {region:"neck",center:{x:center.x,y:center.y-.12*shoulderWidth},radius:{x:.16*shoulderWidth,y:.2*shoulderWidth},confidence:.68*neckFrontGain},
-    {region:"upperChest",center:{x:center.x,y:center.y+.28*shoulderWidth},radius:{x:.38*shoulderWidth,y:.32*shoulderWidth},confidence:.65},
-    {region:"lowerChest",center:{x:center.x,y:center.y+.68*shoulderWidth},radius:{x:.42*shoulderWidth,y:.34*shoulderWidth},confidence:.58},
-    {region:"abdomen",center:{x:center.x,y:center.y+1.08*shoulderWidth},radius:{x:.38*shoulderWidth,y:.38*shoulderWidth},confidence:.5},
-  ];
-  if(posteriorNeck>=.25)regions.push({region:"backNeck",center:{x:center.x,y:center.y-.2*shoulderWidth},radius:{x:.25*shoulderWidth,y:.24*shoulderWidth},confidence:.25+.5*posteriorNeck});
-  return regions;
+function neckCandidate(input:HumanBodyRegionInput,model:HumanSemanticBodyModel,point:ContactPoint2):HumanBodyRegionCandidate|null{
+  const neck=model.neck;if(!neck)return null;
+  const geometry=pointSegmentNormalizedDistance(point,neck.start,neck.end,neck.radius);
+  const posterior=clamp01(input.posteriorNeckContactHint??0),back=posterior>=.50;
+  const region:BodyContactRegion=back?"backNeck":"neck";
+  const confidence=neck.confidence*(back?.55+.45*posterior:1-.28*posterior);
+  return{
+    region,anatomicalLabel:region,anatomicalSource:back?"posterior-inference":"derived",anatomicalConfidence:confidence,
+    correctionEligible:true,center:midpoint(neck.start,neck.end),radius:{x:neck.radius,y:distance(neck.start,neck.end)*.5+neck.radius},
+    signedDistance:geometry.signedDistance,confidence,familyUv:geometry.uv,rawUv:geometry.uv,surfaceFamily:"neck",
+    selectionBias:(1-confidence)*.18,modelConfidence:model.confidence,
+  };
 }
 
-/** Returns every candidate so temporal ownership can apply continuity instead of a one-frame winner. */
-export function evaluateHumanBodyRegions(input:HumanBodyRegionInput,point:ContactPoint2):HumanBodyRegionCandidate[]{
-  return [...facePrimitives(input),...posePrimitives(input)].map(region=>({...region,signedDistance:ellipseSignedDistance(point,region.center,region.radius)}));
+function shoulderCandidates(model:HumanSemanticBodyModel,point:ContactPoint2):HumanBodyRegionCandidate[]{
+  const shoulders=model.shoulders;if(!shoulders)return[];
+  const radius={x:shoulders.radius,y:shoulders.radius*.92};
+  return (["left","right"] as const).map(side=>{
+    const value=shoulders[side],region=`${side}Shoulder` as BodyContactRegion;
+    const rawUv={x:(point.x-value.point.x)/Math.max(1e-6,radius.x),y:(point.y-value.point.y)/Math.max(1e-6,radius.y)};
+    return{
+      region,anatomicalLabel:region,anatomicalSource:value.source,anatomicalConfidence:value.confidence,correctionEligible:true,
+      center:value.point,radius,signedDistance:ellipseSignedDistance(point,value.point,radius),confidence:value.confidence,
+      rawUv,familyUv:rawUv,surfaceFamily:"shoulder" as BodyContactSurfaceFamily,selectionBias:(1-value.confidence)*.16,modelConfidence:model.confidence,
+    };
+  });
 }
 
-export function selectHumanBodyRegion(candidates:HumanBodyRegionCandidate[],previous:BodyContactRegion|null=null,switchPenalty=.18,maxSignedDistance=.8):HumanBodyRegionCandidate|null{
+function torsoCandidate(model:HumanSemanticBodyModel,point:ContactPoint2):HumanBodyRegionCandidate|null{
+  const torso=model.torso;if(!torso)return null;
+  const end=torso.hipCenter??{x:torso.shoulderCenter.x,y:torso.shoulderCenter.y+torso.length};
+  const geometry=pointSegmentNormalizedDistance(point,torso.shoulderCenter,end,torso.halfWidth);
+  const t=geometry.t;
+  const region:BodyContactRegion=t<.36?"upperChest":t<.68?"lowerChest":"abdomen";
+  const sectionStart=region==="upperChest"?0:region==="lowerChest"?.32:.64;
+  const sectionEnd=region==="upperChest"?.40:region==="lowerChest"?.72:1;
+  const localV=((t-sectionStart)/Math.max(1e-6,sectionEnd-sectionStart))*2-1;
+  const regionUv={x:geometry.uv.x,y:localV};
+  return{
+    region,anatomicalLabel:region,anatomicalSource:"derived",anatomicalConfidence:torso.confidence,correctionEligible:true,
+    center:midpoint(torso.shoulderCenter,end),radius:{x:torso.halfWidth,y:torso.length*.5},signedDistance:geometry.signedDistance,
+    confidence:torso.confidence,rawUv:regionUv,familyUv:geometry.uv,surfaceFamily:"torso",selectionBias:(1-torso.confidence)*.18,modelConfidence:model.confidence,
+  };
+}
+
+/**
+ * One candidate per continuous physical surface (head/neck/torso) plus each shoulder. Semantic
+ * labels are assigned only AFTER the family geometry has been fitted to the current person.
+ */
+export function evaluateHumanBodyRegions(
+  input:HumanBodyRegionInput,point:ContactPoint2,preparedModel:HumanSemanticBodyModel=buildHumanSemanticBodyModel(input),
+):HumanBodyRegionCandidate[]{
+  const result:HumanBodyRegionCandidate[]=[];
+  const head=headCandidate(input,preparedModel,point);if(head)result.push(head);
+  const neck=neckCandidate(input,preparedModel,point);if(neck)result.push(neck);
+  result.push(...shoulderCandidates(preparedModel,point));
+  const torso=torsoCandidate(preparedModel,point);if(torso)result.push(torso);
+  return result;
+}
+
+export function selectHumanBodyRegion(candidates:HumanBodyRegionCandidate[],previous:BodyContactRegion|null=null,switchPenalty=.18,maxSignedDistance=.9):HumanBodyRegionCandidate|null{
   let best:HumanBodyRegionCandidate|null=null,bestCost=Infinity;
+  const family=(region:BodyContactRegion):BodyContactSurfaceFamily=>region==="neck"||region==="backNeck"?"neck":region==="leftShoulder"||region==="rightShoulder"?"shoulder":region==="upperChest"||region==="lowerChest"||region==="abdomen"?"torso":"head";
+  const previousFamily=previous?family(previous):null;
   for(const candidate of candidates){
     if(!Number.isFinite(candidate.signedDistance)||candidate.signedDistance>maxSignedDistance)continue;
-    const cost=candidate.signedDistance+(previous&&candidate.region!==previous?switchPenalty:0)+(1-candidate.confidence)*.25;
+    const currentFamily=candidate.surfaceFamily??family(candidate.region);
+    const continuity=previous&&candidate.region!==previous ? (currentFamily===previousFamily ? .04 : switchPenalty) : 0;
+    const cost=candidate.signedDistance+continuity+(1-candidate.confidence)*.22+(1-(candidate.anatomicalConfidence??candidate.confidence))*.10+(candidate.selectionBias??0);
     if(cost<bestCost){best=candidate;bestCost=cost;}
   }
   return best;

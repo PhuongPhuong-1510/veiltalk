@@ -20,18 +20,25 @@ export interface FacialNeutralCalibrationSnapshot {
 const NEUTRAL_GUARD_CHANNELS = [
   "eyeBlinkLeft", "eyeBlinkRight", "jawOpen",
   "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft", "mouthFrownRight",
+  "mouthPucker", "mouthFunnel", "mouthPressLeft", "mouthPressRight",
+  "mouthStretchLeft", "mouthStretchRight", "cheekPuff",
   "browDownLeft", "browDownRight", "browInnerUp",
 ] as const;
 
-// Manual calibration may be a little more permissive than automatic collection for
-// naturally asymmetric faces, but it must not absorb an intentional expression into
-// the neutral baseline. These are the gestures users most often hold while pressing
-// the calibration button.
 const MANUAL_HARD_GUARD_CHANNELS = [
   "eyeBlinkLeft", "eyeBlinkRight", "jawOpen", "cheekPuff",
   "mouthPucker", "mouthFunnel", "mouthPressLeft", "mouthPressRight",
+  "mouthStretchLeft", "mouthStretchRight",
   "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft", "mouthFrownRight",
 ] as const;
+
+const EXPRESSION_SENSITIVE_CHANNELS = new Set<string>([
+  "jawOpen", "cheekPuff",
+  "mouthPucker", "mouthFunnel", "mouthPressLeft", "mouthPressRight",
+  "mouthStretchLeft", "mouthStretchRight", "mouthDimpleLeft", "mouthDimpleRight",
+  "mouthSmileLeft", "mouthSmileRight", "mouthFrownLeft", "mouthFrownRight",
+  "mouthUpperUpLeft", "mouthUpperUpRight", "mouthLowerDownLeft", "mouthLowerDownRight",
+]);
 
 const median = (values: readonly number[]): number => {
   if (values.length === 0) return 0;
@@ -41,8 +48,10 @@ const median = (values: readonly number[]): number => {
 };
 
 /**
- * F1: học bias trung tính từ dữ liệu blendshape local-only. Trong lúc thu baseline, output vẫn đi thẳng
- * để không làm avatar "chết"; baseline chỉ có hiệu lực sau khi đủ sample trung tính.
+ * Learns local-only neutral blendshape bias.
+ * Round-1 change: automatic neutral collection/adaptation now guards lip-shape channels too, so a
+ * slight pucker/stretch/press is not silently learned as the new resting mouth and subtracted from
+ * later speech.
  */
 export class FacialNeutralCalibrator {
   private acceptedSamples = 0;
@@ -109,6 +118,9 @@ export class FacialNeutralCalibrator {
 
   private adapt(input: Readonly<Record<string, number>>): void {
     for (const [name, value] of Object.entries(input)) {
+      // Do not allow a small expressive lip gesture that slipped through the global guard to drag
+      // its own baseline upward over time.
+      if (EXPRESSION_SENSITIVE_CHANNELS.has(name) && value > this.config.neutralActivationLimit) continue;
       const baseline = this.baselines.get(name) ?? 0;
       if (value > baseline + this.config.adaptiveWindow) continue;
       this.baselines.set(name, baseline + (value - baseline) * this.config.adaptiveRate);

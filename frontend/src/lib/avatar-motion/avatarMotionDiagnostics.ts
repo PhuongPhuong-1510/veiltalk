@@ -185,6 +185,10 @@ export interface ArmFrameDiagnostic {
     effectiveGraceMs: number;
     reconstructionConfidence: number | null;
     reconstructionRejectionReason: string | null;
+    /** Pose↔Hand wrist disagreement in aspect-corrected image space, when both are available. */
+    poseHandImageDistance?: number | null;
+    /** True when Pose wrist won the source arbitration for the current output. */
+    poseTrusted?: boolean;
   };
 }
 

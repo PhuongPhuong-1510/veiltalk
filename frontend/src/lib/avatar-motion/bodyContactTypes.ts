@@ -5,6 +5,10 @@ export type BodyContactRegion =
   | "leftEar" | "rightEar" | "backHead" | "neck" | "backNeck"
   | "leftShoulder" | "rightShoulder" | "upperChest" | "lowerChest" | "abdomen";
 
+/** Human-side semantic label. Some labels intentionally do not yet own an avatar correction patch. */
+export type HumanAnatomicalLabel = BodyContactRegion | "nose" | "leftTemple" | "rightTemple";
+export type HumanAnatomicalSource = "face-landmark" | "pose-landmark" | "derived" | "posterior-inference";
+export type BodyContactSurfaceFamily = "head" | "neck" | "shoulder" | "torso";
 export type HandContactProbe = "palmCenter" | "ulnarEdge" | "radialEdge";
 export type ContactDepthRelation = "in-front-separated" | "surface-compatible" | "behind" | "unknown";
 export type ContactPhase = "idle" | "approach" | "near" | "touch" | "hold" | "slide" | "release";
@@ -12,12 +16,29 @@ export type ContactPhase = "idle" | "approach" | "near" | "touch" | "hold" | "sl
 export interface ContactPoint2 { x:number; y:number }
 
 export interface HumanBodyRegionCandidate {
+  /** Existing avatar-side patch used only after the physical surface family is selected. */
   region:BodyContactRegion;
+  /** Human anatomical interpretation for diagnostics and future finer contact ownership. */
+  anatomicalLabel?:HumanAnatomicalLabel;
+  anatomicalSource?:HumanAnatomicalSource;
+  anatomicalConfidence?:number;
+  /** Whether this semantic location is allowed to acquire production correction in the current AR9 scope. */
+  correctionEligible?:boolean;
   center:ContactPoint2;
   radius:ContactPoint2;
-  /** <= 0 is inside the semantic patch; positive values are normalized separation. */
+  /** <= 0 is inside/near the continuous family proxy; positive values are normalized separation. */
   signedDistance:number;
   confidence:number;
+  /** Raw avatar-patch coordinate before clamping. */
+  rawUv?:ContactPoint2;
+  /** Continuous physical surface coordinate used for temporal velocity/continuity. */
+  familyUv?:ContactPoint2;
+  /** Coarser physical surface family. Semantic labels do not own contact continuity. */
+  surfaceFamily?:BodyContactSurfaceFamily;
+  /** Generic topology/uncertainty cost, lower is better. */
+  selectionBias?:number;
+  /** Confidence of the normalized per-person body model from which this candidate was derived. */
+  modelConfidence?:number;
 }
 
 export interface HandContactProbeObservation {
@@ -33,17 +54,8 @@ export interface HandContactProbeObservation {
 export interface ContactDepthEvidence {
   relation:ContactDepthRelation;
   confidence:number;
-  /**
-   * Cue convention: +1 supports surface compatibility, -1 contradicts it, null unavailable.
-   * `posePrior` is candidate-relative: it must already account for anterior/posterior topology.
-   */
-  sources:{
-    occlusion:number|null;
-    scaleChange:number|null;
-    motionConsistency:number|null;
-    posePrior:number|null;
-    history:number|null;
-  };
+  /** Cue convention: +1 supports surface compatibility, -1 contradicts it, null unavailable. */
+  sources:{occlusion:number|null;scaleChange:number|null;motionConsistency:number|null;posePrior:number|null;history:number|null;};
   rejectionReason:"none"|"behind-evidence"|"separated-evidence"|"insufficient-cues";
 }
 
@@ -62,19 +74,29 @@ export interface ContactEvidenceBreakdown {
 export interface HumanContactObservation {
   side:"left"|"right";
   region:BodyContactRegion;
+  anatomicalLabel?:HumanAnatomicalLabel;
+  anatomicalSource?:HumanAnatomicalSource;
+  anatomicalConfidence?:number;
+  correctionEligible?:boolean;
+  modelConfidence?:number;
   probe:HandContactProbe;
   imagePoint:ContactPoint2;
-  /** Contact point in the selected semantic patch, normalized to [-1, 1]. */
+  /** Avatar patch coordinate, normalized/clamped to [-1,1]. */
   regionUv:ContactPoint2;
-  /** Signed normalized separation from the selected 2D semantic patch. */
+  /** Unclamped avatar-patch coordinate. */
+  regionRawUv?:ContactPoint2;
+  /** Continuous physical-family coordinate. */
+  familyUv?:ContactPoint2;
+  surfaceFamily?:BodyContactSurfaceFamily;
+  regionSelectionBias?:number;
+  /** Signed normalized separation from the selected continuous 2D family proxy. */
   regionSignedDistance:number;
-  /** Edge-normal in image space when one exists; palmCenter is intentionally null. */
   imageNormal:ContactPoint2|null;
   tangentAngleRadians:number|null;
   overlap:number;
-  /** Negative means approaching the selected surface, positive means separating. */
+  /** Negative means approaching the selected surface family, positive means separating. */
   normalVelocity:number|null;
-  /** Magnitude of motion along the selected surface parameterization. */
+  /** Motion magnitude in continuous family parameterization, not semantic patch UV. */
   tangentVelocity:number|null;
   depth:ContactDepthEvidence;
   confidence:number;
@@ -87,17 +109,11 @@ export interface HumanBodyRegionInput {
   poseLandmarks?:RawNormalizedLandmarkV1[]|null;
   videoWidth:number;
   videoHeight:number;
-  /**
-   * Yaw must use the same image-coordinate convention as the supplied landmarks.
-   * If landmarks are mirrored before entering this module, yaw must be mirrored too.
-   */
   headYawRadians?:number|null;
-  /** Posterior evidence for the head only. Never reuse this to down-rank torso surfaces. */
   posteriorHeadContactHint?:number|null;
-  /** Posterior evidence for the neck only. Kept separate from head depth because torso/head Z differ. */
   posteriorNeckContactHint?:number|null;
-  /** @deprecated Compatibility fallback. New callers should provide the head/neck-specific hints above. */
+  /** @deprecated Compatibility fallback. */
   posteriorContactHint?:number|null;
-  /** True only when landmark x has already been mirrored before entering this module. CSS video mirroring does not count. */
+  /** True only when landmark X itself was mirrored before this module. CSS video mirroring does not count. */
   imageMirrored?:boolean;
 }

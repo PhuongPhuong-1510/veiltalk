@@ -18,6 +18,9 @@ export interface WristReconstructionResult {
   planarDistance: number | null;
   depthDelta: number | null;
   reachViolation: number;
+  /** Image-space point consistent with the reconstructed world x/y after reach clamping. */
+  projectedImage: Vector3Data | null;
+  depthAmbiguity: number;
   rejectionReason: WristReconstructionRejectionReason | null;
 }
 
@@ -27,7 +30,8 @@ const finiteLandmark = (point: RawNormalizedLandmarkV1 | null | undefined): poin
 const semanticWorld = (point: RawNormalizedLandmarkV1): Vector3 => new Vector3(point.x, -point.y, -point.z);
 const rejected = (reason: WristReconstructionRejectionReason): WristReconstructionResult => ({
   accepted: false, point: null, confidence: 0, imageToWorldScale: null,
-  planarDistance: null, depthDelta: null, reachViolation: 0, rejectionReason: reason,
+  planarDistance: null, depthDelta: null, reachViolation: 0, projectedImage: null,
+  depthAmbiguity: 1, rejectionReason: reason,
 });
 
 function aspectCorrectedDelta(
@@ -112,6 +116,14 @@ export function reconstructPointOnSphereFromImage(input: {
   const negative = anchor.clone().add(new Vector3(dx, dy, -depthMagnitude));
   const chosen = positive.distanceToSquared(priorTarget) <= negative.distanceToSquared(priorTarget) ? positive : negative;
   const confidence = Math.max(0, Math.min(1, 1 - violation / Math.max(1e-6, slack)));
+  const aspect = input.videoWidth / input.videoHeight;
+  const projectedImage = {
+    x: input.anchorImage.x + dx / input.imageToWorldScale,
+    y: input.anchorImage.y - (dy / input.imageToWorldScale) * aspect,
+    z: input.targetImage.z,
+  };
+  // 1 means the two depth signs are maximally ambiguous (near the image plane).
+  const depthAmbiguity = 1 - Math.min(1, depthMagnitude / input.targetDistance);
   return {
     accepted: true,
     point: { x: chosen.x, y: chosen.y, z: chosen.z },
@@ -120,6 +132,8 @@ export function reconstructPointOnSphereFromImage(input: {
     planarDistance,
     depthDelta: chosen.z - anchor.z,
     reachViolation: violation,
+    projectedImage,
+    depthAmbiguity,
     rejectionReason: null,
   };
 }

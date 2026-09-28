@@ -98,4 +98,19 @@ describe("wrist evidence", () => {
       handObservationIsNew: false, handMatched: false, handSampledAtMs: null, handImage: null,
     }, config).effectiveGraceMs).toBeLessThanOrEqual(config.maximumGraceMs);
   });
+  it("requires Hand confirmation again after a sampling gap", () => {
+    const state = createWristEvidenceState();
+    for (const sampledAtMs of [0, 60]) updateWristEvidence(state, {
+      nowMs: sampledAtMs, poseSampledAtMs: sampledAtMs, poseObservationIsNew: false, poseValid: false,
+      poseWorld: null, poseImage: null, handObservationIsNew: true, handMatched: true,
+      handSampledAtMs: sampledAtMs, handImage: lm(.5, .5),
+    }, config);
+    const reacquired = updateWristEvidence(state, {
+      nowMs: 500, poseSampledAtMs: 500, poseObservationIsNew: false, poseValid: false,
+      poseWorld: null, poseImage: null, handObservationIsNew: true, handMatched: true,
+      handSampledAtMs: 500, handImage: lm(.5, .5),
+    }, config);
+    expect(reacquired.source).not.toBe("hand-image");
+    expect(state.handCandidateSinceMs).toBe(500);
+  });
 });

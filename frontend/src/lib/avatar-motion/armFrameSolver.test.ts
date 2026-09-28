@@ -280,6 +280,24 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(solved.diagnostic.lowerSegmentLength).toBeCloseTo(1, 6);
   });
 
+  it("does not treat a reconstructed wrist as fully observed past the inference timeout", () => {
+    const world = frame(), image = imageFrame(world); image[13].visibility = 0;
+    const beyondTimeout = DEFAULT_AVATAR_MOTION_CONFIG.armFrame.elbowInferenceTimeoutMs + 3_000;
+    const history: ArmGeometryHistory = {
+      previousPole: { x: 0, y: 1, z: 0 }, previousPoleWasFresh: true,
+      previousDepthDegenerate: false, lastValidPoleAtMs: beyondTimeout - 100,
+      calibratedLength: { upper: 1, lower: 1 }, inferenceStartedAtMs: 0,
+    };
+    const result = solveAnatomicalArmFrames(
+      world, image, profile, { left: history, right: emptyHistory() }, beyondTimeout,
+      DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+      { left: { hand: null, face: null, imageToWorldScale: 1, imageAspectRatio: 1,
+        wrist: { source: "reconstructed", confidence: 1, depthAmbiguity: 0 } } },
+    );
+    expect(result.sides.left).toBeNull();
+    expect(result.diagnostics.left.hardRejectionReason).toBe("elbow-inference-timeout");
+  });
+
   it("still times out an inference that never had observed bone lengths", () => {
     // Chưa từng quan sát được khuỷu → chiều dài chỉ là prior giải phẫu, sai số CÓ tích luỹ.
     // Trường hợp này timeout phải giữ nguyên.

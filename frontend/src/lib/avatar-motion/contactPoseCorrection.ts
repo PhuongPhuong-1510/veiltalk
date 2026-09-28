@@ -22,7 +22,7 @@ export type ContactPoseCorrectionReason =
 
 export interface ContactPoseCorrection {
   rotations:Partial<Record<AvatarJointName,QuaternionData>>;
-  /** Projected wrist-target error. This is pre-runtime-rate-limit, not the final rendered probe error. */
+  /** Probe-to-anchor error after joint constraints, before runtime blend/rate-limit. */
   anchorError:number;
   normalErrorRadians:number;
   reachRatio:number;
@@ -102,8 +102,9 @@ export function solveContactPoseCorrection(
   if(!wristTarget)return rejected("invalid-target");
 
   const shoulderParent=`${side}Shoulder` as ContactBodyJointName;
+  const shoulderTransform=getPosedContactJointTransform(profile,shoulderParent,baseline,headRotation);
   const shoulder=poseContactRestWorldPoint(profile,shoulderParent,arm.shoulderWorld,baseline,headRotation);
-  if(!shoulder)return rejected("missing-contact-rig");
+  if(!shoulder||!shoulderTransform)return rejected("missing-contact-rig");
 
   const target=new Vector3(wristTarget.wrist.x,wristTarget.wrist.y,wristTarget.wrist.z);
   const preferredPole=currentElbowPole(profile,side,baseline,shoulder,target,headRotation);
@@ -145,15 +146,49 @@ export function solveContactPoseCorrection(
   landmarks[indices[1]]=lm(new Vector3(ik.elbow.x,ik.elbow.y,ik.elbow.z));
   landmarks[indices[2]]=lm(new Vector3(ik.wrist.x,ik.wrist.y,ik.wrist.z));
 
-  const solved=solveParentLocalArmRotations(landmarks,profile,true),upperName=`${side}UpperArm` as const,lowerName=`${side}LowerArm` as const,handName=`${side}Hand` as const;
-  const lowerWorld=solved.targetWorldRotations[lowerName];
-  if(!lowerWorld||!solved.deltas[upperName]||!solved.deltas[lowerName])return rejected("invalid-target");
+  // Use the CURRENT posed shoulder world rotation when converting IK geometry back into
+  // parent-local deltas. The old path always used parentRestWorldRotation, which becomes wrong
+  // as soon as torso/shoulder animation is active.
+  const solved=solveParentLocalArmRotations(
+    landmarks,profile,true,undefined,{fixedParentWorldRotations:{[shoulderParent]:qData(shoulderTransform.rotation)}},
+  ),upperName=`${side}UpperArm` as const,lowerName=`${side}LowerArm` as const,handName=`${side}Hand` as const;
+  const upperWorld=solved.targetWorldRotations[upperName],lowerWorld=solved.targetWorldRotations[lowerName];
+  if(!upperWorld||!lowerWorld||!solved.deltas[upperName]||!solved.deltas[lowerName])return rejected("invalid-target");
 
   const desiredHandWorld=wristTarget.orientation;
   const targetHandLocal=multiply(inverse(lowerWorld),desiredHandWorld);
   const handDelta=multiply(inverse(hand.restLocalRotation),targetHandLocal);
   const normalized=qData(new Quaternion(handDelta.x,handDelta.y,handDelta.z,handDelta.w).normalize());
   if(!finite(normalized.x,normalized.y,normalized.z,normalized.w))return rejected("invalid-target");
+
+  // Forward-kinematics validation AFTER joint constraints. Analytic IK may hit the requested wrist
+  // exactly, but constrained local deltas can move the rendered wrist/probe away from that target.
+  // Diagnostics must report the pose that the renderer can actually reproduce, not pre-constraint IK.
+  const upperPrimaryLocal=new Vector3(
+    profile.joints[upperName].anatomicalRestBasis.primaryLocal.x,
+    profile.joints[upperName].anatomicalRestBasis.primaryLocal.y,
+    profile.joints[upperName].anatomicalRestBasis.primaryLocal.z,
+  );
+  const lowerPrimaryLocal=new Vector3(
+    profile.joints[lowerName].anatomicalRestBasis.primaryLocal.x,
+    profile.joints[lowerName].anatomicalRestBasis.primaryLocal.y,
+    profile.joints[lowerName].anatomicalRestBasis.primaryLocal.z,
+  );
+  const upperWorldQ=new Quaternion(upperWorld.x,upperWorld.y,upperWorld.z,upperWorld.w).normalize();
+  const lowerWorldQ=new Quaternion(lowerWorld.x,lowerWorld.y,lowerWorld.z,lowerWorld.w).normalize();
+  const actualElbow=shoulder.clone().addScaledVector(upperPrimaryLocal.applyQuaternion(upperWorldQ).normalize(),arm.upperLength);
+  const actualWrist=actualElbow.clone().addScaledVector(lowerPrimaryLocal.applyQuaternion(lowerWorldQ).normalize(),arm.lowerLength);
+  const actualHandWorld=lowerWorldQ.clone()
+    .multiply(new Quaternion(hand.restLocalRotation.x,hand.restLocalRotation.y,hand.restLocalRotation.z,hand.restLocalRotation.w))
+    .multiply(new Quaternion(normalized.x,normalized.y,normalized.z,normalized.w))
+    .normalize();
+  const probe=contactRig.probes[side][probeName];
+  const actualProbePoint=actualWrist.clone().add(new Vector3(probe.frameOffset.x,probe.frameOffset.y,probe.frameOffset.z).applyQuaternion(actualHandWorld));
+  const actualProbeNormal=new Vector3(probe.contactNormal.x,probe.contactNormal.y,probe.contactNormal.z).normalize().applyQuaternion(actualHandWorld);
+  const targetNormal=new Vector3(-anchor.normal.x,-anchor.normal.y,-anchor.normal.z).normalize();
+  const postConstraintAnchorError=actualProbePoint.distanceTo(new Vector3(anchor.point.x,anchor.point.y,anchor.point.z));
+  const postConstraintNormalError=actualProbeNormal.angleTo(targetNormal);
+  if(!finite(postConstraintAnchorError,postConstraintNormalError))return rejected("invalid-target");
 
   // Large differences are diagnostic only. Runtime already owns angular velocity limiting, so a
   // valid contact is allowed to converge over several render frames instead of being discarded.
@@ -177,8 +212,8 @@ export function solveContactPoseCorrection(
 
   return{
     rotations:{[upperName]:solved.deltas[upperName]!,[lowerName]:solved.deltas[lowerName]!,[handName]:normalized},
-    anchorError:ik.targetError,
-    normalErrorRadians:wristTarget.normalErrorRadians,
+    anchorError:postConstraintAnchorError,
+    normalErrorRadians:postConstraintNormalError,
     reachRatio:ik.reachRatio,
     projected:ik.projected,
     projection:ik.projection,

@@ -42,4 +42,14 @@ describe("wrist reconstruction", () => {
     expect(value.accepted).toBe(false);
     expect(value.rejectionReason).toBe("outside-reach-slack");
   });
+  it("returns an image point consistent with the clamped world projection", () => {
+    const value = reconstructPointOnSphereFromImage({
+      anchorWorld: { x: 0, y: 0, z: 0 }, anchorImage: lm(.5, .5), targetImage: lm(.71, .5),
+      targetDistance: .2, imageToWorldScale: 1, previousDirection: { x: 1, y: 0, z: 0 },
+      videoWidth: 100, videoHeight: 100, reachSlackRatio: .1,
+    });
+    expect(value.accepted).toBe(true);
+    expect(value.projectedImage?.x).toBeCloseTo(.7);
+    expect(value.point?.x).toBeCloseTo(.2);
+  });
 });

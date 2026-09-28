@@ -2,7 +2,7 @@ import { Quaternion } from "three";
 import type { RawNormalizedLandmarkV1,RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
 import type { QuaternionData } from "./avatarPoseTypes";
 import type { ArmSide } from "./avatarMotionDiagnostics";
-import type { BodyContactRegion,ContactEvidenceBreakdown,ContactPoint2,HandContactProbe,HumanContactObservation } from "./bodyContactTypes";
+import type { BodyContactRegion,BodyContactSurfaceFamily,ContactEvidenceBreakdown,ContactPoint2,HandContactProbe,HumanAnatomicalLabel,HumanAnatomicalSource,HumanContactObservation } from "./bodyContactTypes";
 import { fuseContactDepthEvidence } from "./contactDepthRelation";
 import { observeHumanContact } from "./contactObservation";
 import { createContactTemporalState,forceContactRelease,updateContactEvidence,updateContactVisualInfluence,type ContactTemporalState } from "./contactTemporal";
@@ -17,6 +17,17 @@ export interface ContactRuntimeDiagnostic {
   phase:ContactTemporalState["phase"];
   region:BodyContactRegion|null;
   regionUv:ContactPoint2|null;
+  /** Unclamped selected-patch UV, useful for spotting semantic-boundary clipping. */
+  regionRawUv:ContactPoint2|null;
+  regionSignedDistance:number|null;
+  regionSelectionBias:number|null;
+  surfaceFamily:BodyContactSurfaceFamily|null;
+  anatomicalLabel:HumanAnatomicalLabel|null;
+  anatomicalSource:HumanAnatomicalSource|null;
+  anatomicalConfidence:number|null;
+  semanticModelConfidence:number|null;
+  correctionEligible:boolean|null;
+  familyUv:ContactPoint2|null;
   probe:string|null;
   confidence:number;
   evidence:ContactEvidenceBreakdown|null;
@@ -25,6 +36,11 @@ export interface ContactRuntimeDiagnostic {
   poseDepthDelta:number|null;
   /** Soft compatibility only; Pose z is never allowed to hard-reject contact by itself. */
   poseDepthSupport:number|null;
+  posteriorHeadHint:number|null;
+  posteriorNeckHint:number|null;
+  stableIdentitySamples:number;
+  normalVelocity:number|null;
+  tangentVelocity:number|null;
   /** Temporal FSM influence before reach/collision quality is applied. */
   influence:number;
   /** Whether production correction is enabled for this runtime update. */
@@ -56,6 +72,8 @@ interface PreviousObservationSample {
   regionUv:ContactPoint2;
   signedDistance:number;
   region:BodyContactRegion;
+  surfaceFamily:BodyContactSurfaceFamily;
+  familyUv:ContactPoint2;
   probe:HandContactProbe;
   sampledAtMs:number;
 }
@@ -85,7 +103,7 @@ interface SideMemory {
 }
 const memory=():SideMemory=>({temporal:createContactTemporalState(),previousSample:null,previousRegion:null,previousProbe:null,stableIdentitySamples:0,observation:null,locked:null,lastCorrection:null,lastCorrectionAtMs:null,lastDetectorArrivalRenderMs:null,appliedRotations:{}});
 const diagnostic=(side:ArmSide):ContactRuntimeDiagnostic=>({
-  side,phase:"idle",region:null,regionUv:null,probe:null,confidence:0,evidence:null,depthRelation:"unknown",poseDepthDelta:null,poseDepthSupport:null,influence:0,
+  side,phase:"idle",region:null,regionUv:null,regionRawUv:null,regionSignedDistance:null,regionSelectionBias:null,surfaceFamily:null,anatomicalLabel:null,anatomicalSource:null,anatomicalConfidence:null,semanticModelConfidence:null,correctionEligible:null,familyUv:null,probe:null,confidence:0,evidence:null,depthRelation:"unknown",poseDepthDelta:null,poseDepthSupport:null,posteriorHeadHint:null,posteriorNeckHint:null,stableIdentitySamples:0,normalVelocity:null,tangentVelocity:null,influence:0,
   correctionEnabled:false,correctionRequested:false,correctionApplied:false,correctionReason:"inactive",solverInfluenceScale:0,effectiveInfluence:0,evidenceQuality:0,
   anchorError:null,normalErrorDegrees:null,targetDistance:null,minReach:null,maxReach:null,reachErrorRatio:null,reachQuality:null,reachProjection:null,
   headPenetration:null,torsoPenetration:null,collisionQuality:null,angularDeltaDegrees:null,
@@ -97,6 +115,12 @@ const clamp01=(v:number)=>Math.max(0,Math.min(1,v));
 const smoothstep=(a:number,b:number,x:number)=>{const t=clamp01((x-a)/Math.max(1e-8,b-a));return t*t*(3-2*t);};
 const activePhase=(phase:ContactTemporalState["phase"])=>phase==="touch"||phase==="hold"||phase==="slide";
 const posteriorRegion=(region:BodyContactRegion)=>region==="backHead"||region==="backNeck";
+const regionFamily=(region:BodyContactRegion):BodyContactSurfaceFamily=>{
+  if(region==="neck"||region==="backNeck")return"neck";
+  if(region==="leftShoulder"||region==="rightShoulder")return"shoulder";
+  if(region==="upperChest"||region==="lowerChest"||region==="abdomen")return"torso";
+  return"head";
+};
 
 function averageFiniteZ(points:Array<RawNormalizedLandmarkV1|undefined|null>):number|null{
   const values=points.filter((p):p is RawNormalizedLandmarkV1=>Boolean(p&&Number.isFinite(p.z))).map(p=>p.z);
@@ -161,12 +185,17 @@ function candidatePoseCompatibility(region:BodyContactRegion,model:PoseDepthMode
 }
 
 function acquisitionEvidenceQuality(observation:HumanContactObservation):number{
-  if(observation.depth.relation!=="surface-compatible"||observation.evidence.hardRejections.length)return 0;
+  if(observation.evidence.hardRejections.length||observation.depth.relation==="behind"||observation.depth.relation==="in-front-separated")return 0;
   const confidenceQ=clamp01((observation.confidence-.55)/.30);
   const overlapQ=clamp01((observation.overlap-.48)/.42);
-  const depthQ=.4+.6*clamp01(observation.depth.confidence);
+  const compatible=observation.depth.relation==="surface-compatible";
+  // Unknown monocular depth may acquire only through the stricter temporal fallback. Keep its
+  // correction deliberately weaker than a fully surface-compatible solve instead of making it zero.
+  const depthQ=compatible?.45+.55*clamp01(observation.depth.confidence):.28+.22*clamp01(observation.depth.confidence);
+  const relationScale=compatible?1:.55;
+  const topologyQ=clamp01(1-(observation.regionSelectionBias??0));
   // Geometric mean keeps one weak cue from being hidden by two strong cues without becoming all-or-nothing.
-  return clamp01(Math.cbrt(Math.max(0,confidenceQ*overlapQ*depthQ)));
+  return clamp01(Math.cbrt(Math.max(0,confidenceQ*overlapQ*depthQ))*relationScale*(.7+.3*topologyQ));
 }
 
 function mapLockedAnchor(rig:AvatarContactRig|null,region:BodyContactRegion,uv:ContactPoint2,tangentAngleRadians:number):AvatarContactLocalAnchor|null{
@@ -199,12 +228,18 @@ export class ContactRuntime {
       });
 
       let normalVelocity:number|null=null,tangentVelocity:number|null=null;
-      if(preliminary&&state.previousSample&&preliminary.region===state.previousSample.region&&preliminary.probe===state.previousSample.probe){
+      const preliminaryFamily=preliminary?.surfaceFamily??(preliminary?regionFamily(preliminary.region):null);
+      const preliminaryFamilyUv=preliminary?.familyUv??preliminary?.regionUv??null;
+      if(preliminary&&preliminaryFamily&&preliminaryFamilyUv&&state.previousSample&&preliminaryFamily===state.previousSample.surfaceFamily&&preliminary.probe===state.previousSample.probe){
         const dt=Math.max(1,sampledAtMs-state.previousSample.sampledAtMs);
         normalVelocity=(preliminary.regionSignedDistance-state.previousSample.signedDistance)/dt*1_000;
-        tangentVelocity=Math.hypot(preliminary.regionUv.x-state.previousSample.regionUv.x,preliminary.regionUv.y-state.previousSample.regionUv.y)/dt*1_000;
+        tangentVelocity=Math.hypot(preliminaryFamilyUv.x-state.previousSample.familyUv.x,preliminaryFamilyUv.y-state.previousSample.familyUv.y)/dt*1_000;
       }
-      const sameIdentity=Boolean(preliminary&&preliminary.region===state.previousRegion&&preliminary.probe===state.previousProbe);
+      // Continuity belongs to a physical surface family, not a semantic label. A cheek↔ear or
+      // forehead↔headTop boundary correction must not erase temporal evidence every frame.
+      const sameIdentity=Boolean(preliminary&&state.previousRegion&&
+        (preliminary.surfaceFamily??regionFamily(preliminary.region))===regionFamily(state.previousRegion)&&
+        preliminary.probe===state.previousProbe);
       state.stableIdentitySamples=sameIdentity?state.stableIdentitySamples+1:preliminary?1:0;
       const motionConsistency=normalVelocity===null?null:clamp01(1-Math.abs(normalVelocity)/1.2);
       const pose=candidatePoseCompatibility(preliminary?.region??"forehead",depthModel);
@@ -223,7 +258,8 @@ export class ContactRuntime {
       state.observation=observation;
       state.temporal=updateContactEvidence(state.temporal,observation,sampledAtMs);
       if(preliminary){
-        state.previousSample={point:preliminary.imagePoint,regionUv:preliminary.regionUv,signedDistance:preliminary.regionSignedDistance,region:preliminary.region,probe:preliminary.probe,sampledAtMs};
+        const family=preliminary.surfaceFamily??regionFamily(preliminary.region);
+        state.previousSample={point:preliminary.imagePoint,regionUv:preliminary.regionUv,signedDistance:preliminary.regionSignedDistance,region:preliminary.region,surfaceFamily:family,familyUv:preliminary.familyUv??preliminary.regionUv,probe:preliminary.probe,sampledAtMs};
       }
       if(observation){state.previousRegion=observation.region;state.previousProbe=observation.probe;}
     }
@@ -233,14 +269,14 @@ export class ContactRuntime {
       state.temporal=forceContactRelease(state.temporal,renderNowMs);
 
     const nowActive=activePhase(state.temporal.phase);
-    if(!wasActive&&nowActive&&state.observation){
+    if(!wasActive&&nowActive&&state.observation&&state.observation.correctionEligible!==false){
       const tangent=state.observation.tangentAngleRadians??0;
       state.locked={
         region:state.observation.region,probe:state.observation.probe,uv:{...state.observation.regionUv},tangentAngleRadians:tangent,
         localAnchor:mapLockedAnchor(this.rig,state.observation.region,state.observation.regionUv,tangent),acquiredAtMs:renderNowMs,lastUpdatedAtMs:renderNowMs,
         evidenceQuality:acquisitionEvidenceQuality(state.observation),
       };
-    }else if(nowActive&&!state.locked&&state.observation){
+    }else if(nowActive&&!state.locked&&state.observation&&state.observation.correctionEligible!==false){
       const tangent=state.observation.tangentAngleRadians??0;
       state.locked={region:state.observation.region,probe:state.observation.probe,uv:{...state.observation.regionUv},tangentAngleRadians:tangent,localAnchor:mapLockedAnchor(this.rig,state.observation.region,state.observation.regionUv,tangent),acquiredAtMs:renderNowMs,lastUpdatedAtMs:renderNowMs,evidenceQuality:acquisitionEvidenceQuality(state.observation)};
     }
@@ -299,10 +335,17 @@ export class ContactRuntime {
     const shownUv=state.locked?.uv??state.observation?.regionUv??null;
     const shown=correction??usable;
     this.diagnostics[side]={
-      side,phase:state.temporal.phase,region:shownRegion,regionUv:shownUv,probe:shownProbe,
+      side,phase:state.temporal.phase,region:shownRegion,regionUv:shownUv,
+      regionRawUv:state.observation?.regionRawUv??null,regionSignedDistance:state.observation?.regionSignedDistance??null,
+      regionSelectionBias:state.observation?.regionSelectionBias??null,surfaceFamily:state.observation?.surfaceFamily??(shownRegion?regionFamily(shownRegion):null),
+      anatomicalLabel:state.observation?.anatomicalLabel??null,anatomicalSource:state.observation?.anatomicalSource??null,
+      anatomicalConfidence:state.observation?.anatomicalConfidence??null,semanticModelConfidence:state.observation?.modelConfidence??null,
+      correctionEligible:state.observation?.correctionEligible??null,familyUv:state.observation?.familyUv??null,probe:shownProbe,
       confidence:state.observation?.confidence??0,evidence:state.observation?.evidence??null,depthRelation:state.observation?.depth.relation??"unknown",
       poseDepthDelta:state.observation?candidatePoseCompatibility(state.observation.region,buildPoseDepthModel(frame,side)).delta:null,
       poseDepthSupport:state.observation?candidatePoseCompatibility(state.observation.region,buildPoseDepthModel(frame,side)).support:null,
+      posteriorHeadHint:buildPoseDepthModel(frame,side).posteriorHeadHint,posteriorNeckHint:buildPoseDepthModel(frame,side).posteriorNeckHint,
+      stableIdentitySamples:state.stableIdentitySamples,normalVelocity:state.observation?.normalVelocity??null,tangentVelocity:state.observation?.tangentVelocity??null,
       influence:state.temporal.visualInfluence,correctionEnabled:enabled,
       correctionRequested:Boolean(enabled&&state.locked&&state.temporal.visualInfluence>0),correctionApplied:applied,
       correctionReason:correction?.reason??(usable?.reason??"inactive"),solverInfluenceScale,effectiveInfluence,evidenceQuality,
