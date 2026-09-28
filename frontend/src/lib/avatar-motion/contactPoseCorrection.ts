@@ -5,48 +5,195 @@ import type { ArmSide } from "./avatarMotionDiagnostics";
 import type { AvatarContactRig } from "./avatarContactRig";
 import type { AvatarContactAnchor } from "./contactAnchorMapping";
 import { solveContactWristTarget } from "./contactWristTarget";
-import { solveContactArmIk } from "./contactArmIk";
+import { solveContactArmIk,type ContactReachProjection } from "./contactArmIk";
 import { solveParentLocalArmRotations } from "./jointSolver";
-import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
+import type { ContactBodyJointName,NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import { capsuleCapsulePenetration,capsuleSpherePenetration } from "./contactCollision";
+import { getPosedContactJointTransform,poseContactRestWorldPoint } from "./posedContactAnchor";
 
-export interface ContactPoseCorrection {rotations:Partial<Record<AvatarJointName,QuaternionData>>;anchorError:number;normalErrorRadians:number;reachRatio:number;projected:boolean;accepted:boolean;reason:"none"|"missing-contact-rig"|"invalid-target"|"unreachable-contact"|"unsafe-angular-jump"|"collision-unsatisfied"}
+export type ContactPoseCorrectionReason =
+  | "none"
+  | "missing-contact-rig"
+  | "invalid-target"
+  | "reach-degraded"
+  | "collision-degraded"
+  | "kinematic-degraded"
+  | "multi-degraded";
+
+export interface ContactPoseCorrection {
+  rotations:Partial<Record<AvatarJointName,QuaternionData>>;
+  /** Projected wrist-target error. This is pre-runtime-rate-limit, not the final rendered probe error. */
+  anchorError:number;
+  normalErrorRadians:number;
+  reachRatio:number;
+  projected:boolean;
+  projection:ContactReachProjection;
+  targetDistance:number;
+  minReach:number;
+  maxReach:number;
+  reachErrorRatio:number;
+  reachQuality:number;
+  headPenetration:number;
+  torsoPenetration:number;
+  collisionQuality:number;
+  /** Suppresses large solver departures from the faithful baseline without a binary reject. */
+  kinematicQuality:number;
+  /** Multiplied with the temporal contact influence by ContactRuntime. */
+  influenceScale:number;
+  angularDeltaDegrees:{upper:number;lower:number;hand:number};
+  accepted:boolean;
+  reason:ContactPoseCorrectionReason;
+}
+
 const multiply=(a:QuaternionData,b:QuaternionData):QuaternionData=>({x:a.w*b.x+a.x*b.w+a.y*b.z-a.z*b.y,y:a.w*b.y-a.x*b.z+a.y*b.w+a.z*b.x,z:a.w*b.z+a.x*b.y-a.y*b.x+a.z*b.w,w:a.w*b.w-a.x*b.x-a.y*b.y-a.z*b.z});
 const inverse=(q:QuaternionData):QuaternionData=>({x:-q.x,y:-q.y,z:-q.z,w:q.w});
 const qData=(q:Quaternion):QuaternionData=>({x:q.x,y:q.y,z:q.z,w:q.w});
 const data=(value:Vector3):Vector3Data=>({x:value.x,y:value.y,z:value.z});
 const lm=(v:Vector3):RawNormalizedLandmarkV1=>({x:v.x,y:v.y,z:v.z,visibility:1});
 const angularDelta=(a:QuaternionData|undefined,b:QuaternionData)=>{const qa=new Quaternion(a?.x??0,a?.y??0,a?.z??0,a?.w??1).normalize(),qb=new Quaternion(b.x,b.y,b.z,b.w).normalize();return 2*Math.acos(Math.min(1,Math.abs(qa.dot(qb))));};
-const worldDelta=(delta:QuaternionData|undefined,parentRestWorld:QuaternionData)=>{if(!delta)return new Quaternion();const parent=new Quaternion(parentRestWorld.x,parentRestWorld.y,parentRestWorld.z,parentRestWorld.w).normalize();return parent.clone().multiply(new Quaternion(delta.x,delta.y,delta.z,delta.w).normalize()).multiply(parent.clone().invert()).normalize();};
+const quaternionOrIdentity=(value:QuaternionData|undefined)=>value?new Quaternion(value.x,value.y,value.z,value.w).normalize():new Quaternion();
+const clamp01=(value:number)=>Math.max(0,Math.min(1,value));
+const smoothstep=(a:number,b:number,x:number)=>{const t=clamp01((x-a)/Math.max(1e-8,b-a));return t*t*(3-2*t);};
+const finite=(...values:number[])=>values.every(Number.isFinite);
 
-function currentElbowPole(profile:NormalizedAvatarRigProfile,side:ArmSide,baseline:Partial<Record<AvatarPoseJointNameV2,QuaternionData>>,shoulder:Vector3,wristTarget:Vector3):Vector3{
+const rejected=(reason:"missing-contact-rig"|"invalid-target"):ContactPoseCorrection=>({
+  rotations:{},anchorError:Infinity,normalErrorRadians:Infinity,reachRatio:Infinity,projected:false,projection:"none",
+  targetDistance:Infinity,minReach:0,maxReach:0,reachErrorRatio:Infinity,reachQuality:0,
+  headPenetration:Infinity,torsoPenetration:Infinity,collisionQuality:0,kinematicQuality:0,influenceScale:0,
+  angularDeltaDegrees:{upper:0,lower:0,hand:0},accepted:false,reason,
+});
+
+function currentElbowPole(
+  profile:NormalizedAvatarRigProfile,side:ArmSide,baseline:Partial<Record<AvatarPoseJointNameV2,QuaternionData>>,
+  shoulder:Vector3,wristTarget:Vector3,headRotation:QuaternionData|null,
+):Vector3{
   const upperName=`${side}UpperArm` as const,upper=profile.joints[upperName],arm=profile.collisionReference!.arms[side];
-  const restDirection=new Vector3(upper.restWorldDirection.x,upper.restWorldDirection.y,upper.restWorldDirection.z);
-  const restWorld=new Quaternion(upper.restWorldRotation.x,upper.restWorldRotation.y,upper.restWorldRotation.z,upper.restWorldRotation.w),delta=baseline[upperName],shoulderDelta=baseline[`${side}Shoulder`];
-  if(delta||shoulderDelta){const parentRest=new Quaternion(upper.parentRestWorldRotation.x,upper.parentRestWorldRotation.y,upper.parentRestWorldRotation.z,upper.parentRestWorldRotation.w),restLocal=new Quaternion(upper.restLocalRotation.x,upper.restLocalRotation.y,upper.restLocalRotation.z,upper.restLocalRotation.w),targetWorld=parentRest.multiply(quaternionOrIdentity(shoulderDelta)).multiply(restLocal).multiply(quaternionOrIdentity(delta)).normalize(),worldChange=targetWorld.multiply(restWorld.clone().invert());restDirection.applyQuaternion(worldChange);}
-  const elbow=shoulder.clone().addScaledVector(restDirection.normalize(),arm.upperLength),axis=wristTarget.clone().sub(shoulder).normalize(),shoulderToElbow=elbow.sub(shoulder);
+  const shoulderTransform=getPosedContactJointTransform(profile,`${side}Shoulder` as ContactBodyJointName,baseline,headRotation);
+  let direction=new Vector3(upper.restWorldDirection.x,upper.restWorldDirection.y,upper.restWorldDirection.z).normalize();
+  if(shoulderTransform){
+    const primaryLocal=new Vector3(upper.anatomicalRestBasis.primaryLocal.x,upper.anatomicalRestBasis.primaryLocal.y,upper.anatomicalRestBasis.primaryLocal.z);
+    const upperWorld=shoulderTransform.rotation.clone().multiply(new Quaternion(upper.restLocalRotation.x,upper.restLocalRotation.y,upper.restLocalRotation.z,upper.restLocalRotation.w)).multiply(quaternionOrIdentity(baseline[upperName])).normalize();
+    direction=primaryLocal.applyQuaternion(upperWorld).normalize();
+  }
+  const elbow=shoulder.clone().addScaledVector(direction,arm.upperLength),axis=wristTarget.clone().sub(shoulder).normalize(),shoulderToElbow=elbow.sub(shoulder);
   const pole=shoulderToElbow.clone().addScaledVector(axis,-shoulderToElbow.dot(axis));
   if(pole.lengthSq()>1e-8)return pole.normalize();
-  return new Vector3(profile.torsoReference.upWorld.x,profile.torsoReference.upWorld.y,profile.torsoReference.upWorld.z);
+  return new Vector3(profile.torsoReference.upWorld.x,profile.torsoReference.upWorld.y,profile.torsoReference.upWorld.z).normalize();
 }
-function quaternionOrIdentity(value:QuaternionData|undefined):Quaternion{return value?new Quaternion(value.x,value.y,value.z,value.w).normalize():new Quaternion();}
 
-export function solveContactPoseCorrection(profile:NormalizedAvatarRigProfile,contactRig:AvatarContactRig,side:ArmSide,anchor:AvatarContactAnchor,probeName:"palmCenter"|"radialEdge"|"ulnarEdge",baseline:Partial<Record<AvatarPoseJointNameV2,QuaternionData>>={},maximumReachErrorRatio=.12):ContactPoseCorrection{
-  const hand=profile.hands?.[side],collision=profile.collisionReference,arm=collision?.arms[side];if(!hand||!arm||!collision)return{rotations:{},anchorError:Infinity,normalErrorRadians:Infinity,reachRatio:Infinity,projected:false,accepted:false,reason:"missing-contact-rig"};
-  const wristTarget=solveContactWristTarget(anchor,contactRig.probes[side][probeName]);if(!wristTarget)return{rotations:{},anchorError:Infinity,normalErrorRadians:Infinity,reachRatio:Infinity,projected:false,accepted:false,reason:"invalid-target"};
-  const torsoPivot=new Vector3(collision.torso.endWorld.x,collision.torso.endWorld.y,collision.torso.endWorld.z),torsoRotation=worldDelta(baseline.upperChest??baseline.chest??baseline.spine??baseline.hips,profile.torsoReference.worldRotation);
-  const shoulder=new Vector3(arm.shoulderWorld.x,arm.shoulderWorld.y,arm.shoulderWorld.z).sub(torsoPivot).applyQuaternion(torsoRotation).add(torsoPivot),target=new Vector3(wristTarget.wrist.x,wristTarget.wrist.y,wristTarget.wrist.z),preferredPole=currentElbowPole(profile,side,baseline,shoulder,target);
-  const ik=solveContactArmIk({shoulder:data(shoulder),wristTarget:wristTarget.wrist,upperLength:arm.upperLength,lowerLength:arm.lowerLength,preferredPole:data(preferredPole)});if(!ik)return{rotations:{},anchorError:Infinity,normalErrorRadians:Infinity,reachRatio:Infinity,projected:false,accepted:false,reason:"invalid-target"};
-  const reachErrorRatio=ik.targetError/Math.max(1e-6,arm.upperLength+arm.lowerLength);if(reachErrorRatio>maximumReachErrorRatio)return{rotations:{},anchorError:ik.targetError,normalErrorRadians:wristTarget.normalErrorRadians,reachRatio:ik.reachRatio,projected:ik.projected,accepted:false,reason:"unreachable-contact"};
-  const head=collision.head,torso=collision.torso,lowerCapsule={start:ik.elbow,end:ik.wrist,radius:arm.radius};
-  const headPenetration=capsuleSpherePenetration(lowerCapsule,{center:head.centerWorld,radius:head.radius}).penetration,torsoPenetration=capsuleCapsulePenetration(lowerCapsule,{start:torso.startWorld,end:torso.endWorld,radius:torso.radius}).penetration;
-  const targetsHead=anchor.parent==="head",targetsTorso=anchor.parent==="torso"||anchor.parent==="leftShoulder"||anchor.parent==="rightShoulder";
-  if((headPenetration>arm.radius*(targetsHead?1.75:.5))||(torsoPenetration>arm.radius*(targetsTorso?1.75:.5)))return{rotations:{},anchorError:ik.targetError,normalErrorRadians:wristTarget.normalErrorRadians,reachRatio:ik.reachRatio,projected:ik.projected,accepted:false,reason:"collision-unsatisfied"};
-  const landmarks=Array.from({length:33},()=>lm(new Vector3()));const indices=side==="left"?[11,13,15]:[12,14,16];landmarks[indices[0]]=lm(new Vector3(ik.shoulder.x,ik.shoulder.y,ik.shoulder.z));landmarks[indices[1]]=lm(new Vector3(ik.elbow.x,ik.elbow.y,ik.elbow.z));landmarks[indices[2]]=lm(new Vector3(ik.wrist.x,ik.wrist.y,ik.wrist.z));
+/**
+ * Contact-aware arm correction with fail-soft reach/collision handling.
+ *
+ * Geometry/rig failures still reject. Ordinary reach mismatch, penetration, or a large angular
+ * difference do NOT discard the solution: they reduce influence while ContactRuntime rate-limits
+ * the actual joint motion. This prevents the old all-or-nothing fallback to the baseline pose.
+ */
+export function solveContactPoseCorrection(
+  profile:NormalizedAvatarRigProfile,contactRig:AvatarContactRig,side:ArmSide,anchor:AvatarContactAnchor,
+  probeName:"palmCenter"|"radialEdge"|"ulnarEdge",baseline:Partial<Record<AvatarPoseJointNameV2,QuaternionData>>={},
+  headRotation:QuaternionData|null=null,
+  /** Reach error at which the projected solution fades to zero influence. */
+  maximumReachErrorRatio=.24,
+):ContactPoseCorrection{
+  const hand=profile.hands?.[side],collision=profile.collisionReference,arm=collision?.arms[side];
+  if(!hand?.contactFrame?.probes||!arm||!collision||!profile.contactSkeleton)return rejected("missing-contact-rig");
+
+  const wristTarget=solveContactWristTarget(anchor,contactRig.probes[side][probeName]);
+  if(!wristTarget)return rejected("invalid-target");
+
+  const shoulderParent=`${side}Shoulder` as ContactBodyJointName;
+  const shoulder=poseContactRestWorldPoint(profile,shoulderParent,arm.shoulderWorld,baseline,headRotation);
+  if(!shoulder)return rejected("missing-contact-rig");
+
+  const target=new Vector3(wristTarget.wrist.x,wristTarget.wrist.y,wristTarget.wrist.z);
+  const preferredPole=currentElbowPole(profile,side,baseline,shoulder,target,headRotation);
+  const ik=solveContactArmIk({shoulder:data(shoulder),wristTarget:wristTarget.wrist,upperLength:arm.upperLength,lowerLength:arm.lowerLength,preferredPole:data(preferredPole)});
+  if(!ik)return rejected("invalid-target");
+
+  // Exact/near-exact reaches receive full weight. Projected targets fade continuously instead of
+  // being rejected at a single threshold.
+  const reachSoftRatio=.015;
+  const reachQuality=1-smoothstep(reachSoftRatio,Math.max(reachSoftRatio+.001,maximumReachErrorRatio),ik.reachErrorRatio);
+
+  const headCenter=poseContactRestWorldPoint(profile,"head",collision.head.centerWorld,baseline,headRotation);
+  const torsoStartParent:ContactBodyJointName=profile.contactSkeleton.joints.upperChest?"upperChest":profile.contactSkeleton.joints.chest?"chest":profile.contactSkeleton.joints.spine?"spine":"hips";
+  const torsoStart=poseContactRestWorldPoint(profile,torsoStartParent,collision.torso.startWorld,baseline,headRotation);
+  const torsoEnd=poseContactRestWorldPoint(profile,profile.contactSkeleton.joints.hips?"hips":torsoStartParent,collision.torso.endWorld,baseline,headRotation);
+  if(!headCenter||!torsoStart||!torsoEnd)return rejected("missing-contact-rig");
+
+  const lowerCapsule={start:ik.elbow,end:ik.wrist,radius:arm.radius};
+  const headResult=capsuleSpherePenetration(lowerCapsule,{center:data(headCenter),radius:collision.head.radius});
+  const torsoResult=capsuleCapsulePenetration(lowerCapsule,{start:data(torsoStart),end:data(torsoEnd),radius:collision.torso.radius});
+  if(!headResult.valid||!torsoResult.valid||!finite(headResult.penetration,torsoResult.penetration))return rejected("invalid-target");
+
+  const targetsHead=anchor.parentJoint==="head";
+  const targetsTorso=anchor.parentJoint==="hips"||anchor.parentJoint==="spine"||anchor.parentJoint==="chest"||anchor.parentJoint==="upperChest"||anchor.parentJoint==="leftShoulder"||anchor.parentJoint==="rightShoulder";
+  const penetrationQuality=(penetration:number,targetBody:boolean)=>{
+    // Intentional contact naturally places the forearm closer to the target body than an ordinary
+    // arm pose. Give it a wider free band, then fade instead of hard-rejecting the entire contact.
+    const soft=arm.radius*(targetBody?1.25:.25);
+    const hard=arm.radius*(targetBody?2.9:1.25);
+    return 1-smoothstep(soft,Math.max(soft+1e-6,hard),penetration);
+  };
+  const headQuality=penetrationQuality(headResult.penetration,targetsHead);
+  const torsoQuality=penetrationQuality(torsoResult.penetration,targetsTorso);
+  const collisionQuality=Math.min(headQuality,torsoQuality);
+
+  const landmarks=Array.from({length:33},()=>lm(new Vector3()));
+  const indices=side==="left"?[11,13,15]:[12,14,16];
+  landmarks[indices[0]]=lm(new Vector3(ik.shoulder.x,ik.shoulder.y,ik.shoulder.z));
+  landmarks[indices[1]]=lm(new Vector3(ik.elbow.x,ik.elbow.y,ik.elbow.z));
+  landmarks[indices[2]]=lm(new Vector3(ik.wrist.x,ik.wrist.y,ik.wrist.z));
+
   const solved=solveParentLocalArmRotations(landmarks,profile,true),upperName=`${side}UpperArm` as const,lowerName=`${side}LowerArm` as const,handName=`${side}Hand` as const;
-  const lowerWorld=solved.targetWorldRotations[lowerName];if(!lowerWorld)return{rotations:{},anchorError:Infinity,normalErrorRadians:Infinity,reachRatio:ik.reachRatio,projected:ik.projected,accepted:false,reason:"invalid-target"};
-  const desiredHandWorld=wristTarget.orientation,targetHandLocal=multiply(inverse(lowerWorld),desiredHandWorld),handDelta=multiply(inverse(hand.restLocalRotation),targetHandLocal);
+  const lowerWorld=solved.targetWorldRotations[lowerName];
+  if(!lowerWorld||!solved.deltas[upperName]||!solved.deltas[lowerName])return rejected("invalid-target");
+
+  const desiredHandWorld=wristTarget.orientation;
+  const targetHandLocal=multiply(inverse(lowerWorld),desiredHandWorld);
+  const handDelta=multiply(inverse(hand.restLocalRotation),targetHandLocal);
   const normalized=qData(new Quaternion(handDelta.x,handDelta.y,handDelta.z,handDelta.w).normalize());
-  if((baseline[upperName]&&angularDelta(baseline[upperName],solved.deltas[upperName]!)>75*Math.PI/180)||(baseline[lowerName]&&angularDelta(baseline[lowerName],solved.deltas[lowerName]!)>95*Math.PI/180)||(baseline[handName]&&angularDelta(baseline[handName],normalized)>110*Math.PI/180))return{rotations:{},anchorError:ik.targetError,normalErrorRadians:wristTarget.normalErrorRadians,reachRatio:ik.reachRatio,projected:ik.projected,accepted:false,reason:"unsafe-angular-jump"};
-  return{rotations:{[upperName]:solved.deltas[upperName]!,[lowerName]:solved.deltas[lowerName]!,[handName]:normalized},anchorError:ik.targetError,normalErrorRadians:wristTarget.normalErrorRadians,reachRatio:ik.reachRatio,projected:ik.projected,accepted:true,reason:"none"};
+  if(!finite(normalized.x,normalized.y,normalized.z,normalized.w))return rejected("invalid-target");
+
+  // Large differences are diagnostic only. Runtime already owns angular velocity limiting, so a
+  // valid contact is allowed to converge over several render frames instead of being discarded.
+  const angularDeltaDegrees={
+    upper:angularDelta(baseline[upperName],solved.deltas[upperName]!)*180/Math.PI,
+    lower:angularDelta(baseline[lowerName],solved.deltas[lowerName]!)*180/Math.PI,
+    hand:angularDelta(baseline[handName],normalized)*180/Math.PI,
+  };
+
+  // V2 allowed any finite target to pull the arm, which amplified a wrong semantic/depth target
+  // into a catastrophic pose. Keep fail-soft behaviour, but make contact a LOCAL corrective layer:
+  // a very large departure from faithful reconstruction fades to zero instead of being forced.
+  const upperQuality=1-smoothstep(65,125,angularDeltaDegrees.upper);
+  const lowerQuality=1-smoothstep(85,155,angularDeltaDegrees.lower);
+  const handQuality=1-smoothstep(100,175,angularDeltaDegrees.hand);
+  const kinematicQuality=clamp01(Math.min(upperQuality,lowerQuality,handQuality));
+
+  const influenceScale=clamp01(reachQuality*collisionQuality*kinematicQuality);
+  const degraded=[reachQuality<.999,collisionQuality<.999,kinematicQuality<.999].filter(Boolean).length;
+  const reason:ContactPoseCorrectionReason=degraded>1?"multi-degraded":reachQuality<.999?"reach-degraded":collisionQuality<.999?"collision-degraded":kinematicQuality<.999?"kinematic-degraded":"none";
+
+  return{
+    rotations:{[upperName]:solved.deltas[upperName]!,[lowerName]:solved.deltas[lowerName]!,[handName]:normalized},
+    anchorError:ik.targetError,
+    normalErrorRadians:wristTarget.normalErrorRadians,
+    reachRatio:ik.reachRatio,
+    projected:ik.projected,
+    projection:ik.projection,
+    targetDistance:ik.targetDistance,
+    minReach:ik.minReach,
+    maxReach:ik.maxReach,
+    reachErrorRatio:ik.reachErrorRatio,
+    reachQuality,
+    headPenetration:headResult.penetration,
+    torsoPenetration:torsoResult.penetration,
+    collisionQuality,
+    kinematicQuality,
+    influenceScale,
+    angularDeltaDegrees,
+    accepted:true,
+    reason,
+  };
 }

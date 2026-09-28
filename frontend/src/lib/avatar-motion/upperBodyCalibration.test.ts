@@ -21,11 +21,11 @@ describe("AR4 paired upper-body calibration",()=>{
     expect(calibration.process({...sample(),faceSampledAtMs:133,poseSampledAtMs:133,fullTorsoRotation:null,fullTorsoQuality:0})).toBe(true);
     expect(calibration.snapshot()).toMatchObject({state:"calibrated",mode:"shoulder-only",acceptedPairs:2,acceptedFullTorsoPairs:0});
   });
-  it("corrects Pose yaw before subtracting it from Face head motion",()=>{
+  it("keeps Pose yaw in the same semantic convention as Face and the mirrored presentation",()=>{
     const calibration=new UpperBodyNeutralCalibrator(1);calibration.begin("model");expect(calibration.process(sample())).toBe(true);
-    const together=calibration.headRelative(q(.3),q(-.3));
+    const together=calibration.headRelative(q(.3),q(.3));
     expect(together?.y).toBeCloseTo(0,5);expect(together?.w).toBeCloseTo(1,5);
-    expect(calibration.fullTorsoDelta(q(-.3))?.y).toBeGreaterThan(0);
+    expect(calibration.fullTorsoDelta(q(.3))?.y).toBeGreaterThan(0);
   });
   it("selects full-torso only when hips are reliable for at least eighty percent of calibration",()=>{
     const calibration=new UpperBodyNeutralCalibrator(5);calibration.begin("model");

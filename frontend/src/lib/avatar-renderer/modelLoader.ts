@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import { inspectModel } from "./modelCapability";
 import type { LoadedAvatarModel, ModelLoadOptions, ShoulderTranslationRigV1 } from "./modelTypes";
-import { freezeRigProfile, validateRigProfile, type ControlledArmJoint, type NormalizedAvatarRigProfile } from "../avatar-motion/normalizedRigProfile";
+import { freezeRigProfile, validateRigProfile, type ContactBodyJointName, type ControlledArmJoint, type NormalizedAvatarRigProfile } from "../avatar-motion/normalizedRigProfile";
 import { AVATAR_FINGER_JOINT_NAMES } from "../avatar-motion/avatarPoseTypes";
 import { buildFingerRigProfile } from "../avatar-motion/fingerRig";
 import { buildFacialCapabilityManifest } from "./facialCapability";
@@ -21,6 +21,33 @@ const UPPER_BODY_PARENTS: Record<AvatarUpperBodyJointName | "head", readonly (Av
   neck: ["upperChest", "chest", "spine", "hips"], head: ["neck", "upperChest", "chest", "spine", "hips"],
   leftShoulder: ["upperChest", "chest", "spine", "hips"], rightShoulder: ["upperChest", "chest", "spine", "hips"],
 };
+
+const CONTACT_BODY_JOINTS: readonly ContactBodyJointName[] = ["hips","spine","chest","upperChest","neck","head","leftShoulder","rightShoulder"];
+
+function createContactSkeletonReference(bones: LoadedAvatarModel["bones"]): NormalizedAvatarRigProfile["contactSkeleton"] {
+  const joints: NonNullable<NormalizedAvatarRigProfile["contactSkeleton"]>["joints"] = {};
+  for (const name of CONTACT_BODY_JOINTS) {
+    const bone = bones[name]; if (!bone) continue;
+    bone.updateWorldMatrix(true, false);
+    const worldPosition = bone.getWorldPosition(new Vector3());
+    const worldRotation = bone.getWorldQuaternion(new Quaternion()).normalize();
+    const candidates = UPPER_BODY_PARENTS[name as AvatarUpperBodyJointName | "head"] ?? [];
+    const parent = candidates.find((candidate) => Boolean(bones[candidate])) as ContactBodyJointName | undefined;
+    if (!parent) {
+      joints[name] = { parent: null, restLocalPosition: vectorData(worldPosition), restLocalRotation: quaternionData(worldRotation), restWorldPosition: vectorData(worldPosition), restWorldRotation: quaternionData(worldRotation) };
+      continue;
+    }
+    const parentBone = bones[parent]; if (!parentBone) continue;
+    parentBone.updateWorldMatrix(true, false);
+    const parentWorldPosition = parentBone.getWorldPosition(new Vector3());
+    const parentWorldRotation = parentBone.getWorldQuaternion(new Quaternion()).normalize();
+    const inverseParent = parentWorldRotation.clone().invert();
+    const localPosition = worldPosition.clone().sub(parentWorldPosition).applyQuaternion(inverseParent);
+    const localRotation = inverseParent.clone().multiply(worldRotation).normalize();
+    joints[name] = { parent, restLocalPosition: vectorData(localPosition), restLocalRotation: quaternionData(localRotation), restWorldPosition: vectorData(worldPosition), restWorldRotation: quaternionData(worldRotation) };
+  }
+  return Object.keys(joints).length ? { joints } : undefined;
+}
 
 function upperBodyLimits(name: AvatarUpperBodyJointName | "head"): UpperBodyJointProfile["limits"] {
   if (name === "head") return { yawLeft: radians(32), yawRight: radians(32), pitchUp: radians(20), pitchDown: radians(25), rollLeft: radians(18), rollRight: radians(18) };
@@ -109,6 +136,7 @@ export function createRigProfile(modelGeneration: number, fingerprint: string, b
   if ([torsoRight, torsoUp, torsoForward].some((axis) => axis.lengthSq() < 1e-8)) return null;
   const torsoRotation = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(torsoRight, torsoUp, torsoForward)).normalize();
   const torsoReference = { rightWorld: vectorData(torsoRight), upWorld: vectorData(torsoUp), forwardWorld: vectorData(torsoForward), worldRotation: quaternionData(torsoRotation) };
+  const contactSkeleton = createContactSkeletonReference(bones);
   const joints = {} as NormalizedAvatarRigProfile["joints"];
   for (const [name, definition] of Object.entries(pairs) as Array<[ControlledArmJoint, typeof pairs[ControlledArmJoint]]>) {
     const bone = bones[name], child = bones[definition.child]; if (!bone || !child || !bone.parent) return null;
@@ -162,8 +190,33 @@ export function createRigProfile(modelGeneration: number, fingerprint: string, b
       };
     }
   }
-  const hands=(["left","right"] as const).every(side=>bones[`${side}Hand`]?.parent)?Object.fromEntries((["left","right"] as const).map(side=>{const hand=bones[`${side}Hand`]!,index=bones[`${side}IndexProximal`],middle=bones[`${side}MiddleProximal`],little=bones[`${side}LittleProximal`];hand.updateWorldMatrix(true,false);const handWorld=hand.getWorldPosition(new Vector3()),inverseHandWorld=hand.getWorldQuaternion(new Quaternion()).normalize().invert();let contactFrame:NonNullable<NormalizedAvatarRigProfile["hands"]>["left"]["contactFrame"];if(index&&middle&&little){index.updateWorldMatrix(true,false);middle.updateWorldMatrix(true,false);little.updateWorldMatrix(true,false);const indexLocal=index.getWorldPosition(new Vector3()).sub(handWorld).applyQuaternion(inverseHandWorld),middleLocal=middle.getWorldPosition(new Vector3()).sub(handWorld).applyQuaternion(inverseHandWorld),littleLocal=little.getWorldPosition(new Vector3()).sub(handWorld).applyQuaternion(inverseHandWorld),across=indexLocal.clone().sub(littleLocal).normalize(),forward=middleLocal.clone().normalize(),normal=across.clone().cross(forward).normalize();forward.copy(normal).cross(across).normalize();if(across.lengthSq()>.99&&forward.lengthSq()>.99&&normal.lengthSq()>.99)contactFrame={acrossLocal:vectorData(across),forwardLocal:vectorData(forward),normalLocal:vectorData(normal),palmWidth:indexLocal.distanceTo(littleLocal),palmLength:middleLocal.length()*1.8};}return[side,{restLocalRotation:quaternionData(hand.quaternion.clone().normalize()),restWorldRotation:quaternionData(hand.getWorldQuaternion(new Quaternion()).normalize()),restWorldPosition:vectorData(handWorld),parentRestWorldRotation:quaternionData(hand.parent!.getWorldQuaternion(new Quaternion()).normalize()),...(contactFrame?{contactFrame}:{})}];})) as NormalizedAvatarRigProfile["hands"]:undefined;
-  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, joints, ...(collisionReference ? { collisionReference } : {}),...(hands?{hands}:{}) };
+  const hands=(["left","right"] as const).every(side=>bones[`${side}Hand`]?.parent)?Object.fromEntries((["left","right"] as const).map(side=>{
+    const hand=bones[`${side}Hand`]!,index=bones[`${side}IndexProximal`],middle=bones[`${side}MiddleProximal`],little=bones[`${side}LittleProximal`];
+    hand.updateWorldMatrix(true,false);
+    const handWorld=hand.getWorldPosition(new Vector3()),handWorldRotation=hand.getWorldQuaternion(new Quaternion()).normalize(),inverseHandWorld=handWorldRotation.clone().invert();
+    let contactFrame:NonNullable<NormalizedAvatarRigProfile["hands"]>["left"]["contactFrame"];
+    if(index&&middle&&little){
+      index.updateWorldMatrix(true,false);middle.updateWorldMatrix(true,false);little.updateWorldMatrix(true,false);
+      const indexLocal=index.getWorldPosition(new Vector3()).sub(handWorld).applyQuaternion(inverseHandWorld),middleLocal=middle.getWorldPosition(new Vector3()).sub(handWorld).applyQuaternion(inverseHandWorld),littleLocal=little.getWorldPosition(new Vector3()).sub(handWorld).applyQuaternion(inverseHandWorld);
+      const across=indexLocal.clone().sub(littleLocal).normalize(),forwardRaw=middleLocal.clone();
+      const forward=forwardRaw.clone().addScaledVector(across,-forwardRaw.dot(across)).normalize(),normal=across.clone().cross(forward).normalize();
+      if(across.lengthSq()>.99&&forward.lengthSq()>.99&&normal.lengthSq()>.99){
+        const palmCenter=indexLocal.clone().add(middleLocal).add(littleLocal).multiplyScalar(.25);
+        const radial=indexLocal.clone().multiplyScalar(.5),ulnar=littleLocal.clone().multiplyScalar(.5);
+        contactFrame={
+          acrossLocal:vectorData(across),forwardLocal:vectorData(forward),normalLocal:vectorData(normal),
+          palmWidth:indexLocal.distanceTo(littleLocal),palmLength:middleLocal.length(),
+          probes:{
+            palmCenter:{offsetLocal:vectorData(palmCenter),normalLocal:vectorData(normal),tangentLocal:vectorData(forward)},
+            radialEdge:{offsetLocal:vectorData(radial),normalLocal:vectorData(across),tangentLocal:vectorData(forward)},
+            ulnarEdge:{offsetLocal:vectorData(ulnar),normalLocal:vectorData(across.clone().negate()),tangentLocal:vectorData(forward)},
+          },
+        };
+      }
+    }
+    return[side,{restLocalRotation:quaternionData(hand.quaternion.clone().normalize()),restWorldRotation:quaternionData(handWorldRotation),restWorldPosition:vectorData(handWorld),parentRestWorldRotation:quaternionData(hand.parent!.getWorldQuaternion(new Quaternion()).normalize()),...(contactFrame?{contactFrame}:{})}];
+  })) as NormalizedAvatarRigProfile["hands"]:undefined;
+  const profile: NormalizedAvatarRigProfile = { version: 1, modelGeneration, modelFingerprint: fingerprint, torsoReference, joints, ...(collisionReference ? { collisionReference } : {}), ...(contactSkeleton ? { contactSkeleton } : {}), ...(hands?{hands}:{}) };
   return validateRigProfile(profile) ? freezeRigProfile(profile) : null;
 }
 

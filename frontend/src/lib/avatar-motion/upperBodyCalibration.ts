@@ -1,6 +1,5 @@
 import type { QuaternionData } from "./avatarPoseTypes";
 import { inverseQuaternion, multiplyQuaternions, slerpQuaternionData } from "./motionMath";
-import { quaternionExp, quaternionLog } from "./quaternionDistribution";
 
 export type UpperBodyCalibrationMode = "pending" | "shoulder-only" | "full-torso";
 
@@ -145,12 +144,12 @@ export class UpperBodyNeutralCalibrator {
 
   shoulderDelta(shoulder: QuaternionData): QuaternionData | null {
     return this.state === "calibrated" && this.shoulderMean
-      ? correctPoseDelta(multiplyQuaternions(inverseQuaternion(this.shoulderMean), shoulder)) : null;
+      ? multiplyQuaternions(inverseQuaternion(this.shoulderMean), shoulder) : null;
   }
 
   fullTorsoDelta(torso: QuaternionData): QuaternionData | null {
     return this.state === "calibrated" && this.fullTorsoMean
-      ? correctPoseDelta(multiplyQuaternions(inverseQuaternion(this.fullTorsoMean), torso)) : null;
+      ? multiplyQuaternions(inverseQuaternion(this.fullTorsoMean), torso) : null;
   }
 
   snapshot(): UpperBodyCalibrationSnapshot {
@@ -187,10 +186,4 @@ function angularMedianDeviation(samples: readonly QuaternionData[], mean: Quater
   }).sort((a, b) => a - b);
   const middle = Math.floor(deviations.length / 2);
   return deviations.length % 2 ? deviations[middle] : (deviations[middle - 1] + deviations[middle]) / 2;
-}
-
-/** Pose World và Face matrix có yaw ngược nhau trên webcam; sửa một lần tại observation boundary. */
-function correctPoseDelta(delta: QuaternionData): QuaternionData | null {
-  const rotation = quaternionLog(delta);
-  return rotation ? quaternionExp({ x: rotation.x, y: -rotation.y, z: rotation.z }) : null;
 }

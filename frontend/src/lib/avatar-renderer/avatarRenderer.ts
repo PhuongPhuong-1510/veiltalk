@@ -143,7 +143,7 @@ export class AvatarRenderer {
     this.verticalOffsetRatio = ratio;
     if (this.model) this.frameModel(this.model);
   }
-  getVerticalOffset(): number { return this.verticalOffsetRatio; }
+getVerticalOffset(): number { return this.verticalOffsetRatio; }
   resize(width: number, height: number): void { this.assertUsable(); if (width <= 0 || height <= 0) return; this.webgl.setSize(width, height, false); this.camera.aspect = width / height; this.camera.updateProjectionMatrix(); }
   getMetrics(): RendererMetricsSnapshot { return this.metrics.snapshot(this.webgl); }
   getCapability() { return this.model?.capability ?? null; }

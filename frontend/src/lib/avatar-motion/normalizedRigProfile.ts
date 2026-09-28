@@ -1,6 +1,8 @@
 import type { AvatarJointName, QuaternionData, Vector3Data } from "./avatarPoseTypes";
+import type { HandContactProbe } from "./bodyContactTypes";
 
 export type ControlledArmJoint = "leftUpperArm" | "leftLowerArm" | "rightUpperArm" | "rightLowerArm";
+export type ContactBodyJointName = "hips"|"spine"|"chest"|"upperChest"|"neck"|"head"|"leftShoulder"|"rightShoulder";
 
 export interface AnatomicalRestBasis {
   primaryLocal: Vector3Data;
@@ -29,7 +31,33 @@ export interface RigCollisionReference {
     radius: number;
   }>;
 }
-export interface RigHandReference {restLocalRotation:QuaternionData;restWorldRotation:QuaternionData;restWorldPosition:Vector3Data;parentRestWorldRotation:QuaternionData;contactFrame?:{acrossLocal:Vector3Data;forwardLocal:Vector3Data;normalLocal:Vector3Data;palmWidth:number;palmLength:number}}
+
+export interface RigContactBodyJointReference {
+  parent:ContactBodyJointName|null;
+  restLocalPosition:Vector3Data;
+  restLocalRotation:QuaternionData;
+  restWorldPosition:Vector3Data;
+  restWorldRotation:QuaternionData;
+}
+export interface RigContactSkeletonReference {joints:Partial<Record<ContactBodyJointName,RigContactBodyJointReference>>}
+
+export interface RigContactProbeReference {offsetLocal:Vector3Data;normalLocal:Vector3Data;tangentLocal:Vector3Data}
+export interface RigHandReference {
+  restLocalRotation:QuaternionData;
+  restWorldRotation:QuaternionData;
+  restWorldPosition:Vector3Data;
+  parentRestWorldRotation:QuaternionData;
+  contactFrame?:{
+    acrossLocal:Vector3Data;
+    forwardLocal:Vector3Data;
+    normalLocal:Vector3Data;
+    /** Legacy dimensions retained only so older fixtures remain readable. */
+    palmWidth?:number;
+    palmLength?:number;
+    /** Resolved wrist-local rigid probes. New production profiles should always provide these. */
+    probes?:Record<HandContactProbe,RigContactProbeReference>;
+  };
+}
 
 export interface ControlledJointProfile {
   parentJoint: AvatarJointName;
@@ -50,9 +78,11 @@ export interface NormalizedAvatarRigProfile {
   modelGeneration: number;
   modelFingerprint: string;
   torsoReference: RigTorsoReference;
-  /** Capsule/sphere rest geometry của đúng VRM đang tải; optional để profile cũ vẫn hợp lệ. */
+  /** Capsule/sphere rest geometry of the currently loaded VRM. */
   collisionReference?: RigCollisionReference;
-  /** Optional for old fixtures; contact correction fails closed when unavailable. */
+  /** Rotation-only semantic skeleton used to pose parent-local contact anchors. */
+  contactSkeleton?:RigContactSkeletonReference;
+  /** Optional for old fixtures; contact correction fails closed when contactFrame/probes are unavailable. */
   hands?:Record<"left"|"right",RigHandReference>;
   joints: Record<ControlledArmJoint, ControlledJointProfile>;
 }
@@ -80,17 +110,25 @@ export function validateRigProfile(profile: NormalizedAvatarRigProfile): boolean
   if (collision) {
     if (!finiteVector(collision.head.centerWorld) || !finite(collision.head.radius) || collision.head.radius <= 0) return false;
     if (!finiteVector(collision.torso.startWorld) || !finiteVector(collision.torso.endWorld) || !finite(collision.torso.radius) || collision.torso.radius <= 0) return false;
-    if (Math.hypot(
-      collision.torso.endWorld.x - collision.torso.startWorld.x,
-      collision.torso.endWorld.y - collision.torso.startWorld.y,
-      collision.torso.endWorld.z - collision.torso.startWorld.z,
-    ) <= 1e-6) return false;
-    for (const arm of Object.values(collision.arms)) {
-      if (!finiteVector(arm.shoulderWorld) || !finite(arm.upperLength, arm.lowerLength, arm.radius)
-        || arm.upperLength <= 0 || arm.lowerLength <= 0 || arm.radius <= 0) return false;
+    if (Math.hypot(collision.torso.endWorld.x - collision.torso.startWorld.x, collision.torso.endWorld.y - collision.torso.startWorld.y, collision.torso.endWorld.z - collision.torso.startWorld.z) <= 1e-6) return false;
+    for (const arm of Object.values(collision.arms)) if (!finiteVector(arm.shoulderWorld) || !finite(arm.upperLength, arm.lowerLength, arm.radius) || arm.upperLength <= 0 || arm.lowerLength <= 0 || arm.radius <= 0) return false;
+  }
+  if(profile.contactSkeleton){
+    for(const [name,joint] of Object.entries(profile.contactSkeleton.joints) as Array<[ContactBodyJointName,RigContactBodyJointReference]>){
+      if(!joint||!finiteVector(joint.restLocalPosition)||!finiteVector(joint.restWorldPosition)||!unitQuaternion(joint.restLocalRotation)||!unitQuaternion(joint.restWorldRotation))return false;
+      if(joint.parent===name)return false;
     }
   }
-  if(profile.hands)for(const hand of Object.values(profile.hands)){if(!finiteVector(hand.restWorldPosition)||!unitQuaternion(hand.restLocalRotation)||!unitQuaternion(hand.restWorldRotation)||!unitQuaternion(hand.parentRestWorldRotation))return false;if(hand.contactFrame&&(!orthonormal(hand.contactFrame.acrossLocal,hand.contactFrame.forwardLocal,hand.contactFrame.normalLocal)||!finite(hand.contactFrame.palmWidth,hand.contactFrame.palmLength)||hand.contactFrame.palmWidth<=0||hand.contactFrame.palmLength<=0))return false;}
+  if(profile.hands)for(const hand of Object.values(profile.hands)){
+    if(!finiteVector(hand.restWorldPosition)||!unitQuaternion(hand.restLocalRotation)||!unitQuaternion(hand.restWorldRotation)||!unitQuaternion(hand.parentRestWorldRotation))return false;
+    const frame=hand.contactFrame;
+    if(frame){
+      if(!orthonormal(frame.acrossLocal,frame.forwardLocal,frame.normalLocal))return false;
+      if(frame.palmWidth!==undefined&&(!finite(frame.palmWidth)||frame.palmWidth<=0))return false;
+      if(frame.palmLength!==undefined&&(!finite(frame.palmLength)||frame.palmLength<=0))return false;
+      if(frame.probes)for(const probe of Object.values(frame.probes))if(!finiteVector(probe.offsetLocal)||!unitVector(probe.normalLocal)||!unitVector(probe.tangentLocal)||Math.abs(probe.normalLocal.x*probe.tangentLocal.x+probe.normalLocal.y*probe.tangentLocal.y+probe.normalLocal.z*probe.tangentLocal.z)>.05)return false;
+    }
+  }
   for (const [name, expected] of Object.entries(HIERARCHY) as Array<[ControlledArmJoint, typeof HIERARCHY[ControlledArmJoint]]>) {
     const joint = profile.joints[name];
     if (!joint || joint.parentJoint !== expected.parentJoint || joint.childJoint !== expected.childJoint || joint.parentMode !== expected.parentMode || joint.controlledParentJoint !== expected.controlledParentJoint) return false;
@@ -110,7 +148,19 @@ export function freezeRigProfile(profile: NormalizedAvatarRigProfile): Normalize
     for (const arm of Object.values(profile.collisionReference.arms)) { Object.freeze(arm.shoulderWorld); Object.freeze(arm); }
     Object.freeze(profile.collisionReference.arms); Object.freeze(profile.collisionReference);
   }
-  if(profile.hands){for(const hand of Object.values(profile.hands)){Object.freeze(hand.restWorldPosition);Object.freeze(hand.restLocalRotation);Object.freeze(hand.restWorldRotation);Object.freeze(hand.parentRestWorldRotation);if(hand.contactFrame){Object.freeze(hand.contactFrame.acrossLocal);Object.freeze(hand.contactFrame.forwardLocal);Object.freeze(hand.contactFrame.normalLocal);Object.freeze(hand.contactFrame);}Object.freeze(hand);}Object.freeze(profile.hands);}
+  if(profile.contactSkeleton){
+    for(const joint of Object.values(profile.contactSkeleton.joints)){if(!joint)continue;Object.freeze(joint.restLocalPosition);Object.freeze(joint.restWorldPosition);Object.freeze(joint.restLocalRotation);Object.freeze(joint.restWorldRotation);Object.freeze(joint);}
+    Object.freeze(profile.contactSkeleton.joints);Object.freeze(profile.contactSkeleton);
+  }
+  if(profile.hands){for(const hand of Object.values(profile.hands)){
+    Object.freeze(hand.restWorldPosition);Object.freeze(hand.restLocalRotation);Object.freeze(hand.restWorldRotation);Object.freeze(hand.parentRestWorldRotation);
+    if(hand.contactFrame){
+      Object.freeze(hand.contactFrame.acrossLocal);Object.freeze(hand.contactFrame.forwardLocal);Object.freeze(hand.contactFrame.normalLocal);
+      if(hand.contactFrame.probes){for(const probe of Object.values(hand.contactFrame.probes)){Object.freeze(probe.offsetLocal);Object.freeze(probe.normalLocal);Object.freeze(probe.tangentLocal);Object.freeze(probe);}Object.freeze(hand.contactFrame.probes);}
+      Object.freeze(hand.contactFrame);
+    }
+    Object.freeze(hand);
+  }Object.freeze(profile.hands);}
   for (const joint of Object.values(profile.joints)) {
     Object.values(joint.anatomicalRestBasis).forEach(Object.freeze); Object.freeze(joint.anatomicalRestBasis);
     Object.freeze(joint.restLocalPosition); Object.freeze(joint.restLocalRotation); Object.freeze(joint.restWorldPosition); Object.freeze(joint.restWorldRotation); Object.freeze(joint.parentRestWorldRotation); Object.freeze(joint.restWorldDirection); Object.freeze(joint);

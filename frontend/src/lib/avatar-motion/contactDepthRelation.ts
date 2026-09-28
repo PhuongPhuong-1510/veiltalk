@@ -1,20 +1,38 @@
-import type { ContactDepthEvidence } from "./bodyContactTypes";
+import type { ContactDepthEvidence, ContactDepthRelation } from "./bodyContactTypes";
 
 export type ContactDepthSources=ContactDepthEvidence["sources"];
 const clamp01=(value:number)=>Math.max(0,Math.min(1,value));
 
 /**
- * Cue convention: +1 supports surface compatibility, -1 contradicts it, null is unavailable.
- * No single cue can promote a contact. Motion plus at least two other independent cues are required.
+ * Fuses candidate-relative depth evidence. A hard relation may be supplied only from a
+ * directional cue whose sign convention is known (for example Pose wrist-vs-nose depth).
+ * History and motion may support confidence but can never assert geometric separation alone.
  */
-export function fuseContactDepthEvidence(sources:ContactDepthSources):ContactDepthEvidence{
-  const values=Object.values(sources).filter((value):value is number=>value!==null&&Number.isFinite(value)).map(value=>Math.max(-1,Math.min(1,value)));
-  if((sources.posePrior??0)<=-.7||(sources.occlusion??0)<=-.85)return{relation:"behind",confidence:clamp01(Math.max(-(sources.posePrior??0),-(sources.occlusion??0))),sources,rejectionReason:"behind-evidence"};
-  const strongestNegative=values.length?Math.min(...values):0;
-  if(strongestNegative<=-.65)return{relation:"in-front-separated",confidence:clamp01(-strongestNegative),sources,rejectionReason:"separated-evidence"};
-  const positive=values.filter(value=>value>=.5);
+export function fuseContactDepthEvidence(
+  sources:ContactDepthSources,
+  hardRelation:Extract<ContactDepthRelation,"behind"|"in-front-separated">|null=null,
+):ContactDepthEvidence{
+  if(hardRelation)return{
+    relation:hardRelation,
+    confidence:.9,
+    sources,
+    rejectionReason:hardRelation==="behind"?"behind-evidence":"separated-evidence",
+  };
+  // Soft priors are intentionally unable to manufacture a hard geometric relation. In particular,
+  // Pose wrist-vs-body z can be strongly negative during a genuine palm contact because the wrist
+  // joint is physically in front of the contacted surface. A hard relation is accepted only through
+  // the explicit `hardRelation` argument from a cue whose directional semantics are independently
+  // established.
   const motionSupports=(sources.motionConsistency??0)>=.5;
-  const spatialSupports=[sources.occlusion,sources.scaleChange,sources.posePrior].filter((value):value is number=>value!==null&&value>=.5).length>0;
-  if(positive.length>=3&&motionSupports&&spatialSupports){const confidence=positive.reduce((sum,value)=>sum+value,0)/positive.length;return{relation:"surface-compatible",confidence:clamp01(confidence),sources,rejectionReason:"none"};}
-  return{relation:"unknown",confidence:values.length?clamp01(values.reduce((sum,value)=>sum+Math.max(0,value),0)/values.length):0,sources,rejectionReason:"insufficient-cues"};
+  const poseSupports=(sources.posePrior??0)>=.5;
+  const auxiliarySupports=[sources.occlusion,sources.scaleChange,sources.history].filter((value):value is number=>value!==null&&value>=.5).length>0;
+  if(motionSupports&&poseSupports&&auxiliarySupports){
+    const values=[sources.motionConsistency,sources.posePrior,sources.occlusion,sources.scaleChange,sources.history].filter((value):value is number=>value!==null&&value>0);
+    const confidence=values.reduce((sum,value)=>sum+value,0)/Math.max(1,values.length);
+    return{relation:"surface-compatible",confidence:clamp01(confidence),sources,rejectionReason:"none"};
+  }
+
+  const available=Object.values(sources).filter((value):value is number=>value!==null&&Number.isFinite(value));
+  const confidence=available.length?clamp01(available.reduce((sum,value)=>sum+Math.max(0,value),0)/available.length):0;
+  return{relation:"unknown",confidence,sources,rejectionReason:"insufficient-cues"};
 }

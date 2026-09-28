@@ -1,20 +1,43 @@
 import { Vector3 } from "three";
 import type { ContactPoint2 } from "./bodyContactTypes";
 import type { Vector3Data } from "./avatarPoseTypes";
+import type { ContactBodyJointName } from "./normalizedRigProfile";
 import type { AvatarContactSurface } from "./avatarContactRig";
 
-export interface AvatarContactAnchor {region:AvatarContactSurface["region"];point:Vector3Data;normal:Vector3Data;tangent:Vector3Data;parent:AvatarContactSurface["parent"]}
+export interface AvatarContactLocalAnchor {
+  region:AvatarContactSurface["region"];
+  pointLocal:Vector3Data;
+  normalLocal:Vector3Data;
+  tangentLocal:Vector3Data;
+  parentJoint:ContactBodyJointName;
+}
+export interface AvatarContactAnchor {
+  region:AvatarContactSurface["region"];
+  point:Vector3Data;
+  normal:Vector3Data;
+  tangent:Vector3Data;
+  parentJoint:ContactBodyJointName;
+}
 const data=(v:Vector3):Vector3Data=>({x:v.x,y:v.y,z:v.z});
-/** Ellipsoid front patch mapping. uv is clamped semantic patch space, never a raw camera coordinate. */
-export function mapContactAnchor(surface:AvatarContactSurface,uv:ContactPoint2={x:0,y:0},tangentAngleRadians=0):AvatarContactAnchor{
+
+/** Ellipsoid patch mapping in parent-local space. uv is semantic image patch space, never raw camera coordinates. */
+export function mapContactAnchor(surface:AvatarContactSurface,uv:ContactPoint2={x:0,y:0},tangentAngleRadians=0):AvatarContactLocalAnchor{
   const u=Math.max(-1,Math.min(1,uv.x)),v=Math.max(-1,Math.min(1,uv.y));
-  const radii=new Vector3(surface.radii.x,surface.radii.y,surface.radii.z),center=new Vector3(surface.center.x,surface.center.y,surface.center.z);
-  const right=new Vector3(surface.right.x,surface.right.y,surface.right.z).normalize(),up=new Vector3(surface.up.x,surface.up.y,surface.up.z).normalize(),forward=new Vector3(surface.forward.x,surface.forward.y,surface.forward.z).normalize();
-  const z=Math.sqrt(Math.max(0,1-u*u*.55-v*v*.55));
-  const local=new Vector3(u*radii.x*.7,v*radii.y*.7,z*radii.z);
-  const point=center.clone().addScaledVector(right,local.x).addScaledVector(up,local.y).addScaledVector(forward,local.z);
-  const normal=right.clone().multiplyScalar(local.x/(radii.x*radii.x)).addScaledVector(up,local.y/(radii.y*radii.y)).addScaledVector(forward,local.z/(radii.z*radii.z)).normalize();
-  let vertical=up.clone().addScaledVector(normal,-up.dot(normal)),horizontal=right.clone().addScaledVector(normal,-right.dot(normal));if(vertical.lengthSq()<1e-8)vertical=right.clone().addScaledVector(normal,-right.dot(normal));vertical.normalize();if(horizontal.lengthSq()<1e-8)horizontal=new Vector3().crossVectors(vertical,normal);horizontal.normalize();
-  const tangent=vertical.multiplyScalar(Math.cos(tangentAngleRadians)).addScaledVector(horizontal,Math.sin(tangentAngleRadians)).normalize();
-  return{region:surface.region,point:data(point),normal:data(normal),tangent:data(tangent),parent:surface.parent};
+  const radii=new Vector3(surface.radii.x,surface.radii.y,surface.radii.z),center=new Vector3(surface.centerLocal.x,surface.centerLocal.y,surface.centerLocal.z);
+  const uAxis=new Vector3(surface.uAxisLocal.x,surface.uAxisLocal.y,surface.uAxisLocal.z).normalize();
+  const vAxis=new Vector3(surface.vAxisLocal.x,surface.vAxisLocal.y,surface.vAxisLocal.z).normalize();
+  const outward=new Vector3(surface.outwardLocal.x,surface.outwardLocal.y,surface.outwardLocal.z).normalize();
+  const xNorm=u*.7,yNorm=v*.7,zNorm=Math.sqrt(Math.max(0,1-xNorm*xNorm-yNorm*yNorm));
+  const point=center.clone().addScaledVector(uAxis,xNorm*radii.x).addScaledVector(vAxis,yNorm*radii.y).addScaledVector(outward,zNorm*radii.z);
+  const normal=uAxis.clone().multiplyScalar(xNorm/Math.max(1e-8,radii.x))
+    .addScaledVector(vAxis,yNorm/Math.max(1e-8,radii.y))
+    .addScaledVector(outward,zNorm/Math.max(1e-8,radii.z)).normalize();
+  let imageUp=vAxis.clone().negate().addScaledVector(normal,vAxis.dot(normal));
+  let imageRight=uAxis.clone().addScaledVector(normal,-uAxis.dot(normal));
+  if(imageUp.lengthSq()<1e-8)imageUp=uAxis.clone().addScaledVector(normal,-uAxis.dot(normal));
+  imageUp.normalize();
+  if(imageRight.lengthSq()<1e-8)imageRight=new Vector3().crossVectors(imageUp,normal);
+  imageRight.normalize();
+  const tangent=imageUp.multiplyScalar(Math.cos(tangentAngleRadians)).addScaledVector(imageRight,Math.sin(tangentAngleRadians)).normalize();
+  return{region:surface.region,pointLocal:data(point),normalLocal:data(normal),tangentLocal:data(tangent),parentJoint:surface.parentJoint};
 }

@@ -20,7 +20,7 @@ describe("torso reference basis", () => {
     const basis=buildShoulderTorsoBasis(landmarks);expect(basis).not.toBeNull();expect(basis!.right.x).toBeCloseTo(1);expect(basis!.up.y).toBeCloseTo(1);
     expect(buildTorsoBasis(landmarks)).toBeNull();
   });
-  it("exposes the raw Pose shoulder yaw sign for the calibration adapter to correct",()=>{
+  it("exposes the raw Pose shoulder yaw without adding presentation mirroring",()=>{
     const angle=.3,c=Math.cos(angle),s=Math.sin(angle);const landmarks=Array.from({length:33},()=>point(0,0,0,0));
     landmarks[11]=point(.2*c,0,-.2*s,1);landmarks[12]=point(-.2*c,0,.2*s,1);
     const basis=buildShoulderTorsoBasis(landmarks)!;expect(basis.worldRotation.y).toBeLessThan(0);expect(basis.worldRotation.w).toBeGreaterThan(0);
