@@ -315,7 +315,7 @@ describe("three-point anatomical arm-frame solver", () => {
   // Phase 3B partial-arm: đo trên webcam — giơ tay chào, khuỷu ra ngoài khung, suy đoán chạy vô thời hạn
   // và prior pole trỏ vào trong thân → cẳng tay xuyên qua ngực. Nghiệm "đúng toán học" nhưng
   // sai giải phẫu. Khuỷu người thật luôn lệch ra phía ngoài thân.
-  it("pushes an inferred elbow out of the torso even when the prior points inward", () => {
+  it("does not let the anatomy prior flip an established inward branch while elbow is hidden", () => {
     // Vai trái ở +X, nên phía ngoài thân của tay trái là +X. Cổ tay giơ cao (+Y).
     const world = Array.from({ length: 33 }, () => lm(0, 0));
     world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
@@ -330,10 +330,9 @@ describe("three-point anatomical arm-frame solver", () => {
     };
     const solved = solveAnatomicalArmFrames(world, image, profile, { left: inwardHistory, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
     expect(solved).not.toBeNull();
-    expect(solved.diagnostic.confidenceFlags).toContain("elbow-anatomy-flip");
-    // Khuỷu phải nằm về phía ngoài thân (x lớn hơn trung điểm vai), không lấn sang phía đối diện.
-    expect(solved.elbowPosition.x).toBeGreaterThan(0);
-    // Ràng buộc chiều dài xương vẫn tuyệt đối sau khi lật.
+    expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-anatomy-flip");
+    expect(solved.elbowDirection!.x).toBeLessThan(0);
+    // Constraint chiều dài vẫn được giữ, nhưng không được biến thành evidence cho nhánh khác.
     expect(solved.diagnostic.upperSegmentLength).toBeCloseTo(.5, 6);
     expect(solved.diagnostic.lowerSegmentLength).toBeCloseTo(.5, 6);
   });
@@ -373,7 +372,7 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(solved.elbowDirection!.z).toBeGreaterThan(0);
   });
 
-  it("uses a fresh Hand palm-forward direction to reject the upside-down inferred elbow branch", () => {
+  it("does not let Hand plausibility flip the established branch without an elbow observation", () => {
     const world = Array.from({ length: 33 }, () => lm(0, 0));
     world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
     world[13] = lm(.45, .433); world[15] = lm(.7, 0);
@@ -391,8 +390,8 @@ describe("three-point anatomical arm-frame solver", () => {
     ).sides.left!;
 
     expect(solved.elbowSource).toBe("inferred-history");
-    expect(solved.elbowPosition.y).toBeLessThan(0);
-    expect(solved.diagnostic.confidenceFlags).toContain("elbow-hand-palm-branch");
+    expect(solved.elbowPosition.y).toBeGreaterThan(0);
+    expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-hand-palm-branch");
   });
 
   it("downgrades a high-visibility elbow that makes the forearm point opposite a good Hand palm", () => {
@@ -412,9 +411,9 @@ describe("three-point anatomical arm-frame solver", () => {
     ).sides.left!;
 
     expect(solved.elbowSource).toBe("inferred-history");
-    expect(solved.elbowPosition.y).toBeLessThan(0);
+    expect(solved.elbowPosition.y).toBeGreaterThan(0);
     expect(solved.diagnostic.confidenceFlags).toContain("observed-elbow-hand-conflict");
-    expect(solved.diagnostic.confidenceFlags).toContain("elbow-hand-palm-branch");
+    expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-hand-palm-branch");
   });
 
   it("does not let a low-quality Hand palm override the established elbow branch", () => {
@@ -590,7 +589,7 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(vector(expired.secondary.lower!).angleTo(transported)).toBeGreaterThan(1e-3);
     expect(vector(expired.secondary.lower!).dot(vector(expired.primary.lower!))).toBeCloseTo(0, 6);
   });
-  it("searches beyond the two opposite poles when the inferred forearm would cross a non-contact face region", () => {
+  it("reports face plausibility without letting it select a new hidden-elbow branch", () => {
     const world = Array.from({ length: 33 }, () => lm(0, 0));
     world[11] = lm(.2, 0); world[12] = lm(-.2, 0); world[13] = lm(.45, .433); world[15] = lm(.7, 0);
     world[14] = lm(-.45, 0); world[16] = lm(-.7, 0); world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
@@ -605,8 +604,8 @@ describe("three-point anatomical arm-frame solver", () => {
     }).sides.left!;
     expect(solved.diagnostic.spatial?.candidateCount).toBe(24);
     expect(solved.diagnostic.spatial?.faceEvidenceUsed).toBe(true);
-    expect(solved.diagnostic.confidenceFlags).toContain("elbow-face-clearance-branch");
-    expect(solved.elbowDirection).not.toEqual({ x: 0, y: 1, z: 0 });
+    expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-face-clearance-branch");
+    expect(solved.elbowDirection).toEqual({ x: 0, y: 1, z: 0 });
   });
 
   it("rejects a visible elbow whose mapped forearm penetrates the avatar head capsule", () => {
@@ -627,8 +626,8 @@ describe("three-point anatomical arm-frame solver", () => {
     const solved = solveAnatomicalArmFrames(world, imageFrame(world), collisionProfile, { left: history, right: emptyHistory() }, 100, DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false).sides.left!;
     expect(solved.elbowSource).toBe("inferred-history");
     expect(solved.diagnostic.confidenceFlags).toContain("observed-elbow-head-collision");
-    expect(solved.diagnostic.confidenceFlags).toContain("elbow-rig-collision-branch");
-    expect(solved.diagnostic.spatial?.headCollisionPenalty).toBe(0);
+    expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-rig-collision-branch");
+    expect(solved.diagnostic.spatial?.headCollisionPenalty).toBeGreaterThan(0);
   });
 
   it("converts through a non-identity ancestor while preserving world directions", () => {

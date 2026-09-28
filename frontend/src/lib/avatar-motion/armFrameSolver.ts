@@ -652,14 +652,6 @@ function inferElbow(
 
   const count = Math.max(8, Math.min(64, Math.round(scoring.elbowInferenceCandidateCount)));
 
-  const candidates = Array.from({ length: count }, (_, index) => {
-
-    const angle = 2 * Math.PI * index / count;
-
-    return { pole: priorPole.clone().multiplyScalar(Math.cos(angle)).addScaledVector(perpendicular, Math.sin(angle)).normalize(), angle };
-
-  });
-
   const evaluate = (candidate: { pole: Vector3; angle: number }, includePalm: boolean, includeAnatomy: boolean, includeFace: boolean, includeCollision: boolean): ScoredPole => {
 
     let total = scoring.elbowInferencePriorWeight * (1 - candidate.pole.dot(priorPole));
@@ -731,9 +723,13 @@ function inferElbow(
 
   };
 
-  const choose = (palmEnabled: boolean, anatomyEnabled: boolean, faceEnabled: boolean, collisionEnabled: boolean) => candidates.map((candidate) => evaluate(candidate, palmEnabled, anatomyEnabled, faceEnabled, collisionEnabled)).reduce((best, value) => value.total + 1e-9 < best.total ? value : best);
-
-  const chosen = choose(true, true, true, true), withoutPalm = choose(false, true, true, true), withoutAnatomy = choose(true, false, true, true), withoutFace = choose(true, true, false, true), withoutCollision = choose(true, true, true, false);
+  // Missing observation must not create a new motion intent. Plausibility scores are
+  // diagnostic/validation signals only: continue the last trusted bend branch by
+  // projecting it onto this frame's exact solution circle. When history is not yet
+  // available, the rig prior seeds the branch once; subsequent frames carry it forward.
+  const continuationPole = (previousUsable ? previous! : priorPole).clone().normalize();
+  const continuationAngle = Math.atan2(continuationPole.dot(perpendicular), continuationPole.dot(priorPole));
+  const chosen = evaluate({ pole: continuationPole, angle: continuationAngle }, true, true, true, true);
 
   const elbow = center.clone().addScaledVector(chosen.pole, radius);
 
@@ -743,17 +739,13 @@ function inferElbow(
 
     elbow, reachRatio: distance / maximumReach, confidence: Math.max(0, 1 - violation / Math.max(1e-6, slack)), elbowDirection: vectorData(chosen.pole),
 
-    sideFlipPrevented: Boolean(previousUsable && chosen.pole.dot(previous!) >= 0 && priorPole.dot(previous!) < 0),
+    sideFlipPrevented: Boolean(previousUsable && priorPole.dot(previous!) < 0),
 
-    anatomyFlipApplied: Boolean(outwardUsable
+    anatomyFlipApplied: false,
 
-      && withoutAnatomy.pole.dot(outward!) < -scoring.elbowInferenceDeepInsideThreshold
+    palmBranchApplied: false,
 
-      && chosen.pole.dot(outward!) > withoutAnatomy.pole.dot(outward!)),
-
-    palmBranchApplied: Boolean(palmUsable && chosen.angle !== withoutPalm.angle),
-
-    faceBranchApplied: Boolean(faceUsable && chosen.angle !== withoutFace.angle), collisionBranchApplied: Boolean(profile.collisionReference && chosen.angle !== withoutCollision.angle),
+    faceBranchApplied: false, collisionBranchApplied: false,
 
     spatial: { candidateCount: count, selectedAngleRadians: chosen.angle, faceEvidenceUsed: faceUsable, intentionalFaceContact: face?.allowContact ?? false, facePenalty: chosen.face, headCollisionPenalty: chosen.head, torsoCollisionPenalty: chosen.torso },
 
