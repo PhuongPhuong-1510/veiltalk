@@ -544,7 +544,17 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
     const restHeadBone=this.model!.rigProfile?.contactSkeleton?.joints.head?.restWorldPosition;
     const headOffset=restHeadBone?restHead.sub(new Vector3(restHeadBone.x,restHeadBone.y,restHeadBone.z)).applyQuaternion(head.getWorldQuaternion(new Quaternion()).multiply(new Quaternion(
       this.model!.rigProfile!.contactSkeleton!.joints.head!.restWorldRotation.x,this.model!.rigProfile!.contactSkeleton!.joints.head!.restWorldRotation.y,this.model!.rigProfile!.contactSkeleton!.joints.head!.restWorldRotation.z,this.model!.rigProfile!.contactSkeleton!.joints.head!.restWorldRotation.w).invert())):new Vector3();
-    const posedProfile=poseAvatarCollisionProfile(staticProfile,{headCenter:headPosition.clone().add(headOffset),neckStart:chestPosition.clone().lerp(neckPosition,.72),neckEnd:neckPosition.clone().lerp(headPosition,.55),torsoStart:chestPosition,torsoEnd:hipsPosition});
+    const rigJoints=model.rigProfile?.contactSkeleton?.joints,chestRest=model.bones.upperChest?rigJoints?.upperChest:rigJoints?.chest;
+    let chestLeftCenter:Vector3|undefined,chestRightCenter:Vector3|undefined,frontNormal:Vector3|undefined;
+    if(chestRest){
+      const restPosition=new Vector3(chestRest.restWorldPosition.x,chestRest.restWorldPosition.y,chestRest.restWorldPosition.z),restRotation=new Quaternion(chestRest.restWorldRotation.x,chestRest.restWorldRotation.y,chestRest.restWorldRotation.z,chestRest.restWorldRotation.w);
+      const delta=chest.getWorldQuaternion(new Quaternion()).multiply(restRotation.invert());
+      const poseRestPoint=(point:{x:number;y:number;z:number})=>new Vector3(point.x,point.y,point.z).sub(restPosition).applyQuaternion(delta).add(chestPosition);
+      if(staticProfile.body.chestLeft)chestLeftCenter=poseRestPoint(staticProfile.body.chestLeft.center);
+      if(staticProfile.body.chestRight)chestRightCenter=poseRestPoint(staticProfile.body.chestRight.center);
+      if(staticProfile.body.frontNormal)frontNormal=new Vector3(staticProfile.body.frontNormal.x,staticProfile.body.frontNormal.y,staticProfile.body.frontNormal.z).applyQuaternion(delta).normalize();
+    }
+    const posedProfile=poseAvatarCollisionProfile(staticProfile,{headCenter:headPosition.clone().add(headOffset),neckStart:chestPosition.clone().lerp(neckPosition,.72),neckEnd:neckPosition.clone().lerp(headPosition,.55),torsoStart:chestPosition,torsoEnd:hipsPosition,...(chestLeftCenter?{chestLeftCenter}:{}),...(chestRightCenter?{chestRightCenter}:{}),...(frontNormal?{frontNormal}:{})});
     const poses={} as Record<"left"|"right",AvatarCollisionPose>;
     const diagnostic:AppliedSelfCollisionDiagnostic={enabled:true,mode:"correction",left:null,right:null,interArm:[]};
     for(const side of ["left","right"] as const){

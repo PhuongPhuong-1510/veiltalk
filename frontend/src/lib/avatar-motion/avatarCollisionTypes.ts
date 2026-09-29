@@ -1,7 +1,7 @@
 import type { Vector3Data } from "./avatarPoseTypes";
 import type { ArmObservability } from "./armObservability";
 
-export type AvatarCollisionBodyPart = "head" | "neck" | "torso";
+export type AvatarCollisionBodyPart = "head" | "neck" | "torso" | "chestLeft" | "chestRight";
 export type AvatarCollisionArmPart = "upperArm" | "forearm" | "hand";
 
 export interface CollisionContact {
@@ -15,6 +15,8 @@ export interface CollisionContact {
   /** Unit vector from the body collider toward the arm collider. */
   surfaceNormal: Vector3Data;
   normalizedPenetration: number;
+  /** Contact position on the arm capsule: 0=start joint, 1=end joint. */
+  armParameter: number;
 }
 
 export interface AvatarCollisionPose {

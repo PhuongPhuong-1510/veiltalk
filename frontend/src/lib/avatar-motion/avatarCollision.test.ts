@@ -50,6 +50,23 @@ describe("avatar self collision", () => {
     expect(queryAvatarArmBodyCollisions(profile, "left", pose).some((c) => c.armPart === "forearm" && c.bodyPart === "head")).toBe(true);
   });
 
+  it("detects a forearm against the model-front chest volume outside the old torso capsule",()=>{
+    const chestProfile:AvatarCollisionProfile={...profile,body:{...profile.body,
+      chestLeft:{center:{x:-.12,y:.65,z:.13},radius:.23},chestRight:{center:{x:.12,y:.65,z:.13},radius:.23},frontNormal:{x:0,y:0,z:1}}};
+    const pose={shoulder:{x:-.5,y:.9,z:.35},elbow:{x:-.12,y:.75,z:.35},wrist:{x:-.12,y:.4,z:.35}};
+    const contacts=queryAvatarArmBodyCollisions(chestProfile,"left",pose);
+    expect(contacts.some(c=>c.armPart==="forearm"&&c.bodyPart==="torso")).toBe(false);
+    expect(contacts.some(c=>c.armPart==="forearm"&&c.bodyPart==="chestLeft")).toBe(true);
+  });
+
+  it("biases an ambiguous central chest penetration toward the visible front surface",()=>{
+    const chestProfile:AvatarCollisionProfile={...profile,body:{...profile.body,
+      chestLeft:{center:{x:-.12,y:.65,z:.13},radius:.23},chestRight:{center:{x:.12,y:.65,z:.13},radius:.23},frontNormal:{x:0,y:0,z:1}}};
+    const pose={shoulder:{x:-.5,y:.9,z:0},elbow:{x:-.12,y:.75,z:0},wrist:{x:-.12,y:.4,z:0}};
+    const contact=queryAvatarArmBodyCollisions(chestProfile,"left",pose).find(c=>c.armPart==="forearm"&&c.bodyPart==="chestLeft");
+    expect(contact?.surfaceNormal.z).toBeGreaterThan(0);
+  });
+
   it("publishes only a bounded improvement when the correction budget is insufficient", () => {
     const pose = { shoulder:{x:-.4,y:.65,z:0}, elbow:{x:-.1,y:.35,z:0}, wrist:{x:.35,y:.2,z:0} };
     const result = correctAvatarArmCollision(profile, { side:"left", baseline:pose, deltaSeconds:1/60, observability:"S-W", bendPole:{x:0,y:1,z:0}, budget:{...budget,maxWristDisplacementPerFrame:.001,maxTotalCorrection:.001} });
