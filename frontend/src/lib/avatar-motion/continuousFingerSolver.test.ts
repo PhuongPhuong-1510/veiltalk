@@ -127,6 +127,28 @@ describe("continuous finger human-domain geometry",()=>{
     expect(result.diagnostics.leftIndexIntermediate?.anatomicalPriorApplied).toBe(false);
     expect(result.rotations.leftIndexIntermediate).toEqual({x:0,y:0,z:0,w:1});
   });
+  it("preserves a side-on pointing index when world depth falsely curls it",()=>{
+    const world=Array.from({length:21},()=>p(0,0));world[0]=p(0,-1);
+    const roots=[5,9,13,17] as const;
+    roots.forEach((root)=>{const x=(5-root)/6;world[root]=p(x,0);world[root+1]=p(x,1);world[root+2]=p(x,1,1);world[root+3]=p(x,0,1);});
+    // MediaPipe World reports a false depth bend for the index, while its image chain is straight.
+    world[5]=p(0,0);world[6]=p(0,1);world[7]=p(0,2,1);world[8]=p(0,3,2);
+    const image=world.map(point=>({...point,z:0}));
+    image[5]=p(0,0);image[6]=p(0,1);image[7]=p(0,2);image[8]=p(0,3);
+    const sideOnBasis={across:{x:1,y:0,z:0},forward:{x:0,y:.1,z:-.995},normal:{x:0,y:.995,z:.1}};
+    const imageBasis={across:{x:1,y:0,z:0},forward:{x:0,y:1,z:0},normal:{x:0,y:0,z:1}};
+    const rig={side:"left",chains:[{finger:"index",segments:[
+      {joint:"leftIndexProximal",flexAxisLocal:{x:1,y:0,z:0},hasChild:true},
+      {joint:"leftIndexIntermediate",flexAxisLocal:{x:1,y:0,z:0},hasChild:true},
+    ],truncatedAtSegment:"Distal"}],controllableSegmentCount:2} satisfies HandFingerRig;
+    const solver=new ContinuousFingerSolver(),config=DEFAULT_AVATAR_MOTION_CONFIG.continuousFinger;
+    solver.solve(world,sideOnBasis,1,100,100,rig,config,image,imageBasis,1);
+    const result=solver.solve(world,sideOnBasis,1,200,200,rig,config,image,imageBasis,1);
+    expect(Math.abs(sideOnBasis.normal.z)).toBeLessThan(config.imageExtensionFacingThreshold);
+    expect(result.diagnostics.leftIndexIntermediate?.imageExtensionOverride).toBe(true);
+    expect(result.diagnostics.leftIndexIntermediate?.anatomicalPriorApplied).toBe(false);
+    expect(result.rotations.leftIndexIntermediate).toEqual({x:0,y:0,z:0,w:1});
+  });
   it("uses timestamp lifecycle and emits exact rest instead of leaving a frozen renderer key",()=>{
     const hand=Array.from({length:21},(_,i)=>p((i%4)*.1,Math.floor(i/4)*.1));hand[5]=p(0,1);hand[6]=p(0,2);hand[7]=p(1,2);hand[8]=p(2,2);
     const basis={across:{x:1,y:0,z:0},forward:{x:0,y:1,z:0},normal:{x:0,y:0,z:1}};

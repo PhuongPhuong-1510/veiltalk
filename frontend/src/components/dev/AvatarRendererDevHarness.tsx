@@ -14,7 +14,7 @@ import type { GazeEyelidDiagnostic } from "../../lib/avatar-motion/gazeEyelidCou
 import type { GazeMetricsSnapshot } from "../../lib/avatar-motion/gazeMetrics";
 import type { FingerRigProfile } from "../../lib/avatar-motion/fingerRig";
 import type { GesturePoseLabel } from "../../lib/avatar-motion/gestureClassifier";
-import type { AppliedFacialExpressionDiagnostic, AppliedShoulderTranslationDiagnostic, AvatarRenderer } from "../../lib/avatar-renderer/avatarRenderer";
+import type { AppliedFacialExpressionDiagnostic, AppliedSelfCollisionDiagnostic, AppliedShoulderTranslationDiagnostic, AvatarRenderer } from "../../lib/avatar-renderer/avatarRenderer";
 import type { AppliedGazeDiagnostic, GazeCapability } from "../../lib/avatar-renderer/gazeCapabilityAdapter";
 import { clearDiagnosticHelpers, createDiagnosticHelpers, elbowPlaneNormal, updateDiagnosticHelpers } from "../../lib/avatar-renderer/avatarDiagnostics";
 import type { ModelCapabilityReport } from "../../lib/avatar-renderer/modelTypes";
@@ -40,8 +40,10 @@ const quaternion = (value: {x:number;y:number;z:number;w:number}|null|undefined)
 
 export default function AvatarRendererDevHarness() {
   const videoRef = useRef<HTMLVideoElement>(null); const rendererRef = useRef<AvatarRenderer | null>(null); const helpersRef = useRef<Group | null>(null);
+  const stageRef = useRef<HTMLElement>(null);
   const modelLoadRequestRef = useRef(0);
   const freezeTimerRef = useRef<number | null>(null);
+  const evidenceCaptureTimerRef = useRef<number | null>(null);
   const processorRef = useRef(new AvatarMotionProcessor({continuousFingerEnabled:true})); const latestPacket = useRef<AvatarPosePacket | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
   const [filtered, setFiltered] = useState(true); const [constraints, setConstraints] = useState(true); const [smoothing, setSmoothing] = useState(true);
   const [handTwistEnabled, setHandTwistEnabled] = useState(true);
@@ -63,6 +65,8 @@ export default function AvatarRendererDevHarness() {
   const [helpers, setHelpers] = useState(false); const [frozen, setFrozen] = useState(false);
   const [sampleName, setSampleName] = useState("live"); const [frozenSequence, setFrozenSequence] = useState(0);
   const [freezeCountdown, setFreezeCountdown] = useState<number | null>(null);
+  const [evidenceCaptureCountdown, setEvidenceCaptureCountdown] = useState<number | null>(null);
+  const [evidenceCaptureStatus, setEvidenceCaptureStatus] = useState<string | null>(null);
   const [simulatedLoss, setSimulatedLoss] = useState(false); const [trackingRunning, setTrackingRunning] = useState(false); const [rendererRunning, setRendererRunning] = useState(true);
   const [poseModel, setPoseModel] = useState<PoseModelVariant>(DEFAULT_POSE_MODEL);
   const [avatarModelId, setAvatarModelId] = useState(DEFAULT_DEV_AVATAR_MODEL_ID);
@@ -75,6 +79,7 @@ export default function AvatarRendererDevHarness() {
   const [shoulderVertical, setShoulderVertical] = useState<ShoulderVerticalDiagnosticSnapshot>(() => processorRef.current.getShoulderVerticalDiagnostics());
   const [torsoLean,setTorsoLean]=useState<TorsoLeanDiagnosticSnapshot>(()=>processorRef.current.getTorsoLeanDiagnostics());
   const [appliedShoulderTranslation, setAppliedShoulderTranslation] = useState<AppliedShoulderTranslationDiagnostic | null>(null);
+  const [selfCollision, setSelfCollision] = useState<AppliedSelfCollisionDiagnostic | null>(null);
   const [eyeBrowExpressions, setEyeBrowExpressions] = useState<EyeBrowExpressionSnapshot>(() => processorRef.current.getEyeBrowExpressions());
   const [mouthExpressions, setMouthExpressions] = useState<MouthExpressionSnapshot>(() => processorRef.current.getMouthExpressions());
   const [facialDynamics, setFacialDynamics] = useState<FacialExpressionDynamicsSnapshot>(() => processorRef.current.getFacialDynamics());
@@ -156,12 +161,13 @@ export default function AvatarRendererDevHarness() {
       const renderer = rendererRef.current; const raw = frozenRaw.current ?? latestRaw.current; setPacket(latestPacket.current); setMotionDiagnostics(processorRef.current.getLastDiagnostics()); setFacialCalibration(processorRef.current.getFacialCalibration()); setUpperBodyCalibration(processorRef.current.getUpperBodyCalibration()); setUpperBodyLife(processorRef.current.getUpperBodyLifeMotion()); setUpperBodyMetrics(processorRef.current.getUpperBodyMetrics()); setShoulderVertical(processorRef.current.getShoulderVerticalDiagnostics());setTorsoLean(processorRef.current.getTorsoLeanDiagnostics()); setEyeBrowExpressions(processorRef.current.getEyeBrowExpressions()); setMouthExpressions(processorRef.current.getMouthExpressions()); setFacialDynamics(processorRef.current.getFacialDynamics()); setMouthTelemetry(processorRef.current.getMouthPipelineTelemetry()); setGazeDiagnostics(processorRef.current.getGazeDiagnostics()); setGazeMetrics(processorRef.current.getGazeMetrics()); setGazeEyelidDiagnostic(processorRef.current.getGazeEyelidDiagnostic()); if (!renderer) return;
       setAppliedFacialExpressions(renderer.getAppliedFacialExpressions());
       setAppliedShoulderTranslation(renderer.getAppliedShoulderTranslation());
+      setSelfCollision(renderer.getSelfCollisionDiagnostics());
       setGazeCapability(renderer.getGazeCapability()); setAppliedGaze(renderer.getAppliedGaze());
       setRendererMetrics(renderer.getMetrics()); const model = renderer.getDiagnosticModel(); if (!model) return;
       if (raw?.pose.worldLandmarks) { setPlaneNormals({ left: elbowPlaneNormal(raw.pose.worldLandmarks, "left", DIAGNOSTIC_CONVERSION), right: elbowPlaneNormal(raw.pose.worldLandmarks, "right", DIAGNOSTIC_CONVERSION) }); if (helpersRef.current) updateDiagnosticHelpers(helpersRef.current, model.bones, raw.pose.worldLandmarks, DIAGNOSTIC_CONVERSION); }
     }, 400); return () => window.clearInterval(timer);
   }, []);
-  useEffect(() => () => { if (freezeTimerRef.current !== null) window.clearInterval(freezeTimerRef.current); stopAutoCapture(); if (helpersRef.current) clearDiagnosticHelpers(helpersRef.current); processorRef.current.dispose(); }, []);
+  useEffect(() => () => { if (freezeTimerRef.current !== null) window.clearInterval(freezeTimerRef.current); if (evidenceCaptureTimerRef.current !== null) window.clearInterval(evidenceCaptureTimerRef.current); stopAutoCapture(); if (helpersRef.current) clearDiagnosticHelpers(helpersRef.current); processorRef.current.dispose(); }, []);
   useEffect(() => { const renderer = rendererRef.current; const model = renderer?.getDiagnosticModel(); if (!model) return; if (helpers && !helpersRef.current) helpersRef.current = createDiagnosticHelpers(model.root, model.bones); if (!helpers && helpersRef.current) { clearDiagnosticHelpers(helpersRef.current); helpersRef.current = null; } }, [helpers, capability]);
 
   const resetModelMotionState = useCallback(() => {
@@ -343,13 +349,64 @@ export default function AvatarRendererDevHarness() {
       window.clearInterval(freezeTimerRef.current!); freezeTimerRef.current = null; setFreezeCountdown(null); toggleFreeze();
     }, 1000);
   }
+  function drawMirroredCover(context: CanvasRenderingContext2D, source: CanvasImageSource, sourceWidth: number, sourceHeight: number, x: number, y: number, width: number, height: number) {
+    const scale = Math.max(width / sourceWidth, height / sourceHeight);
+    const cropWidth = width / scale;
+    const cropHeight = height / scale;
+    context.save();
+    context.translate(x + width, y);
+    context.scale(-1, 1);
+    context.drawImage(source, (sourceWidth - cropWidth) / 2, (sourceHeight - cropHeight) / 2, cropWidth, cropHeight, 0, 0, width, height);
+    context.restore();
+  }
+  function captureEvidenceImage() {
+    const avatarCanvas = stageRef.current?.querySelector("canvas");
+    const video = videoRef.current;
+    if (!avatarCanvas || !video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth === 0) {
+      setEvidenceCaptureStatus("Không thể chụp: hãy bật camera và chờ hình ảnh xuất hiện.");
+      return;
+    }
+
+    const panelWidth = 960; const panelHeight = 540; const labelHeight = 52; const gap = 12;
+    const output = document.createElement("canvas");
+    output.width = panelWidth * 2 + gap; output.height = panelHeight + labelHeight;
+    const context = output.getContext("2d");
+    if (!context) { setEvidenceCaptureStatus("Không thể tạo ảnh bằng chứng trên trình duyệt này."); return; }
+    context.fillStyle = "#0d0b14"; context.fillRect(0, 0, output.width, output.height);
+    drawMirroredCover(context, avatarCanvas, avatarCanvas.width, avatarCanvas.height, 0, labelHeight, panelWidth, panelHeight);
+    drawMirroredCover(context, video, video.videoWidth, video.videoHeight, panelWidth + gap, labelHeight, panelWidth, panelHeight);
+    context.fillStyle = "#f5f3ff"; context.font = "600 24px Inter, sans-serif";
+    context.fillText("Avatar", 18, 34); context.fillText("Webcam", panelWidth + gap + 18, 34);
+    output.toBlob((blob) => {
+      if (!blob) { setEvidenceCaptureStatus("Không thể xuất ảnh PNG."); return; }
+      const url = URL.createObjectURL(blob); const link = document.createElement("a");
+      link.href = url; link.download = `avatar-evidence-${new Date().toISOString().replace(/[:.]/g, "-")}.png`; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setEvidenceCaptureStatus("Đã chụp và tải ảnh avatar + webcam.");
+    }, "image/png");
+  }
+  function captureEvidenceAfterCountdown() {
+    if (evidenceCaptureTimerRef.current !== null) return;
+    if (!trackingRunning || !latestRaw.current) { setEvidenceCaptureStatus("Hãy bật Start tracking trước khi chụp."); return; }
+    setEvidenceCaptureStatus(null);
+    let remaining = 5; setEvidenceCaptureCountdown(remaining);
+    evidenceCaptureTimerRef.current = window.setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) { setEvidenceCaptureCountdown(remaining); return; }
+      window.clearInterval(evidenceCaptureTimerRef.current!); evidenceCaptureTimerRef.current = null; setEvidenceCaptureCountdown(null);
+      // Chụp ngay sau lượt render kế tiếp để WebGL canvas vẫn còn đầy đủ pixel.
+      window.requestAnimationFrame(() => captureEvidenceImage());
+    }, 1000);
+  }
   const evidenceFrame = frozenRaw.current ?? latestRaw.current; const posePoints = evidenceFrame?.pose.worldLandmarks; const evidenceLandmarks = posePoints ? { leftEar: posePoints[7], rightEar: posePoints[8], leftShoulder: posePoints[11], rightShoulder: posePoints[12], leftElbow: posePoints[13], rightElbow: posePoints[14], leftWrist: posePoints[15], rightWrist: posePoints[16], leftHip: posePoints[23], rightHip: posePoints[24] } : null;
   return <main className="avatar-renderer-dev">
-    <header><div><strong>DEV ONLY · LOCAL ONLY</strong><h1>P4-T10 Retargeting Diagnostics</h1></div><p>Không upload, capture hoặc lưu raw frame.</p></header>
+    <header><div><strong>DEV ONLY · LOCAL ONLY</strong><h1>P4-T10 Retargeting Diagnostics</h1></div><p>Ảnh bằng chứng chỉ được tải xuống máy, không upload raw frame.</p></header>
     {error && <pre className="dev-error" role="alert">{error}</pre>}
     <section className="dev-controls">
       <button onClick={() => void toggleTracking()}>{trackingRunning ? "Stop tracking" : "Start tracking"}</button><button onClick={toggleRenderer}>{rendererRunning ? "Stop renderer" : "Start renderer"}</button><button onClick={reloadModel} disabled={modelLoading}>{modelLoading ? "Loading model…" : "Reload model"}</button><button onClick={() => { processorRef.current.calibrateFaceNeutral(); setFacialCalibration(processorRef.current.getFacialCalibration()); setUpperBodyCalibration(processorRef.current.getUpperBodyCalibration()); }}>Calibrate neutral face + upper body</button><span className={`facial-calibration-badge ${facialCalibration.state}`}>F1: {facialCalibration.state} · {facialCalibration.acceptedSamples}/{facialCalibration.requiredSamples} · {facialCalibration.collectionMode}</span><span className="eye-brow-badge">AR4: {upperBodyCalibration.state} · {upperBodyCalibration.acceptedPairs}/{upperBodyCalibration.requiredPairs} · {upperBodyCalibration.mode}</span><span className="eye-brow-badge">F2 blink L/R: {eyeBrowExpressions.blinkLeft.toFixed(2)}/{eyeBrowExpressions.blinkRight.toFixed(2)}{eyeBrowExpressions.unilateralCandidate ? ` · guard ${eyeBrowExpressions.unilateralCandidate}` : ""}</span>
       <button onClick={toggleFreeze} disabled={!frozen && !latestRaw.current}>{frozen ? "Unfreeze" : "Freeze current"}</button><button onClick={freezeAfterCountdown} disabled={frozen || freezeCountdown !== null || !latestRaw.current}>{freezeCountdown === null ? "Freeze in 5s" : `Freeze in ${freezeCountdown}s`}</button>
+      <button className="evidence-capture-button" onClick={captureEvidenceAfterCountdown} disabled={evidenceCaptureCountdown !== null}>{evidenceCaptureCountdown === null ? "Chụp bằng chứng sau 5s" : `Chuẩn bị chụp: ${evidenceCaptureCountdown}s`}</button>
+      {evidenceCaptureStatus && <span className="evidence-capture-status" role="status">{evidenceCaptureStatus}</span>}
       <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Dynamics/filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={handTwistEnabled} onChange={(e) => setHandTwistEnabled(e.target.checked)} /> Hand twist (2B-5)</label><label><input type="checkbox" checked={continuousFingerEnabled} onChange={(e)=>setContinuousFingerEnabled(e.target.checked)} /> Continuous fingers (AR6)</label><label><input type="checkbox" checked={contactShadowEnabled} onChange={(e)=>{const enabled=e.target.checked;setContactShadowEnabled(enabled);if(!enabled)setContactCorrectionEnabled(false);}} /> Hand-body contact (AR9 shadow)</label><label><input type="checkbox" checked={contactCorrectionEnabled} onChange={(e)=>{const enabled=e.target.checked;setContactCorrectionEnabled(enabled);if(enabled)setContactShadowEnabled(true);}} /> Apply AR9 correction</label><label><input type="checkbox" checked={gestureEnabled} disabled={continuousFingerEnabled} onChange={(e) => setGestureEnabled(e.target.checked)} /> Finger gesture (legacy)</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Bone smoothing</label><label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
       <label>Pose model <select value={poseModel} onChange={(e) => { if (trackingRunning) { tracking?.stop(); setTrackingRunning(false); } setPoseModel(e.target.value as PoseModelVariant); }}><option value="full">full (chính xác hơn)</option><option value="lite">lite (nhẹ hơn)</option></select></label>
       <label>Avatar model <select value={avatarModelId} onChange={(event) => selectAvatarModel(event.target.value)}>{DEV_AVATAR_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select></label>
@@ -359,7 +416,7 @@ export default function AvatarRendererDevHarness() {
       <label>Camera attention <input type="range" min="0" max="1" step="0.05" value={gazeAttention} onChange={(event) => setGazeAttention(Number(event.target.value))} disabled={gazeMode !== "cinematic"} /> {gazeAttention.toFixed(2)}</label>
       <button onClick={() => { setZoom(1); setVerticalOffset(0); }}>Reset khung hình</button>
     </section>
-    <section className="dev-stage"><AvatarCanvas onReady={attachRenderer} onDispose={detachRenderer} onError={(reason) => setError(`WebGL: ${reason.message}`)} options={{ smoothing, onContextLost: (reason) => setError(reason.message) }} /><div className="dev-camera-preview"><video ref={videoRef} muted playsInline />{!trackingRunning && <p>Camera chưa bật<br /><small>Bấm Start tracking để dùng webcam</small></p>}</div></section>
+    <section className="dev-stage" ref={stageRef}><AvatarCanvas onReady={attachRenderer} onDispose={detachRenderer} onError={(reason) => setError(`WebGL: ${reason.message}`)} options={{ smoothing, onContextLost: (reason) => setError(reason.message) }} /><div className="dev-camera-preview"><video ref={videoRef} muted playsInline />{!trackingRunning && <p>Camera chưa bật<br /><small>Bấm Start tracking để dùng webcam</small></p>}</div></section>
     <section className="dev-panels">
       <article><h2>Frozen evidence</h2><p>Mode: {frozen ? "FROZEN" : "LIVE"} · sample: <strong>{sampleName}</strong> · frozen #{frozenSequence}</p><p>Conversion: <strong>{DIAGNOSTIC_CONVERSION}</strong> · raw timestamp {number(evidenceFrame?.frameTimestampMs, 0)} · packet seq {packet?.sequence ?? "—"}</p><p>Solver {filtered ? "+dynamics/filter" : "raw"} · constraints {constraints ? "on" : "off"} · Hand twist {handTwistEnabled ? "on" : "Pose-only"} · bone smoothing {smoothing ? "on" : "off"}</p><pre>required world landmarks {JSON.stringify(evidenceLandmarks, null, 2)}</pre><pre>plane normal {JSON.stringify(planeNormals, null, 2)}</pre></article>
       <article><h2>Realtime</h2><p>Avatar: <strong>{getDevAvatarModel(avatarModelId)?.label ?? avatarModelId}</strong>{modelLoading ? " · đang tải…" : ""}</p><p>Tracking/Pipeline: {number(trackingMetrics?.cameraFps)} / {number(trackingMetrics?.pipelineFps)} FPS</p><p>Renderer: {number(rendererMetrics?.fps)} FPS · p95 {number(rendererMetrics?.frameTimeP95Ms)}ms</p><p>Processor→draw: {number(rendererMetrics?.processorInputToDrawMs)}ms</p>
@@ -548,6 +605,15 @@ export default function AvatarRendererDevHarness() {
             {flag("observed-elbow-head-collision") && <> · <strong>Pose elbow xuyên head bị bác bỏ</strong></>}
             {flag("elbow-face-clearance-branch") && <> · <strong>face-clearance đổi mặt phẳng</strong></>}
             {flag("elbow-rig-collision-branch") && <> · <strong>collision rig đổi mặt phẳng</strong></>}
+          </p>;
+        })}
+      </article>
+      <article><h2>Avatar self-collision</h2>
+        <p>Runtime: <strong>{selfCollision?.enabled ? selfCollision.mode : "off"}</strong> · inter-arm {selfCollision?.interArm.length ?? 0}</p>
+        {(["left", "right"] as const).map((side) => {
+          const value = selfCollision?.[side];
+          return <p key={side}><strong>{side}</strong>: {value ? `${value.reason} · baseline ${value.baselinePreserved ? "preserved" : "corrected"} · before ${value.contactsBefore.length} · after ${value.contactsAfter.length}` : "—"}
+            {value?.contactsBefore[0] && <><br /><small>{value.contactsBefore[0].armPart} → {value.contactsBefore[0].bodyPart} · signed distance {value.contactsBefore[0].signedDistance.toFixed(3)} · penetration {value.contactsBefore[0].penetrationDepth.toFixed(3)} · normal {vector(value.contactsBefore[0].surfaceNormal)}</small></>}
           </p>;
         })}
       </article>

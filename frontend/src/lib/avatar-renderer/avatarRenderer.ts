@@ -19,12 +19,24 @@ import type { AppliedGazeDiagnostic, GazeCapability } from "./gazeCapabilityAdap
 import type { GazeEyelidSupport } from "../avatar-motion/gazeEyelidCoupling";
 
 import { retargetFacialExpressions } from "./facialRetargeting";
+import { buildAvatarCollisionProfile, poseAvatarCollisionProfile, type AvatarCollisionProfile } from "../avatar-motion/avatarCollisionProfile";
+import { correctAvatarArmCollision } from "../avatar-motion/avatarCollisionCorrection";
+import { correctAvatarInterArmCollision, queryAvatarInterArmCollisions, type InterArmCollisionContact } from "../avatar-motion/avatarInterArmCollision";
+import type { AvatarCollisionCorrectionResult, AvatarCollisionPose } from "../avatar-motion/avatarCollisionTypes";
 
 
 
 export interface AvatarRendererOptions { smoothing?: boolean; pixelRatioLimit?: number; onContextLost?: (error: Error) => void; now?: () => number }
 
 export interface AppliedFacialExpressionDiagnostic { semantic: string; modelName: string; value: number }
+
+export interface AppliedSelfCollisionDiagnostic {
+  enabled: boolean;
+  mode: "correction";
+  left: AvatarCollisionCorrectionResult | null;
+  right: AvatarCollisionCorrectionResult | null;
+  interArm: InterArmCollisionContact[];
+}
 
 export interface AppliedShoulderTranslationDiagnostic {
 
@@ -183,6 +195,9 @@ export class AvatarRenderer {
   private devFacialPreview: { kind: "expression" | "raw-morph"; name: string; value: number } | null = null;
 
   private readonly currentRawMorphWeights = new Map<string, number>();
+  private collisionProfile: AvatarCollisionProfile | null = null;
+  private selfCollisionDiagnostic: AppliedSelfCollisionDiagnostic = { enabled: false, mode: "correction", left: null, right: null, interArm: [] };
+  private interArmDepthOrdering:"left-front"|"right-front"|null=null;
 
   private appliedShoulderTranslation: AppliedShoulderTranslationDiagnostic = {
 
@@ -239,6 +254,9 @@ export class AvatarRenderer {
     this.target = null; this.appliedSequence = null;
 
     this.currentExpressions = {}; this.currentRotations = {}; this.currentRawMorphWeights.clear();
+    this.collisionProfile = loaded.rigProfile ? buildAvatarCollisionProfile(loaded.rigProfile) : null;
+    this.interArmDepthOrdering = null;
+    this.selfCollisionDiagnostic = { enabled: Boolean(this.collisionProfile), mode: "correction", left: null, right: null, interArm: [] };
 
     this.appliedShoulderTranslation = applyShoulderTranslation(loaded, null); return loaded.capability;
 
@@ -307,6 +325,8 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
   getGazeEyelidSupport(): GazeEyelidSupport | null { return this.model?.gazeEyelidSupport ?? null; }
 
   getAppliedShoulderTranslation(): AppliedShoulderTranslationDiagnostic { return structuredClone(this.appliedShoulderTranslation); }
+
+  getSelfCollisionDiagnostics(): AppliedSelfCollisionDiagnostic { return structuredClone(this.selfCollisionDiagnostic); }
 
   getRigProfile() { return this.model?.rigProfile ?? null; }
 
@@ -414,6 +434,14 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
 
     if (this.model) this.appliedShoulderTranslation = applyShoulderTranslation(this.model, this.target?.version === 2 ? this.target.shoulderMotion : null);
 
+    // Collision must observe the finalized baseline pose. Push corrections back through VRM once,
+    // then restore raw shoulder translation because humanoid.update does not own that channel.
+    if (this.model && this.target) {
+      this.applySelfCollision(this.target, dt);
+      this.model.vrm?.update(0);
+      this.appliedShoulderTranslation = applyShoulderTranslation(this.model, this.target.version === 2 ? this.target.shoulderMotion : null);
+    }
+
     if (this.model) applyRawMorphWeights(this.model.morphTargets, this.currentRawMorphWeights);
 
     // ExpressionManager cập nhật morph ở `vrm.update`; raw candidate DEV phải áp sau bước đó để không bị ghi đè.
@@ -438,6 +466,9 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
 
     const rotationAlpha = this.smoothing ? dampingAlpha(20, dt) : 1;
     const fingerRotationAlpha = this.smoothing ? dampingAlpha(28, dt) : 1;
+    // A few rig-only validation tests intentionally construct a renderer shell without running the
+    // WebGL constructor. Keep the pure pose application path usable in that environment.
+    this.currentExpressions ??= {};
 
     // Packet remains model-independent. Retarget only at the renderer boundary so unsupported
     // MediaPipe semantics do not pretend to be model channels and raw VRoid lip morphs do not
@@ -499,6 +530,56 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
 
     }
 
+  }
+
+  /** Final baseline FK -> posed colliders -> bounded correction -> FK verification. */
+  private applySelfCollision(packet:AvatarPosePacket,dt:number):void{
+    const model=this.model,staticProfile=this.collisionProfile;
+    if(!model||!staticProfile){this.selfCollisionDiagnostic={enabled:false,mode:"correction",left:null,right:null,interArm:[]};return;}
+    model.root.updateMatrixWorld(true);
+    const head=model.bones.head,neck=model.bones.neck,chest=model.bones.upperChest??model.bones.chest,hips=model.bones.hips;
+    if(!head||!neck||!chest||!hips){this.selfCollisionDiagnostic={enabled:false,mode:"correction",left:null,right:null,interArm:[]};return;}
+    const headPosition=head.getWorldPosition(new Vector3()),neckPosition=neck.getWorldPosition(new Vector3()),chestPosition=chest.getWorldPosition(new Vector3()),hipsPosition=hips.getWorldPosition(new Vector3());
+    const restHead=new Vector3(staticProfile.body.head.center.x,staticProfile.body.head.center.y,staticProfile.body.head.center.z);
+    const restHeadBone=this.model!.rigProfile?.contactSkeleton?.joints.head?.restWorldPosition;
+    const headOffset=restHeadBone?restHead.sub(new Vector3(restHeadBone.x,restHeadBone.y,restHeadBone.z)).applyQuaternion(head.getWorldQuaternion(new Quaternion()).multiply(new Quaternion(
+      this.model!.rigProfile!.contactSkeleton!.joints.head!.restWorldRotation.x,this.model!.rigProfile!.contactSkeleton!.joints.head!.restWorldRotation.y,this.model!.rigProfile!.contactSkeleton!.joints.head!.restWorldRotation.z,this.model!.rigProfile!.contactSkeleton!.joints.head!.restWorldRotation.w).invert())):new Vector3();
+    const posedProfile=poseAvatarCollisionProfile(staticProfile,{headCenter:headPosition.clone().add(headOffset),neckStart:chestPosition.clone().lerp(neckPosition,.72),neckEnd:neckPosition.clone().lerp(headPosition,.55),torsoStart:chestPosition,torsoEnd:hipsPosition});
+    const poses={} as Record<"left"|"right",AvatarCollisionPose>;
+    const diagnostic:AppliedSelfCollisionDiagnostic={enabled:true,mode:"correction",left:null,right:null,interArm:[]};
+    for(const side of ["left","right"] as const){
+      const upper=model.bones[`${side}UpperArm`],lower=model.bones[`${side}LowerArm`],hand=model.bones[`${side}Hand`];if(!upper||!lower||!hand)continue;
+      const shoulder=upper.getWorldPosition(new Vector3()),elbow=lower.getWorldPosition(new Vector3()),wrist=hand.getWorldPosition(new Vector3());
+      const handRef=model.rigProfile?.hands?.[side],frame=handRef?.contactFrame;
+      const palmEnd=frame?.palmLength?new Vector3(frame.forwardLocal.x,frame.forwardLocal.y,frame.forwardLocal.z).applyQuaternion(hand.getWorldQuaternion(new Quaternion())).normalize().multiplyScalar(frame.palmLength).add(wrist):wrist.clone();
+      const pose:AvatarCollisionPose={shoulder,elbow,wrist,hand:palmEnd};poses[side]=pose;
+      const axis=wrist.clone().sub(shoulder).normalize(),pole=elbow.clone().sub(shoulder);pole.addScaledVector(axis,-pole.dot(axis));if(pole.lengthSq()<1e-10)pole.set(0,0,1);else pole.normalize();
+      const total=posedProfile.arms[side].upperLength+posedProfile.arms[side].lowerLength;
+      const result=correctAvatarArmCollision(posedProfile,{side,baseline:pose,deltaSeconds:dt,observability:packet.armObservability?.[side]??"---",bendPole:pole,budget:{maxWristDisplacementPerFrame:total*.08,maxElbowAngularCorrectionPerSecond:8,maxTotalCorrection:total*.3,maxIterations:4,influence:1}});
+      diagnostic[side]=result;if(!result.baselinePreserved){this.applyCorrectedArm(side,pose,result.pose);poses[side]=result.pose;model.root.updateMatrixWorld(true);}
+    }
+    if(poses.left&&poses.right){
+      const depthDelta=poses.left.wrist.z-poses.right.wrist.z,depthThreshold=Math.max(posedProfile.arms.left.handRadius,posedProfile.arms.right.handRadius);
+      if(Math.abs(depthDelta)>depthThreshold)this.interArmDepthOrdering=depthDelta>0?"left-front":"right-front";
+      const inter=correctAvatarInterArmCollision(posedProfile,poses.left,poses.right,packet.armObservability??{left:"---",right:"---"},(posedProfile.arms.left.lowerLength+posedProfile.arms.right.lowerLength)*.04,3,this.interArmDepthOrdering);
+      if(!inter.baselinePreserved){this.applyCorrectedArm("left",poses.left,inter.left);model.root.updateMatrixWorld(true);this.applyCorrectedArm("right",poses.right,inter.right);model.root.updateMatrixWorld(true);poses.left=inter.left;poses.right=inter.right;}
+      diagnostic.interArm=queryAvatarInterArmCollisions(posedProfile,poses.left,poses.right);
+    }
+    this.selfCollisionDiagnostic=diagnostic;
+  }
+
+  private applyCorrectedArm(side:"left"|"right",from:AvatarCollisionPose,to:AvatarCollisionPose):void{
+    const model=this.model!,upper=model.bones[`${side}UpperArm`]!,lower=model.bones[`${side}LowerArm`]!;
+    this.rotateBoneDirectionWorld(upper,new Vector3().subVectors(new Vector3(from.elbow.x,from.elbow.y,from.elbow.z),new Vector3(from.shoulder.x,from.shoulder.y,from.shoulder.z)),new Vector3().subVectors(new Vector3(to.elbow.x,to.elbow.y,to.elbow.z),new Vector3(to.shoulder.x,to.shoulder.y,to.shoulder.z)));
+    this.currentRotations[`${side}UpperArm`]={x:upper.quaternion.x,y:upper.quaternion.y,z:upper.quaternion.z,w:upper.quaternion.w};model.root.updateMatrixWorld(true);
+    const elbow=lower.getWorldPosition(new Vector3()),hand=model.bones[`${side}Hand`]!,wrist=hand.getWorldPosition(new Vector3());
+    this.rotateBoneDirectionWorld(lower,wrist.sub(elbow),new Vector3(to.wrist.x,to.wrist.y,to.wrist.z).sub(elbow));
+    this.currentRotations[`${side}LowerArm`]={x:lower.quaternion.x,y:lower.quaternion.y,z:lower.quaternion.z,w:lower.quaternion.w};
+  }
+
+  private rotateBoneDirectionWorld(bone:import("three").Object3D,from:Vector3,to:Vector3):void{
+    if(from.lengthSq()<1e-10||to.lengthSq()<1e-10)return;const world=bone.getWorldQuaternion(new Quaternion());
+    const target=new Quaternion().setFromUnitVectors(from.normalize(),to.normalize()).multiply(world).normalize();const parent=bone.parent?.getWorldQuaternion(new Quaternion())??new Quaternion();bone.quaternion.copy(parent.invert().multiply(target)).normalize();
   }
 
   private frameModel(model: LoadedAvatarModel): void {

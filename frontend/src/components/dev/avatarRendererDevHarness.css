@@ -2,6 +2,9 @@
 .avatar-renderer-dev header, .dev-controls, .dev-panels { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .avatar-renderer-dev header { justify-content: space-between; } .avatar-renderer-dev h1 { margin: 4px 0; }
 .avatar-renderer-dev button { padding: 8px 12px; border: 1px solid #6956d8; border-radius: 8px; color: white; background: #342a69; }
+.avatar-renderer-dev button:disabled { cursor: not-allowed; opacity: .58; }
+.avatar-renderer-dev .evidence-capture-button { border-color: #24b991; background: #12614f; font-weight: 700; }
+.evidence-capture-status { align-self: center; color: #b9ffe9; }
 .dev-controls { margin: 14px 0; padding: 12px; border-radius: 10px; background: #171326; }
 .facial-calibration-badge { align-self: center; padding: 6px 10px; border: 1px solid #d19b55; border-radius: 999px; color: #ffe0a8; background: #4b351c; font-weight: 700; }
 .facial-calibration-badge.ready { border-color: #3ccba1; color: #b9ffe9; background: #173e35; }

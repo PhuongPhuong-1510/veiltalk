@@ -755,6 +755,7 @@ export class AvatarMotionProcessor {
     };
     const armStabilityDiagnostics = {} as AvatarMotionDiagnosticSnapshot["armStability"];
     let jointRotations: AvatarPosePacketV2["jointRotations"] = {};
+    const armObservability: NonNullable<AvatarPosePacketV1["armObservability"]> = { left:"---", right:"---" };
     if (upperBody) for (const [name, rotation] of Object.entries(upperBody.deltas)) if (name !== "head" && rotation) jointRotations[name as keyof typeof jointRotations] = rotation;
     if (this.rigProfile) {
       const sampledAtMs = frame.pose.sampledAtMs;
@@ -803,6 +804,10 @@ export class AvatarMotionProcessor {
           poseWorld: null, poseImage: null, handObservationIsNew: false, handMatched: false,
           handSampledAtMs: frame.handSampledAtMs, handImage: null,
         }, this.config.wristEvidence);
+        const shoulderObserved = Boolean(solved?.diagnostics[side].observation.upperDirectionValid);
+        const elbowObserved = solved?.sides[side]?.elbowSource === "observed";
+        const wristObserved = Boolean(solved?.visibilityStates[side].wrist && wristEvidence.source === "pose-world");
+        armObservability[side] = `${shoulderObserved?"S":"-"}${elbowObserved?"E":"-"}${wristObserved?"W":"-"}` as typeof armObservability[typeof side];
         const stabilityState = this.armStabilityState[side];
         const names = side === "left" ? { upper: "leftUpperArm" as const, lower: "leftLowerArm" as const } : { upper: "rightUpperArm" as const, lower: "rightLowerArm" as const };
         // Phase 3B (bổ sung) — Partial arm tracking: hai đoạn xương được nghiệm thu ĐỘC LẬP.
@@ -1045,7 +1050,7 @@ export class AvatarMotionProcessor {
       this.bimanualRuntime.reset();
       this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
     }
-    const common = { sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics };
+    const common = { sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics, armObservability };
     return upperBody
       ? { ...common, version: 2, headRotation: upperBody.deltas.head ?? null, shoulderMotion: upperBody.shoulderMotion }
       : { ...common, version: 1, headRotation } as AvatarPosePacketV1;

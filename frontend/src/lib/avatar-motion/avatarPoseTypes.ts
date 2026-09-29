@@ -1,5 +1,6 @@
 import type { TrackingSampleState } from "../tracking/rawTrackingTypes";
 import type { HandMotionDiagnosticsSnapshot } from "./handMotionDiagnostics";
+import type { ArmObservability } from "./armObservability";
 
 export type AvatarSourceTrackingState = TrackingSampleState;
 export type AvatarOutputMotionState = "active" | "held" | "returning" | "idle";
@@ -138,6 +139,8 @@ export interface AvatarPosePacketV1 {
    * `jointRotations` rỗng trong trường hợp đó).
    */
   handMotion: HandMotionDiagnosticsSnapshot | null;
+  /** Current partial-arm evidence; optional for backward-compatible receivers. */
+  armObservability?: Record<"left"|"right", ArmObservability>;
 }
 
 /**

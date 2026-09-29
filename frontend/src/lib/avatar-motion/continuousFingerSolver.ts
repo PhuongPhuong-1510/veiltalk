@@ -273,11 +273,13 @@ export class ContinuousFingerSolver {
 
     // dùng hình chiếu 2D có đủ chiều dài và ba khớp thẳng làm bằng chứng mạnh để bác flexion 3D giả.
 
-    if(landmarks&&basis&&imageLandmarks&&imageBasis&&sampledAtMs!==null&&Math.abs(basis.normal.z)>=config.imageExtensionFacingThreshold){
+    if(landmarks&&basis&&imageLandmarks&&imageBasis&&sampledAtMs!==null){
 
       const flattened=imageLandmarks.map(point=>({...point,y:point.y*imageAspectY,z:0}));
 
       const imageObserved=observeContinuousFingerAngles(flattened,imageBasis,quality);
+
+      const cameraFacing=Math.abs(basis.normal.z)>=config.imageExtensionFacingThreshold;
 
       for(const finger of [...REGULAR_FINGERS,"thumb"] as AvatarFingerName[]){
 
@@ -291,7 +293,18 @@ export class ContinuousFingerSolver {
         // A fingertip that is already close to the thumb is strong 3D evidence that the chain
         // is intentionally participating in contact. Do not let the 2D straight-finger override
         // erase that pose just because the contact points toward the camera.
-        if(!image||!world||(contactProximity??0)>=0.55||!imageFingerClearlyStraight(flattened,finger))continue;
+        // Edge-on palms are exactly where Hand World depth can curl one otherwise straight
+        // pointing index finger. Normally 2D extension is restricted to camera-facing palms,
+        // because a finger bent toward the camera may project as a straight line. The pointing
+        // shape supplies the missing disambiguation: index is visibly straight while at least
+        // two of the other regular fingers are observably curled. This keeps the conservative
+        // frontal gate for arbitrary fingers while allowing the common side-on one-finger pose.
+        const edgeOnPointingIndex=finger==="index"&&REGULAR_FINGERS
+          .filter(other=>other!=="index")
+          .filter(other=>(observed[other]?.angles[1]??0)>=35*Math.PI/180)
+          .length>=2;
+
+        if((!cameraFacing&&!edgeOnPointingIndex)||!image||!world||(contactProximity??0)>=0.55||!imageFingerClearlyStraight(flattened,finger))continue;
 
         // MCP flexion leaves the image plane. Once image z is flattened, its measured MCP angle
 
