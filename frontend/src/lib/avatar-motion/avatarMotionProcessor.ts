@@ -272,6 +272,20 @@ function worldRotationAfterForearmTwist(baseWorld: QuaternionData, localAxis: Ve
   return { x: value.x, y: value.y, z: value.z, w: value.w };
 }
 
+/**
+ * Returns a rig-local anatomical axis after the CURRENT lower-arm world rotation. Wrist flexion /
+ * deviation axes must follow forearm pronation/supination; using the pre-twist secondary vector
+ * makes the wrist bend diagonally when the palm turns toward the camera.
+ */
+function localAxisInWorld(localAxis: Vector3Data, worldRotation: QuaternionData): Vector3Data | null {
+  const axis = new Vector3(localAxis.x, localAxis.y, localAxis.z);
+  const rotation = new Quaternion(worldRotation.x, worldRotation.y, worldRotation.z, worldRotation.w);
+  if (![axis.x, axis.y, axis.z, rotation.x, rotation.y, rotation.z, rotation.w].every(Number.isFinite)
+    || axis.lengthSq() < 1e-8 || rotation.lengthSq() < 1e-8) return null;
+  axis.normalize().applyQuaternion(rotation.normalize()).normalize();
+  return { x: axis.x, y: axis.y, z: axis.z };
+}
+
 export class AvatarMotionProcessor {
   private sequence = 0;
   private readonly facialNeutral: FacialNeutralCalibrator;
@@ -927,19 +941,42 @@ export class AvatarMotionProcessor {
         // lowerArm above, while AR9 runs later and may override this baseline during contact.
         const handName = side === "left" ? "leftHand" : "rightHand";
         const wristPalm = handContext.palmBasisBySide[side];
-        const wristAxis = geometry?.primary.lower ?? state.previousPrimary.lower;
-        const wristReference = geometry?.secondary.lower ?? state.previousSecondary.lower;
         const wristLowerWorldBase = geometry?.targetWorldRotations[names.lower] ?? this.lastGeometryDiagnostics[side]?.lowerTargetWorld ?? null;
         const wristLowerJoint = this.rigProfile?.joints[lowerName];
         const wristLowerWorld = wristLowerWorldBase && wristLowerJoint
           ? worldRotationAfterForearmTwist(wristLowerWorldBase, wristLowerJoint.anatomicalRestBasis.primaryLocal, twistResult.diagnostic.appliedTwistRadians)
           : wristLowerWorldBase;
+
+        // Wrist bending axes must live in the same CURRENT frame as the already-twisted lower arm.
+        // `geometry.secondary.lower` is the pre-forearm-twist branch reference; continuing to use it
+        // after pronation/supination mixes flexion and radial/ulnar deviation and produces the
+        // diagonal wrist visible on camera-facing palms. Prefer the rig axes transported by the
+        // final lower-arm world rotation, with the old geometry values only as a fail-soft fallback.
+        const rigWristAxis = wristLowerWorld && wristLowerJoint
+          ? localAxisInWorld(wristLowerJoint.anatomicalRestBasis.primaryLocal, wristLowerWorld)
+          : null;
+        const rigWristReference = wristLowerWorld && wristLowerJoint
+          ? localAxisInWorld(wristLowerJoint.anatomicalRestBasis.secondaryLocal, wristLowerWorld)
+          : null;
+        const wristAxis = rigWristAxis ?? geometry?.primary.lower ?? state.previousPrimary.lower;
+        const wristReference = rigWristReference ?? geometry?.secondary.lower ?? state.previousSecondary.lower;
+        const wristHandRig = this.rigProfile?.hands?.[side];
+        const wristContactFrame = wristHandRig?.contactFrame;
+
+        // Production wrist swing is deliberately rig-aware. If this VRM cannot provide a real
+        // hand-rest rotation + palm-forward axis, fail closed instead of applying a lower-arm-frame
+        // quaternion as a hand-rest-relative delta. Old unit fixtures may still exercise the
+        // backward-compatible path inside computeWristSwing directly.
         const wristObservation = this.wristSwingEnabled && handContext.sampleClassification === "new-sample" &&
           handContext.matchResult[side].matched && wristPalm?.worldBasis && validWristVector(wristAxis) &&
-          validWristVector(wristReference) && wristLowerWorld
-          ? computeWristSwing({ forearmAxisWorld: wristAxis, bendReferenceWorld: wristReference,
-              palmForwardWorld: handWorldVectorToAvatarSemantic(wristPalm.worldBasis.forward), lowerArmWorldRotation: wristLowerWorld,
-              quality: wristPalm.worldGeometryQuality })
+          validWristVector(wristReference) && wristLowerWorld && wristHandRig && wristContactFrame
+          ? computeWristSwing({
+              forearmAxisWorld: wristAxis, bendReferenceWorld: wristReference,
+              palmForwardWorld: handWorldVectorToAvatarSemantic(wristPalm.worldBasis.forward),
+              lowerArmWorldRotation: wristLowerWorld, quality: wristPalm.worldGeometryQuality,
+              handRestLocalRotation: wristHandRig.restLocalRotation,
+              rigPalmForwardLocal: wristContactFrame.forwardLocal,
+            })
           : null;
         this.wristSwingState[side] = updateWristSwingTemporal(
           this.wristSwingState[side], wristObservation?.accepted ? wristObservation.localRotation : null,

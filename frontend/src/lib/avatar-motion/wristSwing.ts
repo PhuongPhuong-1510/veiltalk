@@ -18,16 +18,33 @@ export const DEFAULT_WRIST_SWING_CONFIG: WristSwingConfig = {
 };
 
 export interface WristSwingInput {
-  forearmAxisWorld: Vector3Data; bendReferenceWorld: Vector3Data; palmForwardWorld: Vector3Data;
-  lowerArmWorldRotation: QuaternionData; quality: number;
+  forearmAxisWorld: Vector3Data;
+  bendReferenceWorld: Vector3Data;
+  palmForwardWorld: Vector3Data;
+  /** Current lower-arm WORLD rotation, including the already-applied forearm twist. */
+  lowerArmWorldRotation: QuaternionData;
+  quality: number;
+  /**
+   * Model-specific normalized-hand rest rotation. When both rig fields are supplied, the wrist
+   * delta is solved in the actual VRM hand-rest frame instead of assuming hand-rest == lower-arm.
+   * Optional only for backward-compatible tests/fixtures; production should provide both fields.
+   */
+  handRestLocalRotation?: QuaternionData | null;
+  /** Model palm-forward axis expressed in the normalized hand bone's LOCAL rest frame. */
+  rigPalmForwardLocal?: Vector3Data | null;
 }
 
 export interface WristSwingResult {
-  accepted: boolean; localRotation: QuaternionData | null; flexionRadians: number;
-  deviationRadians: number; limited: boolean; rejectionReason: string | null;
+  accepted: boolean;
+  localRotation: QuaternionData | null;
+  flexionRadians: number;
+  deviationRadians: number;
+  limited: boolean;
+  rejectionReason: string | null;
 }
 
 const finiteVector = (v: Vector3) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+const finiteQuaternion = (q: Quaternion) => Number.isFinite(q.x) && Number.isFinite(q.y) && Number.isFinite(q.z) && Number.isFinite(q.w);
 const data = (q: Quaternion): QuaternionData => ({ x: q.x, y: q.y, z: q.z, w: q.w });
 const clampSigned = (value: number, negativeLimit: number, positiveLimit: number) => Math.max(-negativeLimit, Math.min(positiveLimit, value));
 const subtractDeadZone = (value: number, deadZone: number) => Math.sign(value) * Math.max(0, Math.abs(value) - deadZone);
@@ -37,35 +54,107 @@ export function handWorldVectorToAvatarSemantic(value: Vector3Data): Vector3Data
   return { x: value.x, y: -value.y, z: -value.z };
 }
 
-/** Computes swing only; shortest-arc construction leaves forearm-axis twist to the existing layer. */
+function rigAwareBaseline(
+  lowerWorld: Quaternion,
+  input: Pick<WristSwingInput, "handRestLocalRotation" | "rigPalmForwardLocal">,
+): { handWorld: Quaternion; palmForwardWorld: Vector3 } | null {
+  if (!input.handRestLocalRotation || !input.rigPalmForwardLocal) return null;
+  const rest = new Quaternion(
+    input.handRestLocalRotation.x, input.handRestLocalRotation.y,
+    input.handRestLocalRotation.z, input.handRestLocalRotation.w,
+  );
+  const localForward = new Vector3(
+    input.rigPalmForwardLocal.x, input.rigPalmForwardLocal.y, input.rigPalmForwardLocal.z,
+  );
+  if (!finiteQuaternion(rest) || rest.lengthSq() < 1e-8 || !finiteVector(localForward) || localForward.lengthSq() < 1e-8) return null;
+  rest.normalize();
+  localForward.normalize();
+
+  // Renderer contract is: handLocal = handRestLocal * handDelta.
+  // Therefore the baseline hand world frame is P(lowerWorld) * R(handRestLocal), not P alone.
+  const handWorld = lowerWorld.clone().multiply(rest).normalize();
+  const palmForwardWorld = localForward.applyQuaternion(handWorld).normalize();
+  return finiteQuaternion(handWorld) && finiteVector(palmForwardWorld) ? { handWorld, palmForwardWorld } : null;
+}
+
+/**
+ * Computes wrist swing only. Forearm-axis twist remains owned by the lower-arm twist layer.
+ *
+ * Important rig invariant:
+ * - packet `leftHand/rightHand` rotations are HAND rest-relative local deltas;
+ * - therefore a WORLD swing must be conjugated through the current baseline HAND world frame
+ *   (`lowerWorld * handRestLocal`), not just through the lower-arm world frame.
+ *
+ * Production callers also provide the model's palm-forward local axis. This lets the shortest-arc
+ * swing start from the actual VRM palm direction instead of assuming `palmForward == forearmAxis`
+ * in the model's rest pose.
+ */
 export function computeWristSwing(input: WristSwingInput, config: WristSwingConfig = DEFAULT_WRIST_SWING_CONFIG): WristSwingResult {
   const axis = new Vector3(input.forearmAxisWorld.x, input.forearmAxisWorld.y, input.forearmAxisWorld.z);
   const reference = new Vector3(input.bendReferenceWorld.x, input.bendReferenceWorld.y, input.bendReferenceWorld.z);
-  const forward = new Vector3(input.palmForwardWorld.x, input.palmForwardWorld.y, input.palmForwardWorld.z);
+  const observedForward = new Vector3(input.palmForwardWorld.x, input.palmForwardWorld.y, input.palmForwardWorld.z);
   const rejected = (reason: string): WristSwingResult => ({ accepted: false, localRotation: null, flexionRadians: 0, deviationRadians: 0, limited: false, rejectionReason: reason });
-  if (![axis, reference, forward].every(finiteVector) || !Number.isFinite(input.quality)) return rejected("non-finite");
+  if (![axis, reference, observedForward].every(finiteVector) || !Number.isFinite(input.quality)) return rejected("non-finite");
   if (input.quality < config.minimumQuality) return rejected("quality-too-low");
-  if (axis.lengthSq() < 1e-8 || reference.lengthSq() < 1e-8 || forward.lengthSq() < 1e-8) return rejected("degenerate-geometry");
-  axis.normalize(); forward.normalize(); reference.addScaledVector(axis, -reference.dot(axis));
+  if (axis.lengthSq() < 1e-8 || reference.lengthSq() < 1e-8 || observedForward.lengthSq() < 1e-8) return rejected("degenerate-geometry");
+
+  axis.normalize();
+  observedForward.normalize();
+  reference.addScaledVector(axis, -reference.dot(axis));
   if (reference.lengthSq() < 1e-8) return rejected("degenerate-reference");
   reference.normalize();
-  const lateral = new Vector3().crossVectors(axis, reference).normalize();
-  const axial = forward.dot(axis);
+  const lateral = new Vector3().crossVectors(axis, reference);
+  if (!finiteVector(lateral) || lateral.lengthSq() < 1e-8) return rejected("degenerate-reference");
+  lateral.normalize();
+
+  const axial = observedForward.dot(axis);
   // A human wrist cannot make the palm-forward vector point backwards along the forearm. This is
   // a Pose/Hand disagreement or occlusion, not an anatomical swing to clamp and render.
   if (axial < Math.cos(85 * Math.PI / 180)) return rejected("direction-disagreement");
-  const rawFlexion = Math.atan2(forward.dot(reference), axial);
-  const rawDeviation = Math.atan2(forward.dot(lateral), axial);
+
+  const rawFlexion = Math.atan2(observedForward.dot(reference), axial);
+  const rawDeviation = Math.atan2(observedForward.dot(lateral), axial);
   const correctedFlexion = subtractDeadZone(rawFlexion, config.straightDeadZoneRadians);
   const correctedDeviation = subtractDeadZone(rawDeviation, config.straightDeadZoneRadians);
   const flexion = clampSigned(correctedFlexion, config.limits.extensionRadians, config.limits.flexionRadians);
   const deviation = clampSigned(correctedDeviation, config.limits.ulnarDeviationRadians, config.limits.radialDeviationRadians);
-  const limitedForward = axis.clone().addScaledVector(reference, Math.tan(flexion)).addScaledVector(lateral, Math.tan(deviation)).normalize();
-  const worldSwing = new Quaternion().setFromUnitVectors(axis, limitedForward).normalize();
-  const lowerWorld = new Quaternion(input.lowerArmWorldRotation.x, input.lowerArmWorldRotation.y, input.lowerArmWorldRotation.z, input.lowerArmWorldRotation.w).normalize();
-  const local = lowerWorld.clone().invert().multiply(worldSwing).multiply(lowerWorld).normalize();
-  return { accepted: true, localRotation: data(local), flexionRadians: flexion, deviationRadians: deviation,
-    limited: Math.abs(flexion - correctedFlexion) > 1e-6 || Math.abs(deviation - correctedDeviation) > 1e-6, rejectionReason: null };
+  const limitedForward = axis.clone()
+    .addScaledVector(reference, Math.tan(flexion))
+    .addScaledVector(lateral, Math.tan(deviation));
+  if (!finiteVector(limitedForward) || limitedForward.lengthSq() < 1e-8) return rejected("degenerate-limited-forward");
+  limitedForward.normalize();
+
+  const lowerWorld = new Quaternion(
+    input.lowerArmWorldRotation.x, input.lowerArmWorldRotation.y,
+    input.lowerArmWorldRotation.z, input.lowerArmWorldRotation.w,
+  );
+  if (!finiteQuaternion(lowerWorld) || lowerWorld.lengthSq() < 1e-8) return rejected("invalid-lower-arm-rotation");
+  lowerWorld.normalize();
+
+  const rigBaseline = rigAwareBaseline(lowerWorld, input);
+  // Backward-compatible fallback for old fixtures. Production processor passes rigBaseline data.
+  const baselineFrameWorld = rigBaseline?.handWorld ?? lowerWorld;
+  const baselinePalmForward = rigBaseline?.palmForwardWorld ?? axis;
+
+  // Shortest swing maps the avatar's CURRENT baseline palm-forward to the bounded observed target.
+  // This is model-aware: a VRM whose hand rest bone is rotated relative to its lower arm no longer
+  // receives a systematic diagonal wrist offset.
+  const worldSwing = new Quaternion().setFromUnitVectors(baselinePalmForward, limitedForward).normalize();
+
+  // Renderer later does: handLocal = handRestLocal * deltaLocal.
+  // If B is baseline hand WORLD and S is the desired WORLD swing:
+  //   B * D = S * B  =>  D = B^-1 * S * B.
+  const local = baselineFrameWorld.clone().invert().multiply(worldSwing).multiply(baselineFrameWorld).normalize();
+  if (!finiteQuaternion(local)) return rejected("non-finite-output");
+
+  return {
+    accepted: true,
+    localRotation: data(local),
+    flexionRadians: flexion,
+    deviationRadians: deviation,
+    limited: Math.abs(flexion - correctedFlexion) > 1e-6 || Math.abs(deviation - correctedDeviation) > 1e-6,
+    rejectionReason: null,
+  };
 }
 
 export interface WristSwingTemporalState {
