@@ -559,8 +559,12 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
       diagnostic[side]=result;if(!result.baselinePreserved){this.applyCorrectedArm(side,pose,result.pose);poses[side]=result.pose;model.root.updateMatrixWorld(true);}
     }
     if(poses.left&&poses.right){
-      const depthDelta=poses.left.wrist.z-poses.right.wrist.z,depthThreshold=Math.max(posedProfile.arms.left.handRadius,posedProfile.arms.right.handRadius);
-      if(Math.abs(depthDelta)>depthThreshold)this.interArmDepthOrdering=depthDelta>0?"left-front":"right-front";
+      const packetOrdering=packet.interArmDepth?.ordering;
+      if(packetOrdering==="left-front"||packetOrdering==="right-front")this.interArmDepthOrdering=packetOrdering;
+      else if(!packet.interArmDepth){
+        const depthDelta=poses.left.wrist.z-poses.right.wrist.z,depthThreshold=Math.max(posedProfile.arms.left.handRadius,posedProfile.arms.right.handRadius);
+        if(Math.abs(depthDelta)>depthThreshold)this.interArmDepthOrdering=depthDelta>0?"left-front":"right-front";
+      }
       const inter=correctAvatarInterArmCollision(posedProfile,poses.left,poses.right,packet.armObservability??{left:"---",right:"---"},(posedProfile.arms.left.lowerLength+posedProfile.arms.right.lowerLength)*.04,3,this.interArmDepthOrdering);
       if(!inter.baselinePreserved){this.applyCorrectedArm("left",poses.left,inter.left);model.root.updateMatrixWorld(true);this.applyCorrectedArm("right",poses.right,inter.right);model.root.updateMatrixWorld(true);poses.left=inter.left;poses.right=inter.right;}
       diagnostic.interArm=queryAvatarInterArmCollisions(posedProfile,poses.left,poses.right);

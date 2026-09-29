@@ -184,6 +184,10 @@ export interface ArmFrameDiagnostic {
     sourceChanged: boolean;
     effectiveGraceMs: number;
     reconstructionConfidence: number | null;
+    feasibilityConfidence?: number | null;
+    depthAmbiguity?: number | null;
+    branchSeparation?: number | null;
+    selectedDepthBranch?: -1 | 1 | null;
     reconstructionRejectionReason: string | null;
     /** Pose↔Hand wrist disagreement in aspect-corrected image space, when both are available. */
     poseHandImageDistance?: number | null;

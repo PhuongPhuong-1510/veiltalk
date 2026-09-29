@@ -595,6 +595,8 @@ export interface AvatarMotionConfig {
 
 
     elbowInferenceCandidateCount: number;
+    /** Minimum score improvement required before leaving the continuation pole. */
+    elbowInferenceCandidateSwitchMargin: number;
 
 
 
@@ -1473,6 +1475,7 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
 
 
     elbowInferenceCandidateCount: 24,
+    elbowInferenceCandidateSwitchMargin: 0.08,
 
 
 

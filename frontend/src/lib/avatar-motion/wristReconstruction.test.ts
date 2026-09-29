@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateShoulderImageToWorldScale, reconstructPointOnSphereFromImage } from "./wristReconstruction";
+import { estimateShoulderImageToWorldScale, generateWristDepthCandidates, reconstructPointOnSphereFromImage } from "./wristReconstruction";
 
 const lm = (x: number, y: number, z = 0, visibility = 1) => ({ x, y, z, visibility });
 
@@ -51,5 +51,28 @@ describe("wrist reconstruction", () => {
     expect(value.accepted).toBe(true);
     expect(value.projectedImage?.x).toBeCloseTo(.7);
     expect(value.point?.x).toBeCloseTo(.2);
+  });
+
+  it("returns both monocular depth branches instead of collapsing them in geometry", () => {
+    const value = generateWristDepthCandidates({
+      anchorWorld: { x: 0, y: 0, z: 0 }, anchorImage: lm(.5, .5), targetImage: lm(.5, .5),
+      targetDistance: .5, imageToWorldScale: 1, videoWidth: 100, videoHeight: 100, reachSlackRatio: .1,
+    });
+    expect(value.candidates.map(candidate => candidate.branch)).toEqual([1, -1]);
+    expect(value.branchSeparation).toBeCloseTo(1);
+  });
+
+  it("treats widely separated depth branches as more ambiguous than coincident branches", () => {
+    const axial = reconstructPointOnSphereFromImage({
+      anchorWorld: { x: 0, y: 0, z: 0 }, anchorImage: lm(.5, .5), targetImage: lm(.5, .5),
+      targetDistance: .5, imageToWorldScale: 1, previousDirection: { x: 0, y: 0, z: 1 },
+      videoWidth: 100, videoHeight: 100, reachSlackRatio: .1,
+    });
+    const planar = reconstructPointOnSphereFromImage({
+      anchorWorld: { x: 0, y: 0, z: 0 }, anchorImage: lm(.5, .5), targetImage: lm(1, .5),
+      targetDistance: .5, imageToWorldScale: 1, previousDirection: { x: 1, y: 0, z: 0 },
+      videoWidth: 100, videoHeight: 100, reachSlackRatio: .1,
+    });
+    expect(axial.depthAmbiguity).toBeGreaterThan(planar.depthAmbiguity);
   });
 });

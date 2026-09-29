@@ -96,6 +96,12 @@ export interface GazeStateV1 {
   pitch: number;
 }
 
+export interface InterArmDepthStateV1 {
+  version: 1;
+  ordering: "left-front" | "right-front" | "ambiguous";
+  confidence: number;
+}
+
 export interface AvatarPartTrackingInfo {
   sourceState: AvatarSourceTrackingState;
   outputState: AvatarOutputMotionState;
@@ -141,6 +147,8 @@ export interface AvatarPosePacketV1 {
   handMotion: HandMotionDiagnosticsSnapshot | null;
   /** Current partial-arm evidence; optional for backward-compatible receivers. */
   armObservability?: Record<"left"|"right", ArmObservability>;
+  /** Processor-owned depth topology; renderer consumes it without re-solving after FK. */
+  interArmDepth?: InterArmDepthStateV1;
 }
 
 /**

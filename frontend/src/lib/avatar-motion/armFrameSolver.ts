@@ -723,13 +723,30 @@ function inferElbow(
 
   };
 
-  // Missing observation must not create a new motion intent. Plausibility scores are
-  // diagnostic/validation signals only: continue the last trusted bend branch by
-  // projecting it onto this frame's exact solution circle. When history is not yet
-  // available, the rig prior seeds the branch once; subsequent frames carry it forward.
+  // Search the complete exact solution circle. A hidden elbow may move within its last trusted
+  // bend hemisphere, but no weak cue may flip it through the shoulder-wrist axis.
   const continuationPole = (previousUsable ? previous! : priorPole).clone().normalize();
   const continuationAngle = Math.atan2(continuationPole.dot(perpendicular), continuationPole.dot(priorPole));
-  const chosen = evaluate({ pole: continuationPole, angle: continuationAngle }, true, true, true, true);
+  const continuation = evaluate({ pole: continuationPole, angle: continuationAngle }, true, true, true, true);
+  const rawCandidates: Array<{pole:Vector3;angle:number}> = [];
+  for (let index = 0; index < count; index += 1) {
+    const angle = -Math.PI + index * (Math.PI * 2 / count);
+    const pole = priorPole.clone().multiplyScalar(Math.cos(angle)).addScaledVector(perpendicular, Math.sin(angle)).normalize();
+    rawCandidates.push({pole,angle});
+  }
+  const choose=(includePalm:boolean,includeAnatomy:boolean,includeFace:boolean,includeCollision:boolean):ScoredPole=>{
+    const evaluated=rawCandidates.map(candidate=>evaluate(candidate,includePalm,includeAnatomy,includeFace,includeCollision)).sort((a,b)=>a.total-b.total);
+    if(!previousUsable)return evaluated[0]??continuation;
+    return evaluated.find(candidate=>candidate.pole.dot(previous!)>=-1e-5)??continuation;
+  };
+  const best=choose(true,true,true,true);
+  const withoutPalm=choose(false,true,true,true),withoutAnatomy=choose(true,false,true,true),withoutFace=choose(true,true,false,true),withoutCollision=choose(true,true,true,false);
+  // Only a fresh palm direction is direct evidence of hidden-forearm intent. Anatomy, face and
+  // collision may score/validate candidates, but cannot move a hidden elbow by themselves.
+  const chosen=palmUsable&&best.total+scoring.elbowInferenceCandidateSwitchMargin<continuation.total?best:continuation;
+  const angularResolution=Math.PI*2/count;
+  const selectedChanged=chosen.pole.angleTo(continuation.pole)>angularResolution*.5;
+  const differs=(candidate:ScoredPole)=>chosen.pole.angleTo(candidate.pole)>angularResolution*.5;
 
   const elbow = center.clone().addScaledVector(chosen.pole, radius);
 
@@ -741,11 +758,12 @@ function inferElbow(
 
     sideFlipPrevented: Boolean(previousUsable && priorPole.dot(previous!) < 0),
 
-    anatomyFlipApplied: false,
+    anatomyFlipApplied: selectedChanged && differs(withoutAnatomy),
 
-    palmBranchApplied: false,
+    palmBranchApplied: selectedChanged && palmUsable && differs(withoutPalm),
 
-    faceBranchApplied: false, collisionBranchApplied: false,
+    faceBranchApplied: selectedChanged && faceUsable && differs(withoutFace),
+    collisionBranchApplied: selectedChanged && differs(withoutCollision),
 
     spatial: { candidateCount: count, selectedAngleRadians: chosen.angle, faceEvidenceUsed: faceUsable, intentionalFaceContact: face?.allowContact ?? false, facePenalty: chosen.face, headCollisionPenalty: chosen.head, torsoCollisionPenalty: chosen.torso },
 
@@ -809,6 +827,8 @@ function solveSide(
   const elbowVisible = visibleWithHysteresis(ie, history.elbowWasVisible, config.visibilityEnter, config.visibilityExit);
 
   const wristVisible = visibleWithHysteresis(iw, history.wristWasVisible, config.visibilityEnter, config.visibilityExit);
+  const reconstructedWrist = spatialEvidence?.wrist?.source === "reconstructed"
+    && spatialEvidence.wrist.confidence > 0;
 
   const visibilityState = { elbow: elbowVisible, wrist: wristVisible };
 
@@ -822,9 +842,9 @@ function solveSide(
 
   let elbowObserved = Boolean(we && ie && elbowVisible && inOuterBounds(ie, config.elbowOuterBoundsMargin));
 
-  const wristValid = Boolean(ww && iw && wristVisible && inOuterBounds(iw, config.wristOuterBoundsMargin));
+  const wristValid = Boolean(ww && iw && (wristVisible || reconstructedWrist) && inOuterBounds(iw, config.wristOuterBoundsMargin));
 
-  const lowerReason = !ww || !iw ? "missing-wrist" : !wristVisible ? "low-wrist-visibility" : !inOuterBounds(iw, config.wristOuterBoundsMargin) ? "wrist-outside-frame" : null;
+  const lowerReason = !ww || !iw ? "missing-wrist" : !wristVisible && !reconstructedWrist ? "low-wrist-visibility" : !inOuterBounds(iw, config.wristOuterBoundsMargin) ? "wrist-outside-frame" : null;
 
   const flags: string[] = []; if ((elbowObserved && nearEdge(ie, config.edgeWarningMargin)) || (wristValid && nearEdge(iw, config.edgeWarningMargin))) flags.push("near-frame-edge");
 
@@ -994,7 +1014,10 @@ function solveSide(
 
   if (!Number.isFinite(upperLength) || upperLength < config.minimumSegmentLength) return reject("invalid-upper-segment", flags);
 
+  const reconstructedWristTrust=spatialEvidence?.wrist?.source==="reconstructed"
+    ? Math.max(0,Math.min(1,spatialEvidence.wrist.confidence*(1-spatialEvidence.wrist.depthAmbiguity))) : 1;
   let lowerDirectionValid = Boolean(lower && lowerLength !== null && Number.isFinite(lowerLength) && lowerLength >= config.minimumSegmentLength);
+  if(spatialEvidence?.wrist?.source==="reconstructed"&&reconstructedWristTrust<.2){lowerDirectionValid=false;flags.push("low-reconstructed-wrist-trust");}
 
   const segmentRatio = lowerDirectionValid ? upperLength / lowerLength! : null;
 
@@ -1024,7 +1047,7 @@ function solveSide(
 
   // không xác định, cross gần 0).
 
-  const depthQuality = 1 - smoothstep(config.depthQualityFullTrustAlignment, config.depthQualityNoTrustAlignment, depthAlignment);
+  const depthQuality = (1 - smoothstep(config.depthQualityFullTrustAlignment, config.depthQualityNoTrustAlignment, depthAlignment))*reconstructedWristTrust;
 
   const bendPlaneQuality = lowerDirectionValid ? upper.clone().cross(lower!).length() : 0;
 
