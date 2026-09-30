@@ -593,6 +593,8 @@ export default function AvatarRendererDevHarness() {
             {arm.spatial && <><small>search {arm.spatial.candidateCount} · face {arm.spatial.faceEvidenceUsed ? (arm.spatial.intentionalFaceContact ? "contact" : "clearance") : "n/a"} · penalty F/H/T {arm.spatial.facePenalty.toFixed(2)}/{arm.spatial.headCollisionPenalty.toFixed(2)}/{arm.spatial.torsoCollisionPenalty.toFixed(2)} · palm {motionDiagnostics?.handTwist[side]?.alignmentMode ?? "legacy"}</small><br /></>}
             <strong>{side}</strong>: upper <em>{arm.segmentLossState.upper}</em> · lower <em>{arm.segmentLossState.lower}</em><br />
             elbow {arm.elbowInference.source} · pole {arm.poleSource}<br />
+            stability U/L {motionDiagnostics.armStability[side].upperStaticMode ? "STATIC" : "moving"}/{motionDiagnostics.armStability[side].lowerStaticMode ? "STATIC" : "moving"}
+            {" · velocity "}{motionDiagnostics.armStability[side].upperAngularVelocityRadiansPerSecond?.toFixed(2) ?? "—"}/{motionDiagnostics.armStability[side].lowerAngularVelocityRadiansPerSecond?.toFixed(2) ?? "—"} rad/s<br />
             wrist {arm.wristEvidence?.source ?? "legacy"} · grace {arm.wristEvidence ? Math.round(arm.wristEvidence.effectiveGraceMs) : "—"}ms
             {arm.wristEvidence?.reconstructionConfidence !== null && arm.wristEvidence?.reconstructionConfidence !== undefined && <> · reconstruct {arm.wristEvidence.reconstructionConfidence.toFixed(2)}</>}
             {arm.wristEvidence?.reconstructionRejectionReason && <> · wrist reject {arm.wristEvidence.reconstructionRejectionReason}</>}

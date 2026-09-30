@@ -26,9 +26,15 @@ export interface SegmentTemporalState {
   lossState: ArmLossState; lastValidAtMs: number | null; recoveryOrigin: QuaternionData | null; recoveryStartedAtMs: number | null;
   /** Timestamp của solver sample gần nhất; chỉ tiến trên sample mới, không phụ thuộc render FPS. */
   lastSolvedAtMs: number | null;
+  /** Raw solver target from the previous detector sample, never the smoothed output. */
+  previousTargetDelta: QuaternionData | null;
+  angularVelocityRadiansPerSecond: number | null;
+  staticMode: boolean;
+  staticCandidateSinceMs: number | null;
 }
 export const createSegmentTemporalState = (resting: QuaternionData = IDENTITY_QUATERNION): SegmentTemporalState => ({
   lastValidDelta: null, currentOutputDelta: resting, lossState: "idle", lastValidAtMs: null, recoveryOrigin: null, recoveryStartedAtMs: null, lastSolvedAtMs: null,
+  previousTargetDelta: null, angularVelocityRadiansPerSecond: null, staticMode: false, staticCandidateSinceMs: null,
 });
 
 /**
@@ -49,6 +55,13 @@ export interface ArmSegmentStabilityConfig {
   movingTimeConstantMs: number;
   /** Chặn một sample outlier làm xương quay quá nhanh. */
   maxAngularVelocityRadiansPerSecond: number;
+  staticEnterVelocityRadiansPerSecond: number;
+  staticExitVelocityRadiansPerSecond: number;
+  staticEnterDelayMs: number;
+  lowMotionVelocityRadiansPerSecond: number;
+  highMotionVelocityRadiansPerSecond: number;
+  staticDeadZoneMultiplier: number;
+  staticTimeConstantMs: number;
 }
 
 export const DEFAULT_ARM_SEGMENT_STABILITY: ArmSegmentStabilityConfig = {
@@ -58,6 +71,13 @@ export const DEFAULT_ARM_SEGMENT_STABILITY: ArmSegmentStabilityConfig = {
   stableTimeConstantMs: 95,
   movingTimeConstantMs: 18,
   maxAngularVelocityRadiansPerSecond: 14, // ~800°/s; chỉ chặn snap/outlier lớn
+  staticEnterVelocityRadiansPerSecond: 0.18,
+  staticExitVelocityRadiansPerSecond: 0.7,
+  staticEnterDelayMs: 160,
+  lowMotionVelocityRadiansPerSecond: 0.2,
+  highMotionVelocityRadiansPerSecond: 2.2,
+  staticDeadZoneMultiplier: 2.5,
+  staticTimeConstantMs: 150,
 };
 
 function quaternionAngularDistance(a: QuaternionData, b: QuaternionData): number {
@@ -71,14 +91,22 @@ function smoothstep01(value: number): number {
 }
 
 function stabilizeActiveSample(
-  previous: QuaternionData, target: QuaternionData, dtMs: number, config: ArmSegmentStabilityConfig,
+  previous: QuaternionData, target: QuaternionData, dtMs: number, angularVelocity: number,
+  staticMode: boolean, config: ArmSegmentStabilityConfig,
 ): QuaternionData {
   const angle = quaternionAngularDistance(previous, target);
-  if (!Number.isFinite(angle) || angle <= config.deadZoneRadians) return previous;
+  // Quiet sub-degree changes accumulate behind the existing low-motion threshold. A genuinely
+  // moving target bypasses that wider rest deadband even when detector FPS is high.
+  const quietDeadZone = angularVelocity < config.staticExitVelocityRadiansPerSecond
+    ? Math.max(config.deadZoneRadians, config.lowMotionRadians * 0.5)
+    : config.deadZoneRadians;
+  const deadZone = quietDeadZone * (staticMode ? config.staticDeadZoneMultiplier : 1);
+  if (!Number.isFinite(angle) || angle <= deadZone) return previous;
 
-  const range = Math.max(1e-6, config.highMotionRadians - config.lowMotionRadians);
-  const motion = smoothstep01((angle - config.lowMotionRadians) / range);
-  const tauMs = config.stableTimeConstantMs + (config.movingTimeConstantMs - config.stableTimeConstantMs) * motion;
+  const range = Math.max(1e-6, config.highMotionVelocityRadiansPerSecond - config.lowMotionVelocityRadiansPerSecond);
+  const motion = smoothstep01((angularVelocity - config.lowMotionVelocityRadiansPerSecond) / range);
+  const baseTauMs = config.stableTimeConstantMs + (config.movingTimeConstantMs - config.stableTimeConstantMs) * motion;
+  const tauMs = staticMode ? Math.max(baseTauMs, config.staticTimeConstantMs) : baseTauMs;
   const dt = Math.max(1, Math.min(100, Number.isFinite(dtMs) ? dtMs : 33));
   const alpha = Math.max(0, Math.min(1, 1 - Math.exp(-dt / Math.max(1, tauMs))));
   let output = slerpQuaternionData(previous, target, alpha);
@@ -144,6 +172,30 @@ export function updateSegmentTemporalOutput(
     const solvedContinuous = sameHemisphere(continuityReference, solved);
     const previousSolvedAtMs = state.lastSolvedAtMs;
     state.lastSolvedAtMs = nowMs;
+    const sampleDtMs = previousSolvedAtMs === null ? null : Math.max(1, Math.min(250, nowMs - previousSolvedAtMs));
+    const targetAngle = state.previousTargetDelta === null
+      ? null
+      : quaternionAngularDistance(state.previousTargetDelta, solvedContinuous);
+    const angularVelocity = targetAngle === null || sampleDtMs === null ? 0 : targetAngle / (sampleDtMs / 1000);
+    state.angularVelocityRadiansPerSecond = Number.isFinite(angularVelocity) ? angularVelocity : null;
+    state.previousTargetDelta = solvedContinuous;
+
+    // A dwell time prevents one quiet detector sample from locking the arm. Exit is immediate so
+    // deliberate movement stays responsive. The separated thresholds provide hysteresis.
+    if (state.staticCandidateSinceMs !== null && nowMs - state.staticCandidateSinceMs >= stability.staticEnterDelayMs) {
+      state.staticMode = true;
+    }
+    if (angularVelocity >= stability.staticExitVelocityRadiansPerSecond) {
+      state.staticMode = false;
+      state.staticCandidateSinceMs = null;
+    } else if (angularVelocity <= stability.staticEnterVelocityRadiansPerSecond) {
+      state.staticCandidateSinceMs ??= nowMs;
+      if (nowMs - state.staticCandidateSinceMs >= stability.staticEnterDelayMs) state.staticMode = true;
+    } else {
+      // Once static, velocities inside the hysteresis band keep the lock. Before entry they reset
+      // the dwell so intermittent movement cannot accidentally accumulate quiet time.
+      if (!state.staticMode) state.staticCandidateSinceMs = null;
+    }
 
     // Source/branch reacquire vẫn blend có chủ đích. Ở active bình thường, thêm adaptive
     // quaternion stabilization để landmark jitter không đi thẳng ra renderer.
@@ -165,7 +217,8 @@ export function updateSegmentTemporalOutput(
       state.currentOutputDelta = solvedContinuous;
     } else {
       state.currentOutputDelta = stabilizeActiveSample(
-        state.currentOutputDelta, solvedContinuous, nowMs - previousSolvedAtMs, stability,
+        state.currentOutputDelta, solvedContinuous, nowMs - previousSolvedAtMs,
+        angularVelocity, state.staticMode, stability,
       );
     }
 

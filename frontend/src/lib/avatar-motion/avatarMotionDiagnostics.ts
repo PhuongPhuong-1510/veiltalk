@@ -75,6 +75,10 @@ export interface ArmStabilityDiagnostic {
   poseLowerTargetAngularDeltaRadians: number | null;
   poseUpperAppliedAngularDeltaRadians: number | null;
   poseLowerAppliedAngularDeltaRadians: number | null;
+  upperAngularVelocityRadiansPerSecond: number | null;
+  lowerAngularVelocityRadiansPerSecond: number | null;
+  upperStaticMode: boolean;
+  lowerStaticMode: boolean;
   elbowSource: ElbowSource;
   elbowSourceChanged: boolean;
   poleSource: PoleSource;

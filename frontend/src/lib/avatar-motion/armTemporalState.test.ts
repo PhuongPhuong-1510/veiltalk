@@ -26,6 +26,36 @@ describe("arm rest deadband", () => {
     const moved = updateSegmentTemporalOutput(state, rotation(.53), true, 66, 250, 500, 180);
     expect(moved.output).not.toEqual(resting.output);
   });
+
+  it("enters static mode after a quiet dwell and exits immediately on deliberate motion", () => {
+    const state = createSegmentTemporalState();
+    updateSegmentTemporalOutput(state, rotation(.5), true, 0, 250, 500, 180);
+    for (let now = 40; now <= 240; now += 40) {
+      const jitter = now % 80 === 0 ? .504 : .5;
+      updateSegmentTemporalOutput(state, rotation(jitter), true, now, 250, 500, 180);
+    }
+    expect(state.staticMode).toBe(true);
+    expect(state.angularVelocityRadiansPerSecond).toBeLessThan(.18);
+
+    updateSegmentTemporalOutput(state, rotation(.7), true, 280, 250, 500, 180);
+    expect(state.staticMode).toBe(false);
+    expect(state.angularVelocityRadiansPerSecond).toBeGreaterThan(.7);
+  });
+
+  it("has nearly the same response to equal physical velocity at 15, 30 and 60 FPS", () => {
+    const run = (fps: number) => {
+      const state = createSegmentTemporalState();
+      const dt = 1000 / fps;
+      updateSegmentTemporalOutput(state, rotation(0), true, 0, 250, 500, 180);
+      for (let now = dt; now <= 1000 + 1e-6; now += dt) {
+        updateSegmentTemporalOutput(state, rotation(now / 1000), true, now, 250, 500, 180);
+      }
+      return new Quaternion(state.currentOutputDelta.x, state.currentOutputDelta.y, state.currentOutputDelta.z, state.currentOutputDelta.w);
+    };
+    const q15 = run(15), q30 = run(30), q60 = run(60);
+    expect(q15.angleTo(q30)).toBeLessThan(.04);
+    expect(q30.angleTo(q60)).toBeLessThan(.04);
+  });
 });
 
 describe("Mức 1B-1: quaternion hemisphere continuity trong updateSegmentTemporalOutput", () => {
