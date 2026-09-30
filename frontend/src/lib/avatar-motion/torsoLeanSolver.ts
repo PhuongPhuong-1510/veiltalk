@@ -81,12 +81,18 @@ export function combineTorsoLeanConfidence(base:number,hard:number,penalties:{he
   return clamp01(base)*clamp01(hard)*(1-clamp01(soft));
 }
 
-/** Remove only the bilateral shoulder component that a fore/aft lean creates in image space. */
+/**
+ * Confidence-weighted fallback for image-only common shoulder evidence.
+ *
+ * Use the accepted lean output, never the raw depth cue: if the lean solver's own dead-zone says
+ * `angle = 0`, the shoulder solver must not still be penalized by that rejected evidence.
+ */
 export function computeLeanShoulderCommonGain(result:TorsoLeanResult):number {
-  if(result.source==="unavailable")return 1;
-  const proxyEvidence=result.cues.depth===null?null:radians(50)*result.cues.depth;
-  const evidence=Math.abs(proxyEvidence??result.angle??0);
-  return 1-smoothstep(radians(.5),radians(1.5),evidence);
+  if(result.source==="unavailable"||result.angle===null||Math.abs(result.angle)<1e-8)return 1;
+  // With no trustworthy hips, a clear accepted lean remains genuinely ambiguous in a monocular
+  // crop. Full suppression is retained only for that fallback path; full-torso shoulder evidence
+  // bypasses this gain in ShoulderMotionSolver.
+  return 1-smoothstep(radians(.5),radians(1.5),Math.abs(result.angle));
 }
 
 export class TorsoLeanSolver {

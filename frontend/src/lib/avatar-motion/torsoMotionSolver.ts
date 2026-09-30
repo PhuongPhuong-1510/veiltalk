@@ -8,7 +8,11 @@ import type { TorsoBasis } from "./torsoBasis";
 
 const radians = (degrees: number) => degrees * Math.PI / 180;
 const LIMITS = { yawLeft:radians(30),yawRight:radians(30),pitchUp:radians(18),pitchDown:radians(25),rollLeft:radians(20),rollRight:radians(20) };
-const WEIGHTS = { hips:{x:.08,y:.10,z:.08},spine:{x:.25,y:.22,z:.22},chest:{x:.35,y:.34,z:.35},upperChest:{x:.32,y:.34,z:.35} } as const;
+// Pitch here represents global torso lean, not spinal curl. Bias it toward the lower trunk so a
+// forward lean reads as one body block instead of folding mostly through chest/upperChest. Yaw and
+// roll retain their existing distribution; a future explicit curl signal can own the upper-spine
+// heavy profile independently.
+const WEIGHTS = { hips:{x:.18,y:.10,z:.08},spine:{x:.34,y:.22,z:.22},chest:{x:.28,y:.34,z:.35},upperChest:{x:.20,y:.34,z:.35} } as const;
 
 export interface TorsoMotionResult {
   layer: UpperBodyLayer;

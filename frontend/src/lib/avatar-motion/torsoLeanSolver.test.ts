@@ -21,9 +21,10 @@ describe("AR4-T06 torso lean solver",()=>{
   it("does not collapse four moderate soft qualities into unavailable confidence",()=>{
     const penalties={head:.2,yaw:.2,roll:.2,shrug:.2};expect(combineTorsoLeanConfidence(.8,1,penalties)).toBeGreaterThan(.6);
   });
-  it("turns off only common shoulder motion when depth indicates a clear lean",()=>{
+  it("uses only accepted confidence-weighted lean, never rejected raw depth, to attenuate shoulder common",()=>{
     const result={angle:radians(2),source:"ambiguous-camera-approach",confidence:.7,cues:{shoulderScale:0,faceScale:null,scaleMismatch:null,depth:.04},penalties:{head:0,yaw:0,roll:0,shrug:1},limited:true} as const;
     expect(computeLeanShoulderCommonGain(result)).toBe(0);
+    expect(computeLeanShoulderCommonGain({...result,angle:0})).toBe(1);
     expect(computeLeanShoulderCommonGain({...result,source:"unavailable",angle:null})).toBe(1);
   });
   it("keeps uniform full-body Z translation at zero full-torso angle",()=>{

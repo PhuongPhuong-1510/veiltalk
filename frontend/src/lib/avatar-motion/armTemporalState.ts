@@ -19,20 +19,77 @@ function sameHemisphere(previous: QuaternionData | null, next: QuaternionData): 
   return dot < 0 ? { x: -next.x, y: -next.y, z: -next.z, w: -next.w } : next;
 }
 
-const ARM_REST_DEADBAND_RADIANS = 0.75 * Math.PI / 180;
-
-function quaternionAngularDistance(a: QuaternionData, b: QuaternionData): number {
-  const dot = Math.min(1, Math.abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w));
-  return 2 * Math.acos(dot);
-}
-
 export type ArmLossState = "idle" | "active" | "held" | "returning" | "recovering";
 export type ArmDeltaOutput = Partial<Record<ControlledArmJoint, QuaternionData>>;
 export interface SegmentTemporalState {
   lastValidDelta: QuaternionData | null; currentOutputDelta: QuaternionData;
   lossState: ArmLossState; lastValidAtMs: number | null; recoveryOrigin: QuaternionData | null; recoveryStartedAtMs: number | null;
+  /** Timestamp của solver sample gần nhất; chỉ tiến trên sample mới, không phụ thuộc render FPS. */
+  lastSolvedAtMs: number | null;
 }
-export const createSegmentTemporalState = (resting: QuaternionData = IDENTITY_QUATERNION): SegmentTemporalState => ({ lastValidDelta: null, currentOutputDelta: resting, lossState: "idle", lastValidAtMs: null, recoveryOrigin: null, recoveryStartedAtMs: null });
+export const createSegmentTemporalState = (resting: QuaternionData = IDENTITY_QUATERNION): SegmentTemporalState => ({
+  lastValidDelta: null, currentOutputDelta: resting, lossState: "idle", lastValidAtMs: null, recoveryOrigin: null, recoveryStartedAtMs: null, lastSolvedAtMs: null,
+});
+
+/**
+ * Stabilizer cho output arm sau geometry solver. Mục tiêu là triệt jitter khi người giữ tư thế
+ * nhưng không làm tay bị "lụt" khi chuyển động chủ động. Các ngưỡng ở đây là angular delta
+ * của quaternion đã solve, không phải landmark pixel threshold.
+ */
+export interface ArmSegmentStabilityConfig {
+  /** Bỏ hoàn toàn rung cực nhỏ ở tư thế đứng yên. */
+  deadZoneRadians: number;
+  /** Dưới vùng này dùng smoothing mạnh. */
+  lowMotionRadians: number;
+  /** Trên vùng này phản hồi nhanh. */
+  highMotionRadians: number;
+  /** Time constant khi gần đứng yên. */
+  stableTimeConstantMs: number;
+  /** Time constant khi đang chuyển động rõ. */
+  movingTimeConstantMs: number;
+  /** Chặn một sample outlier làm xương quay quá nhanh. */
+  maxAngularVelocityRadiansPerSecond: number;
+}
+
+export const DEFAULT_ARM_SEGMENT_STABILITY: ArmSegmentStabilityConfig = {
+  deadZoneRadians: 0.006,          // ~0.34°
+  lowMotionRadians: 0.028,         // ~1.6°
+  highMotionRadians: 0.21,         // ~12°
+  stableTimeConstantMs: 95,
+  movingTimeConstantMs: 18,
+  maxAngularVelocityRadiansPerSecond: 14, // ~800°/s; chỉ chặn snap/outlier lớn
+};
+
+function quaternionAngularDistance(a: QuaternionData, b: QuaternionData): number {
+  const dot = Math.abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w);
+  return 2 * Math.acos(Math.max(-1, Math.min(1, dot)));
+}
+
+function smoothstep01(value: number): number {
+  const t = Math.max(0, Math.min(1, value));
+  return t * t * (3 - 2 * t);
+}
+
+function stabilizeActiveSample(
+  previous: QuaternionData, target: QuaternionData, dtMs: number, config: ArmSegmentStabilityConfig,
+): QuaternionData {
+  const angle = quaternionAngularDistance(previous, target);
+  if (!Number.isFinite(angle) || angle <= config.deadZoneRadians) return previous;
+
+  const range = Math.max(1e-6, config.highMotionRadians - config.lowMotionRadians);
+  const motion = smoothstep01((angle - config.lowMotionRadians) / range);
+  const tauMs = config.stableTimeConstantMs + (config.movingTimeConstantMs - config.stableTimeConstantMs) * motion;
+  const dt = Math.max(1, Math.min(100, Number.isFinite(dtMs) ? dtMs : 33));
+  const alpha = Math.max(0, Math.min(1, 1 - Math.exp(-dt / Math.max(1, tauMs))));
+  let output = slerpQuaternionData(previous, target, alpha);
+
+  // Velocity cap chạy SAU adaptive smoothing. Nó chỉ tác động lên discontinuity lớn;
+  // chuyển động bình thường ở 24–30 FPS vẫn được theo nhanh.
+  const appliedAngle = quaternionAngularDistance(previous, output);
+  const maxStep = Math.max(0, config.maxAngularVelocityRadiansPerSecond) * dt / 1000;
+  if (maxStep > 0 && appliedAngle > maxStep) output = slerpQuaternionData(previous, output, maxStep / appliedAngle);
+  return output;
+}
 
 export interface ArmTemporalState {
   previousPole: { x: number; y: number; z: number } | null;
@@ -53,6 +110,7 @@ export interface ArmTemporalState {
   previousSecondary: { upper: { x: number; y: number; z: number } | null; lower: { x: number; y: number; z: number } | null };
   lengthSamples: { upper: number[]; lower: number[] };
   calibratedLength: { upper: number | null; lower: number | null };
+  /** Robust per-segment calibration consumed by AvatarMotionProcessor. */
   lengthProfile: { upper: RobustMeasurementState; lower: RobustMeasurementState };
   previousObservedElbow: { x: number; y: number; z: number } | null;
   /** Phase 3B partial-arm: mỏ neo phía gập khuỷu, giữ qua các frame để elbow inference không lật phía. */
@@ -75,34 +133,46 @@ export const createArmTemporalState = (): ArmTemporalState => ({
   elbowSource: "unavailable", elbowWasVisible: false, wristWasVisible: false,
 });
 
-export function updateSegmentTemporalOutput(state: SegmentTemporalState, solved: QuaternionData | null, isNewSample: boolean, nowMs: number, holdMs: number, returnMs: number, recoveryMs: number, invalidGraceMs = 0, restingDelta: QuaternionData = IDENTITY_QUATERNION, forceReacquireBlend = false): { output: QuaternionData; state: ArmLossState; progress: number } {
+export function updateSegmentTemporalOutput(
+  state: SegmentTemporalState, solved: QuaternionData | null, isNewSample: boolean, nowMs: number,
+  holdMs: number, returnMs: number, recoveryMs: number, invalidGraceMs = 0,
+  restingDelta: QuaternionData = IDENTITY_QUATERNION, forceReacquireBlend = false,
+  stability: ArmSegmentStabilityConfig = DEFAULT_ARM_SEGMENT_STABILITY,
+): { output: QuaternionData; state: ArmLossState; progress: number } {
   if (solved && isNewSample) {
-    // Mức 1B-1: đưa `solved` về cùng hemisphere với đầu ra liên tục gần nhất TRƯỚC khi dùng —
-    // áp dụng cả khi recovering (so với recoveryOrigin, vì slerp giữa hai quaternion khác
-    // hemisphere sẽ đi đường vòng dài) lẫn khi gán thẳng (progress=1, không qua slerp nào cả).
     const continuityReference = state.currentOutputDelta;
     const solvedContinuous = sameHemisphere(continuityReference, solved);
-    // Pose landmarks keep moving by fractions of a degree even when the user is
-    // sitting still. Do not continuously excite the arm rig with that noise.
-    // Comparing against the emitted value (rather than the previous raw sample)
-    // still lets deliberate slow motion accumulate and cross the deadband.
-    if (state.lossState === "active" && quaternionAngularDistance(continuityReference, solvedContinuous) < ARM_REST_DEADBAND_RADIANS) {
-      state.lastValidDelta = continuityReference;
-      state.lastValidAtMs = nowMs;
-      return { output: continuityReference, state: "active", progress: 1 };
+    const previousSolvedAtMs = state.lastSolvedAtMs;
+    state.lastSolvedAtMs = nowMs;
+
+    // Source/branch reacquire vẫn blend có chủ đích. Ở active bình thường, thêm adaptive
+    // quaternion stabilization để landmark jitter không đi thẳng ra renderer.
+    const recovering = (state.lastValidDelta !== null && state.lossState !== "active") ||
+      (state.lastValidDelta !== null && forceReacquireBlend);
+    if (recovering && state.recoveryStartedAtMs === null) {
+      state.recoveryStartedAtMs = nowMs;
+      state.recoveryOrigin = state.currentOutputDelta;
     }
-    // Mức 1B-2 (theo tư vấn chuyên gia): tracking chưa hề "mất" theo lossState (geometry vẫn
-    // solved liên tục mỗi frame) khi nguồn dữ liệu hình học đổi loại — ví dụ elbowSource đổi
-    // từ inferred sang observed, hay poleSource đổi từ rest/previous sang fresh/hand. Trước
-    // đây trường hợp này không kích hoạt `recovering` (chỉ dựa vào lossState), nên góc nhảy
-    // ngay tức thời — đo được hơn 100° khi elbow từ bị che chuyển sang lộ rõ. `forceReacquireBlend`
-    // do caller (processor) truyền vào khi phát hiện đổi loại nguồn, ép blend dù lossState
-    // đang "active".
-    const recovering = (state.lastValidDelta !== null && state.lossState !== "active") || (state.lastValidDelta !== null && forceReacquireBlend);
-    if (recovering && state.recoveryStartedAtMs === null) { state.recoveryStartedAtMs = nowMs; state.recoveryOrigin = state.currentOutputDelta; }
-    state.lastValidDelta = solvedContinuous; state.lastValidAtMs = nowMs;
-    const progress = recovering ? Math.min(1, (nowMs - state.recoveryStartedAtMs!) / Math.max(1, recoveryMs)) : 1;
-    state.currentOutputDelta = recovering ? slerpQuaternionData(state.recoveryOrigin!, solvedContinuous, progress) : solvedContinuous;
+
+    const progress = recovering
+      ? Math.min(1, (nowMs - state.recoveryStartedAtMs!) / Math.max(1, recoveryMs))
+      : 1;
+
+    if (recovering) {
+      // Giữ contract recovery cũ để không đổi cảm giác reacquire của toàn pipeline.
+      state.currentOutputDelta = slerpQuaternionData(state.recoveryOrigin!, solvedContinuous, progress);
+    } else if (previousSolvedAtMs === null) {
+      state.currentOutputDelta = solvedContinuous;
+    } else {
+      state.currentOutputDelta = stabilizeActiveSample(
+        state.currentOutputDelta, solvedContinuous, nowMs - previousSolvedAtMs, stability,
+      );
+    }
+
+    // Hold phải giữ đúng OUTPUT người dùng vừa thấy, không giữ raw solver target ở phía sau
+    // stabilizer; nếu không frame đầu tiên mất tracking có thể tự tạo một cú snap.
+    state.lastValidDelta = state.currentOutputDelta;
+    state.lastValidAtMs = nowMs;
     state.lossState = progress < 1 ? "recovering" : "active";
     if (progress >= 1) { state.recoveryOrigin = null; state.recoveryStartedAtMs = null; }
     return { output: state.currentOutputDelta, state: state.lossState, progress };

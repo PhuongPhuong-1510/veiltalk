@@ -32,7 +32,7 @@ describe("AR4 torso and shoulder solvers",()=>{
   it("keeps left/right shrug evidence independent",()=>{
     const solver=new ShoulderMotionSolver(),neutral=landmarks();expect(solver.captureNeutral(neutral,basis)).toBe(true);const raised=landmarks();raised[11]=lm(-.2,.6);
     const result=solver.solve(raised,basis,profile,{x:0,y:0,z:0});expect(result.elevation.left).toBeGreaterThan(0);expect(Math.abs(result.elevation.right)).toBeLessThan(result.elevation.left*.2);expect(result.vertical.left).toBeGreaterThan(0);expect(result.directBilateralProtractionObservable).toBe(false);
-    const missingEars=landmarks();missingEars[7].visibility=0;missingEars[8].visibility=0;missingEars[11]=lm(-.2,.6);const fallback=solver.solve(missingEars,basis,profile,{x:0,y:0,z:0});expect(fallback.verticalSource.left).toBe("nose-gap");expect(fallback.vertical.left).toBeGreaterThan(0);expect(Math.abs(fallback.vertical.right)).toBeLessThan(.01);
+    const missingEars=landmarks();missingEars[7].visibility=0;missingEars[8].visibility=0;missingEars[11]=lm(-.2,.6);const fallback=solver.solve(missingEars,basis,profile,{x:0,y:0,z:0});expect(fallback.verticalSource.left).toBe("torso-length");expect(fallback.vertical.left).toBeGreaterThan(0);expect(Math.abs(fallback.vertical.right)).toBeLessThan(.01);
   });
   it("detects bilateral shrug without requiring visible hips",()=>{
     const solver=new ShoulderMotionSolver(),neutral=landmarks();neutral[23].visibility=0;neutral[24].visibility=0;expect(solver.captureNeutral(neutral,basis)).toBe(true);
@@ -42,8 +42,25 @@ describe("AR4 torso and shoulder solvers",()=>{
   it("rejects perspective-like bilateral shoulder drift during a detected lean",()=>{
     const solver=new ShoulderMotionSolver(),neutral=landmarks();expect(solver.captureNeutral(neutral,basis)).toBe(true);
     const drifted=landmarks();drifted[11]=lm(-.2,.6);drifted[12]=lm(.2,.6);
-    const result=solver.solve(drifted,basis,profile,{x:0,y:0,z:0},drifted,1,0);
+    // Image evidence drifts, but the shoulder↔hip world length stays rigid: this is perspective,
+    // not a physical bilateral shrug.
+    const result=solver.solve(neutral,basis,profile,{x:0,y:0,z:0},drifted,1,0);
     expect(Math.abs(result.vertical.left)).toBeLessThan(.01);expect(Math.abs(result.vertical.right)).toBeLessThan(.01);expect(result.commonMotionGain).toBe(0);
+  });
+  it("distributes rigid torso pitch toward the lower trunk instead of treating lean as upper-chest curl",()=>{
+    const result=solveTorsoMotion(basis,identity,profile,landmarks(),false,q(new Vector3(1,0,0),.2));
+    const spine=localRotationToSemantic(result.layer.spine!,profile.joints.spine!)!.x;
+    const upperChest=localRotationToSemantic(result.layer.upperChest!,profile.joints.upperChest!)!.x;
+    expect(spine).toBeGreaterThan(upperChest);
+    expect(spine+upperChest+(localRotationToSemantic(result.layer.hips!,profile.joints.hips!)?.x??0)+(localRotationToSemantic(result.layer.chest!,profile.joints.chest!)?.x??0)).toBeCloseTo(.2,5);
+  });
+  it("preserves a physical bilateral shrug from shoulder-to-hip length even while image common is suppressed",()=>{
+    const solver=new ShoulderMotionSolver(),neutral=landmarks();expect(solver.captureNeutral(neutral,basis)).toBe(true);
+    const raised=landmarks();raised[11]=lm(-.2,.6);raised[12]=lm(.2,.6);
+    const result=solver.solve(raised,basis,profile,{x:0,y:0,z:0},raised,1,0);
+    expect(result.verticalSource.left).toBe("torso-length");
+    expect(result.verticalSource.right).toBe("torso-length");
+    expect(result.vertical.left).toBeGreaterThan(.5);expect(result.vertical.right).toBeGreaterThan(.5);
   });
   it("preserves differential shoulder evidence while common lean motion is gated",()=>{
     const solver=new ShoulderMotionSolver(),neutral=landmarks();expect(solver.captureNeutral(neutral,basis)).toBe(true);
@@ -54,7 +71,7 @@ describe("AR4 torso and shoulder solvers",()=>{
   it("detects bilateral shrug from nose-to-shoulder-center gap when both ears are unavailable",()=>{
     const solver=new ShoulderMotionSolver(),neutral=landmarks();neutral[7].visibility=0;neutral[8].visibility=0;expect(solver.captureNeutral(neutral,basis)).toBe(true);
     const raised=landmarks();raised[7].visibility=0;raised[8].visibility=0;raised[11]=lm(-.2,.6);raised[12]=lm(.2,.6);
-    const result=solver.solve(raised,basis,profile,{x:0,y:0,z:0});expect(result.verticalSource.left).toBe("nose-gap");expect(result.verticalSource.right).toBe("nose-gap");expect(result.vertical.left).toBeGreaterThan(.5);expect(result.vertical.right).toBeGreaterThan(.5);
+    const result=solver.solve(raised,basis,profile,{x:0,y:0,z:0});expect(result.verticalSource.left).toBe("torso-length");expect(result.verticalSource.right).toBe("torso-length");expect(result.vertical.left).toBeGreaterThan(.5);expect(result.vertical.right).toBeGreaterThan(.5);
   });
   it("uses image-space shrug evidence when world-space shoulders stay unchanged in a close camera crop",()=>{
     const solver=new ShoulderMotionSolver(),world=landmarks(),neutralImage=landmarks();expect(solver.captureNeutral(world,basis,neutralImage,16/9)).toBe(true);
