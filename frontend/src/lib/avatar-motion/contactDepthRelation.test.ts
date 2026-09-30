@@ -10,4 +10,7 @@ describe("contact depth evidence",()=>{
     expect(fuseContactDepthEvidence({occlusion:-.9,scaleChange:null,motionConsistency:null,posePrior:null,history:null}).relation).toBe("behind");
     expect(fuseContactDepthEvidence({occlusion:null,scaleChange:-.7,motionConsistency:.8,posePrior:null,history:.8}).relation).toBe("in-front-separated");
   });
+  it("never lets history manufacture physical depth compatibility",()=>{
+    expect(fuseContactDepthEvidence({occlusion:null,scaleChange:null,motionConsistency:.95,posePrior:null,history:1}).relation).toBe("unknown");
+  });
 });

@@ -38,6 +38,9 @@ export interface ContactPoseCorrection {
   collisionQuality:number;
   /** Suppresses large solver departures from the faithful baseline without a binary reject. */
   kinematicQuality:number;
+  endpointQuality:number;
+  normalQuality:number;
+  contactQuality:number;
   /** Multiplied with the temporal contact influence by ContactRuntime. */
   influenceScale:number;
   angularDeltaDegrees:{upper:number;lower:number;hand:number};
@@ -55,11 +58,19 @@ const quaternionOrIdentity=(value:QuaternionData|undefined)=>value?new Quaternio
 const clamp01=(value:number)=>Math.max(0,Math.min(1,value));
 const smoothstep=(a:number,b:number,x:number)=>{const t=clamp01((x-a)/Math.max(1e-8,b-a));return t*t*(3-2*t);};
 const finite=(...values:number[])=>values.every(Number.isFinite);
+const clampQuaternionCorrection=(baseline:QuaternionData|undefined,target:QuaternionData,maxRadians:number):QuaternionData=>{
+  const from=quaternionOrIdentity(baseline),to=new Quaternion(target.x,target.y,target.z,target.w).normalize();
+  // Explicitly keep both quaternions in the same hemisphere. q and -q encode the same pose, but
+  // temporal consumers must not see the representation jump across frames.
+  if(from.dot(to)<0)to.set(-to.x,-to.y,-to.z,-to.w);
+  const angle=from.angleTo(to);if(!Number.isFinite(angle)||angle<=maxRadians)return qData(to);
+  return qData(from.slerp(to,maxRadians/Math.max(1e-8,angle)).normalize());
+};
 
 const rejected=(reason:"missing-contact-rig"|"invalid-target"):ContactPoseCorrection=>({
   rotations:{},anchorError:Infinity,normalErrorRadians:Infinity,reachRatio:Infinity,projected:false,projection:"none",
   targetDistance:Infinity,minReach:0,maxReach:0,reachErrorRatio:Infinity,reachQuality:0,
-  headPenetration:Infinity,torsoPenetration:Infinity,collisionQuality:0,kinematicQuality:0,influenceScale:0,
+  headPenetration:Infinity,torsoPenetration:Infinity,collisionQuality:0,kinematicQuality:0,endpointQuality:0,normalQuality:0,contactQuality:0,influenceScale:0,
   angularDeltaDegrees:{upper:0,lower:0,hand:0},accepted:false,reason,
 });
 
@@ -108,23 +119,37 @@ export function solveContactPoseCorrection(
 
   const target=new Vector3(wristTarget.wrist.x,wristTarget.wrist.y,wristTarget.wrist.z);
   const preferredPole=currentElbowPole(profile,side,baseline,shoulder,target,headRotation);
-  const ik=solveContactArmIk({shoulder:data(shoulder),wristTarget:wristTarget.wrist,upperLength:arm.upperLength,lowerLength:arm.lowerLength,preferredPole:data(preferredPole)});
-  if(!ik)return rejected("invalid-target");
-
-  // Exact/near-exact reaches receive full weight. Projected targets fade continuously instead of
-  // being rejected at a single threshold.
-  const reachSoftRatio=.015;
-  const reachQuality=1-smoothstep(reachSoftRatio,Math.max(reachSoftRatio+.001,maximumReachErrorRatio),ik.reachErrorRatio);
-
   const headCenter=poseContactRestWorldPoint(profile,"head",collision.head.centerWorld,baseline,headRotation);
   const torsoStartParent:ContactBodyJointName=profile.contactSkeleton.joints.upperChest?"upperChest":profile.contactSkeleton.joints.chest?"chest":profile.contactSkeleton.joints.spine?"spine":"hips";
   const torsoStart=poseContactRestWorldPoint(profile,torsoStartParent,collision.torso.startWorld,baseline,headRotation);
   const torsoEnd=poseContactRestWorldPoint(profile,profile.contactSkeleton.joints.hips?"hips":torsoStartParent,collision.torso.endWorld,baseline,headRotation);
   if(!headCenter||!torsoStart||!torsoEnd)return rejected("missing-contact-rig");
 
-  const lowerCapsule={start:ik.elbow,end:ik.wrist,radius:arm.radius};
-  const headResult=capsuleSpherePenetration(lowerCapsule,{center:data(headCenter),radius:collision.head.radius});
-  const torsoResult=capsuleCapsulePenetration(lowerCapsule,{start:data(torsoStart),end:data(torsoEnd),radius:collision.torso.radius});
+  // The elbow lies on a solution circle. Try a small deterministic manifold instead of fading a
+  // perfectly reachable contact merely because the single preferred pole intersects the body.
+  const reachAxis=target.clone().sub(shoulder).normalize();
+  const poleAngles=[0,Math.PI/4,-Math.PI/4,Math.PI/2,-Math.PI/2];
+  const candidates=poleAngles.map(angle=>{
+    const pole=preferredPole.clone().applyAxisAngle(reachAxis,angle);
+    const value=solveContactArmIk({shoulder:data(shoulder),wristTarget:wristTarget.wrist,upperLength:arm.upperLength,lowerLength:arm.lowerLength,preferredPole:data(pole)});
+    if(!value)return null;
+    const lower={start:value.elbow,end:value.wrist,radius:arm.radius};
+    const hp=capsuleSpherePenetration(lower,{center:data(headCenter),radius:collision.head.radius});
+    const tp=capsuleCapsulePenetration(lower,{start:data(torsoStart),end:data(torsoEnd),radius:collision.torso.radius});
+    if(!hp.valid||!tp.valid)return null;
+    // Prefer clearance first, then remain near the tracked elbow plane when solutions are similar.
+    return{value,head:hp,torso:tp,cost:hp.penetration+tp.penetration+Math.abs(angle)*arm.radius*.025};
+  }).filter((entry):entry is NonNullable<typeof entry>=>entry!==null).sort((a,b)=>a.cost-b.cost);
+  const selected=candidates[0];if(!selected)return rejected("invalid-target");
+  const ik=selected.value;
+
+  // Exact/near-exact reaches receive full weight. Projected targets fade continuously instead of
+  // being rejected at a single threshold.
+  const reachSoftRatio=.015;
+  const reachQuality=1-smoothstep(reachSoftRatio,Math.max(reachSoftRatio+.001,maximumReachErrorRatio),ik.reachErrorRatio);
+
+  const headResult=selected.head;
+  const torsoResult=selected.torso;
   if(!headResult.valid||!torsoResult.valid||!finite(headResult.penetration,torsoResult.penetration))return rejected("invalid-target");
 
   const targetsHead=anchor.parentJoint==="head";
@@ -158,7 +183,11 @@ export function solveContactPoseCorrection(
   const desiredHandWorld=wristTarget.orientation;
   const targetHandLocal=multiply(inverse(lowerWorld),desiredHandWorld);
   const handDelta=multiply(inverse(hand.restLocalRotation),targetHandLocal);
-  const normalized=qData(new Quaternion(handDelta.x,handDelta.y,handDelta.z,handDelta.w).normalize());
+  const rawHandDelta=qData(new Quaternion(handDelta.x,handDelta.y,handDelta.z,handDelta.w).normalize());
+  // Contact is a local corrective layer on top of the tracked wrist. Never let a noisy contact
+  // normal replace the complete hand orientation or select a 180-degree wrist branch.
+  const maxHandCorrection=probeName==="palmCenter"?55*Math.PI/180:42*Math.PI/180;
+  const normalized=clampQuaternionCorrection(baseline[handName],rawHandDelta,maxHandCorrection);
   if(!finite(normalized.x,normalized.y,normalized.z,normalized.w))return rejected("invalid-target");
 
   // Forward-kinematics validation AFTER joint constraints. Analytic IK may hit the requested wrist
@@ -206,8 +235,14 @@ export function solveContactPoseCorrection(
   const handQuality=1-smoothstep(100,175,angularDeltaDegrees.hand);
   const kinematicQuality=clamp01(Math.min(upperQuality,lowerQuality,handQuality));
 
-  const influenceScale=clamp01(reachQuality*collisionQuality*kinematicQuality);
-  const degraded=[reachQuality<.999,collisionQuality<.999,kinematicQuality<.999].filter(Boolean).length;
+  // Validate the pose the renderer can reproduce. Endpoint and normal error are first-class
+  // quality terms, not diagnostics-only values.
+  const armScale=Math.max(1e-8,arm.upperLength+arm.lowerLength);
+  const endpointQuality=1-smoothstep(.012,.12,postConstraintAnchorError/armScale);
+  const normalQuality=1-smoothstep(18*Math.PI/180,72*Math.PI/180,postConstraintNormalError);
+  const contactQuality=clamp01(endpointQuality*normalQuality);
+  const influenceScale=clamp01(reachQuality*collisionQuality*kinematicQuality*contactQuality);
+  const degraded=[reachQuality<.999,collisionQuality<.999,kinematicQuality<.999,contactQuality<.999].filter(Boolean).length;
   const reason:ContactPoseCorrectionReason=degraded>1?"multi-degraded":reachQuality<.999?"reach-degraded":collisionQuality<.999?"collision-degraded":kinematicQuality<.999?"kinematic-degraded":"none";
 
   return{
@@ -226,6 +261,9 @@ export function solveContactPoseCorrection(
     torsoPenetration:torsoResult.penetration,
     collisionQuality,
     kinematicQuality,
+    endpointQuality,
+    normalQuality,
+    contactQuality,
     influenceScale,
     angularDeltaDegrees,
     accepted:true,

@@ -55,7 +55,7 @@ export interface ContactDepthEvidence {
   relation:ContactDepthRelation;
   confidence:number;
   /** Cue convention: +1 supports surface compatibility, -1 contradicts it, null unavailable. */
-  sources:{occlusion:number|null;scaleChange:number|null;motionConsistency:number|null;posePrior:number|null;history:number|null;};
+  sources:{occlusion:number|null;scaleChange:number|null;motionConsistency:number|null;posePrior:number|null;history:number|null;probeDepth?:number|null;};
   rejectionReason:"none"|"behind-evidence"|"separated-evidence"|"insufficient-cues";
 }
 
@@ -69,6 +69,11 @@ export interface ContactEvidenceBreakdown {
   continuity:number;
   finalConfidence:number;
   hardRejections:string[];
+  /** Independent onset/release evidence. History is deliberately excluded. */
+  closing?:number;
+  stopping?:number;
+  separating?:number;
+  tracking?:number;
 }
 
 export interface HumanContactObservation {
@@ -98,6 +103,10 @@ export interface HumanContactObservation {
   normalVelocity:number|null;
   /** Motion magnitude in continuous family parameterization, not semantic patch UV. */
   tangentVelocity:number|null;
+  /** Physical palm/edge orientation compatibility, null when the 3D hand basis is unavailable. */
+  orientationCompatibility?:number|null;
+  /** Candidate-only score. It locates a projected body region and never asserts contact. */
+  candidateQuality?:number;
   depth:ContactDepthEvidence;
   confidence:number;
   evidence:ContactEvidenceBreakdown;

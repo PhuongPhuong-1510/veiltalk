@@ -27,6 +27,7 @@ export interface ContactObservationInput extends HumanBodyRegionInput {
   tangentVelocity?:number|null;
   motionConfidence?:number|null;
   continuity?:number;
+  orientationByProbe?:Partial<Record<HandContactProbe,number|null>>;
 }
 
 /** Shadow-mode observation only: this module never writes avatar joints. */
@@ -45,10 +46,13 @@ export function observeHumanContact(input:ContactObservationInput):HumanContactO
       const familySwitch=previousFamily&&family!==previousFamily ? .18 : 0;
       const semanticSwitch=input.previousRegion&&family===previousFamily&&region.region!==input.previousRegion ? .025 : 0;
       const probeSwitch=input.previousProbe&&probe.probe!==input.previousProbe ? .10 : 0;
-      const outsidePenalty=Math.max(0,region.signedDistance)*.22;
+      // Once a point is inside a silhouette, being deeper inside is not evidence of contact and
+      // must not make one family beat another. Monocular projection cannot provide that fact.
+      const outsideDistance=Math.max(0,region.signedDistance);
+      const outsidePenalty=outsideDistance*.22;
       const anatomyPenalty=(1-(region.anatomicalConfidence??region.confidence))*.12;
       const modelPenalty=(1-(region.modelConfidence??region.confidence))*.06;
-      const cost=region.signedDistance+familySwitch+semanticSwitch+probeSwitch+(1-probe.confidence)*.18+(1-region.confidence)*.16+
+      const cost=outsideDistance+familySwitch+semanticSwitch+probeSwitch+(1-probe.confidence)*.18+(1-region.confidence)*.16+
         anatomyPenalty+modelPenalty+(region.selectionBias??0)+outsidePenalty;
       if(cost<chosenCost){chosen={probe,region,cost};chosenCost=cost;}
     }
@@ -59,7 +63,10 @@ export function observeHumanContact(input:ContactObservationInput):HumanContactO
   // Continuous family proxy drives projected overlap. Deep interior points are valid in a monocular
   // projection, so only positive outside-distance reduces overlap.
   const overlap=clamp01(1-Math.max(0,chosen.region.signedDistance));
-  const motion=clamp01(input.motionConfidence??.5),orientation=clamp01(chosen.probe.confidence),continuity=clamp01(input.continuity??0);
+  const motion=clamp01(input.motionConfidence??.5),orientationRaw=input.orientationByProbe?.[chosen.probe.probe]??null;
+  // Unknown orientation is neutral, not positive evidence. A measured orientation is independent
+  // from probe geometry and can therefore strengthen or weaken acquisition.
+  const orientation=orientationRaw===null?.5:clamp01(orientationRaw),continuity=clamp01(input.continuity??0);
   const hardRejections:string[]=[];
   if(input.depth.relation==="behind")hardRejections.push("depth-behind");
   if(input.depth.relation==="in-front-separated")hardRejections.push("depth-separated");
@@ -67,10 +74,15 @@ export function observeHumanContact(input:ContactObservationInput):HumanContactO
   const modelQ=clamp01(chosen.region.modelConfidence??chosen.region.confidence);
   const topologyQ=clamp01(1-(chosen.region.selectionBias??0));
   const bodyRegionConfidence=clamp01(chosen.region.confidence*(.42+.34*anatomyQ+.14*modelQ+.10*topologyQ));
+  const candidateQuality=clamp01(chosen.probe.confidence*.36+bodyRegionConfidence*.34+overlap*.30);
   const confidence=hardRejections.length?0:clamp01(
-    chosen.probe.confidence*.21+bodyRegionConfidence*.20+overlap*.24+motion*.08+orientation*.08+input.depth.confidence*.08+continuity*.11
+    candidateQuality*.49+motion*.08+orientation*.14+input.depth.confidence*.18+continuity*.11
   );
-  const evidence:ContactEvidenceBreakdown={handGeometry:chosen.probe.confidence,bodyRegion:bodyRegionConfidence,overlap,motion,orientation,depth:input.depth.confidence,continuity,finalConfidence:confidence,hardRejections};
+  const nv=input.normalVelocity??null;
+  const closing=nv===null?0:clamp01((-nv-.04)/.55);
+  const separating=nv===null?0:clamp01((nv-.04)/.55);
+  const stopping=nv===null?0:clamp01(1-Math.abs(nv)/.18);
+  const evidence:ContactEvidenceBreakdown={handGeometry:chosen.probe.confidence,bodyRegion:bodyRegionConfidence,overlap,motion,orientation,depth:input.depth.confidence,continuity,finalConfidence:confidence,hardRejections,closing,stopping,separating,tracking:candidateQuality};
   const tangentAngleRadians=chosen.probe.tangentHint?Math.atan2(chosen.probe.tangentHint.x,-chosen.probe.tangentHint.y):null;
   return{
     side:input.side,region:chosen.region.region,anatomicalLabel:chosen.region.anatomicalLabel,anatomicalSource:chosen.region.anatomicalSource,
@@ -78,6 +90,6 @@ export function observeHumanContact(input:ContactObservationInput):HumanContactO
     probe:chosen.probe.probe,imagePoint:chosen.probe.point,regionUv,regionRawUv:uvRaw,familyUv:chosen.region.familyUv,
     surfaceFamily:chosen.region.surfaceFamily??regionFamily(chosen.region.region),regionSelectionBias:chosen.region.selectionBias??0,
     regionSignedDistance:chosen.region.signedDistance,imageNormal:chosen.probe.contactNormal,tangentAngleRadians,overlap,
-    normalVelocity:input.normalVelocity??null,tangentVelocity:input.tangentVelocity??null,depth:input.depth,confidence,evidence,sampledAtMs:input.sampledAtMs,
+    normalVelocity:nv,tangentVelocity:input.tangentVelocity??null,orientationCompatibility:orientationRaw,candidateQuality,depth:input.depth,confidence,evidence,sampledAtMs:input.sampledAtMs,
   };
 }

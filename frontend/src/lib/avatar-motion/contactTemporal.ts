@@ -7,6 +7,10 @@ export interface ContactTemporalConfig {
   occlusionGraceMs:number; acquireBlendMs:number; releaseBlendMs:number;
   /** Generic near gate in normalized patch distance. Keeps approach from stalling at semantic boundaries. */
   nearSignedDistance?:number;
+  separatingThreshold?:number;
+  onsetClosingThreshold?:number;
+  onsetStoppingThreshold?:number;
+  bootstrapConfirmMs?:number;
 }
 
 export const DEFAULT_CONTACT_TEMPORAL_CONFIG:ContactTemporalConfig={
@@ -15,6 +19,7 @@ export const DEFAULT_CONTACT_TEMPORAL_CONFIG:ContactTemporalConfig={
   slideEnterVelocity:.16,slideExitVelocity:.08,slideConfirmMs:80,
   occlusionGraceMs:250,acquireBlendMs:180,releaseBlendMs:220,
   nearSignedDistance:.55,
+  separatingThreshold:.55,onsetClosingThreshold:.28,onsetStoppingThreshold:.55,bootstrapConfirmMs:180,
 };
 
 export interface ContactTemporalState {
@@ -27,12 +32,16 @@ export interface ContactTemporalState {
   touchConditionSinceMs?:number|null;
   unknownTouchConditionSinceMs?:number|null;
   holdConditionSinceMs?:number|null;
+  /** Latched only from real inward motion; continuity/history cannot set it. */
+  sawClosingSinceMs?:number|null;
+  bootstrapSinceMs?:number|null;
 }
 
 export const createContactTemporalState=():ContactTemporalState=>({
   phase:"idle",region:null,probe:null,candidateSinceMs:null,phaseSinceMs:null,lastDetectorTimestampMs:null,lastObservedAtMs:null,
   motionCandidateSinceMs:null,visualInfluence:0,lastSurfaceCompatibleAtMs:null,approachConditionSinceMs:null,nearConditionSinceMs:null,
   touchConditionSinceMs:null,unknownTouchConditionSinceMs:null,holdConditionSinceMs:null,
+  sawClosingSinceMs:null,bootstrapSinceMs:null,
 });
 
 const activePhase=(phase:ContactPhase)=>phase==="touch"||phase==="hold"||phase==="slide";
@@ -58,6 +67,13 @@ export function updateContactEvidence(state:ContactTemporalState,observation:Hum
 
   next.lastObservedAtMs=sampledAtMs;
   const observationRegion=observation!.region,observationProbe=observation!.probe;
+  const velocity=observation!.normalVelocity;
+  const closing=observation!.evidence.closing??(velocity===null?0:Math.max(0,Math.min(1,(-velocity-.04)/.55)));
+  const stopping=observation!.evidence.stopping??(velocity===null?0:Math.max(0,Math.min(1,1-Math.abs(velocity)/.18)));
+  const separating=observation!.evidence.separating??(velocity===null?0:Math.max(0,Math.min(1,(velocity-.04)/.55)));
+  if(closing>=(config.onsetClosingThreshold??.28))next.sawClosingSinceMs=next.sawClosingSinceMs??sampledAtMs;
+  // Pull-away is a direct release event. Do not wait for aggregate confidence to decay.
+  if(activePhase(next.phase)&&separating>=(config.separatingThreshold??.55))return transition(next,"release",sampledAtMs);
   if(!activePhase(next.phase)){
     const identityChanged=next.region!==observationRegion||next.probe!==observationProbe;
     if(identityChanged)next={...next,region:observationRegion,probe:observationProbe,candidateSinceMs:sampledAtMs,approachConditionSinceMs:null,nearConditionSinceMs:null,touchConditionSinceMs:null,unknownTouchConditionSinceMs:null,holdConditionSinceMs:null};
@@ -89,11 +105,22 @@ export function updateContactEvidence(state:ContactTemporalState,observation:Hum
   }
 
   if(next.phase==="near"){
-    const direct=observation!.confidence>=config.touchConfidence&&observation!.depth.relation==="surface-compatible";
+    const compatible=observation!.depth.relation==="surface-compatible";
+    const tangentiallyStable=observation!.tangentVelocity===null||observation!.tangentVelocity<=config.slideEnterVelocity;
+    const onset=next.sawClosingSinceMs!==null&&next.sawClosingSinceMs!==undefined&&stopping>=(config.onsetStoppingThreshold??.55)&&tangentiallyStable;
+    const direct=observation!.confidence>=config.touchConfidence&&compatible&&onset;
     next.touchConditionSinceMs=conditionSince(next.touchConditionSinceMs,direct,sampledAtMs);
+    // Bootstrap supports starting the camera while already touching, but is intentionally slower
+    // and requires measured orientation when available plus strong candidate/depth evidence.
+    const orientation=observation!.orientationCompatibility;
+    const bootstrap=observation!.confidence>=config.touchConfidence&&compatible&&stopping>=.55&&
+      observation!.overlap>=.82&&(observation!.tangentVelocity===null||observation!.tangentVelocity<=config.slideExitVelocity)&&
+      (orientation===null||orientation===undefined||orientation>=.58);
+    next.bootstrapSinceMs=conditionSince(next.bootstrapSinceMs,bootstrap,sampledAtMs);
     next.unknownTouchConditionSinceMs=null;
     const directReady=direct&&sampledAtMs-(next.touchConditionSinceMs??sampledAtMs)>=config.touchConfirmMs;
-    if(directReady){
+    const bootstrapReady=bootstrap&&sampledAtMs-(next.bootstrapSinceMs??sampledAtMs)>=(config.bootstrapConfirmMs??180);
+    if(directReady||bootstrapReady){
       next=transition(next,"touch",sampledAtMs);next.touchConditionSinceMs=null;next.unknownTouchConditionSinceMs=null;
     }
     return next;

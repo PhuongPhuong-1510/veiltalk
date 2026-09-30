@@ -15,7 +15,8 @@ describe("contact temporal clocks",()=>{
     state=updateContactEvidence(state,observation(200),200);expect(state.phase).toBe("near");
     state=updateContactEvidence(state,observation(290,"unknown"),290);expect(state.phase).toBe("near");
     state=updateContactEvidence(state,observation(300),300);expect(state.phase).toBe("near");
-    state=updateContactEvidence(state,observation(390),390);expect(state.phase).toBe("touch");
+    state=updateContactEvidence(state,observation(390),390);expect(state.phase).toBe("near");
+    state=updateContactEvidence(state,observation(490),490);expect(state.phase).toBe("touch");
   });
   it("uses render dt only for visual blending",()=>{
     const active={...createContactTemporalState(),phase:"hold" as const};
@@ -42,5 +43,15 @@ describe("contact temporal clocks",()=>{
     state=updateContactEvidence(state,observation(190,"surface-compatible",.2),190);expect(state.phase).toBe("slide");
     state=updateContactEvidence(state,observation(200,"surface-compatible",.02),200);expect(state.phase).toBe("slide");
     state=updateContactEvidence(state,observation(290,"surface-compatible",.02),290);expect(state.phase).toBe("hold");
+  });
+  it("releases immediately on strong separating motion",()=>{
+    let state:ContactTemporalState={...createContactTemporalState(),phase:"hold",phaseSinceMs:0,candidateSinceMs:0,lastObservedAtMs:0,lastDetectorTimestampMs:0,region:"headTop",probe:"palmCenter"};
+    const pulling={...observation(40),normalVelocity:.7,evidence:{...observation(40).evidence,separating:1}};
+    state=updateContactEvidence(state,pulling,40);expect(state.phase).toBe("release");
+  });
+  it("does not bootstrap a lateral pass-by into contact",()=>{
+    let state=createContactTemporalState();
+    for(const at of [0,60,130,200,300,500,800])state=updateContactEvidence(state,observation(at,"surface-compatible",.4),at);
+    expect(state.phase).toBe("near");
   });
 });

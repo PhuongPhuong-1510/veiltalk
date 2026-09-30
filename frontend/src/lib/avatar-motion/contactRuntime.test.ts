@@ -19,7 +19,7 @@ describe("AR9 contact runtime",()=>{
   it("observes in shadow without writes, then either applies or safely rejects confirmed contact",()=>{
     const runtime=new ContactRuntime();runtime.setProfile(profile);
     const shadowRotations={};
-    for(const at of [0,60,130,200,290,380])runtime.update("left",frame(at),hand(),at,at,60,shadowRotations,null,false);
+    for(const at of [0,60,130,200,290,380,480])runtime.update("left",frame(at),hand(),at,at,60,shadowRotations,null,false);
     expect(shadowRotations).toEqual({});
     expect(runtime.snapshot().left.phase).toMatch(/touch|hold/);
     const corrected={};runtime.update("left",frame(450),hand(),450,450,70,corrected,null,true);

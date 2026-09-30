@@ -286,6 +286,42 @@ function localAxisInWorld(localAxis: Vector3Data, worldRotation: QuaternionData)
   return { x: axis.x, y: axis.y, z: axis.z };
 }
 
+/** Convert detector label certainty into compatibility with the side that actually owns the candidate. */
+function handednessCompatibilityQuality(side: ArmSide, match: HandSideMatchResult): number | null {
+  if (match.handedness === null || match.handedness === "unknown" || match.handednessScore === null || !Number.isFinite(match.handednessScore)) return null;
+  const score = Math.max(0, Math.min(1, match.handednessScore));
+  return match.handedness === side ? score : 1 - score;
+}
+
+/**
+ * Observability of the absolute rig-palm twist itself. The generic forearm-reference projection is
+ * not allowed to veto an already valid absolute-rig alignment.
+ */
+function absoluteRigTwistProjectionQuality(
+  forearmAxisWorld: Vector3Data,
+  observedPalmNormalWorld: Vector3Data,
+  restPalmNormalWorld: Vector3Data,
+  lowerRestWorldRotation: QuaternionData,
+  lowerTargetWorldRotation: QuaternionData,
+): number | null {
+  const axis = new Vector3(forearmAxisWorld.x, forearmAxisWorld.y, forearmAxisWorld.z);
+  const observed = new Vector3(observedPalmNormalWorld.x, observedPalmNormalWorld.y, observedPalmNormalWorld.z);
+  const restPalm = new Vector3(restPalmNormalWorld.x, restPalmNormalWorld.y, restPalmNormalWorld.z);
+  const restRotation = new Quaternion(lowerRestWorldRotation.x, lowerRestWorldRotation.y, lowerRestWorldRotation.z, lowerRestWorldRotation.w);
+  const targetRotation = new Quaternion(lowerTargetWorldRotation.x, lowerTargetWorldRotation.y, lowerTargetWorldRotation.z, lowerTargetWorldRotation.w);
+  if (![axis.x, axis.y, axis.z, observed.x, observed.y, observed.z, restPalm.x, restPalm.y, restPalm.z,
+    restRotation.x, restRotation.y, restRotation.z, restRotation.w, targetRotation.x, targetRotation.y, targetRotation.z, targetRotation.w].every(Number.isFinite)
+    || axis.lengthSq() < 1e-8 || observed.lengthSq() < 1e-8 || restPalm.lengthSq() < 1e-8
+    || restRotation.lengthSq() < 1e-8 || targetRotation.lengthSq() < 1e-8) return null;
+  axis.normalize(); observed.normalize(); restPalm.normalize(); restRotation.normalize(); targetRotation.normalize();
+  const localPalm = restPalm.applyQuaternion(restRotation.clone().invert());
+  const predicted = localPalm.applyQuaternion(targetRotation);
+  const observedProjected = observed.clone().addScaledVector(axis, -observed.dot(axis));
+  const predictedProjected = predicted.clone().addScaledVector(axis, -predicted.dot(axis));
+  const quality = Math.min(observedProjected.length(), predictedProjected.length());
+  return Number.isFinite(quality) ? Math.max(0, Math.min(1, quality)) : null;
+}
+
 export class AvatarMotionProcessor {
   private sequence = 0;
   private readonly facialNeutral: FacialNeutralCalibrator;
@@ -1079,7 +1115,7 @@ export class AvatarMotionProcessor {
     } else this.diagnostics = null;
     // Phase 3B.3: chạy SAU nhánh arm và chỉ GHI THÊM khoá xương ngón. Không đọc, không sửa, không
     // ghi đè bất kỳ khoá arm nào ở trên — kể cả `leftHand`/`rightHand` (wrist thuộc Phase 3B).
-    if(this.contactShadowEnabled){const renderDt=this.lastContactRenderAtMs===null?0:Math.max(0,Math.min(100,processedTimestampMs-this.lastContactRenderAtMs));this.lastContactRenderAtMs=processedTimestampMs;const contactHeadRotation=upperBody?.deltas.head??headRotation;for(const side of ["left","right"] as const){const match=handContext.matchResult[side];const candidate=match.matched&&match.candidateArrayIndex!==null?frame.rawHands[match.candidateArrayIndex]??null:null;this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,contactHeadRotation,this.contactCorrectionEnabled);}}
+    if(this.contactShadowEnabled){const renderDt=this.lastContactRenderAtMs===null?0:Math.max(0,Math.min(100,processedTimestampMs-this.lastContactRenderAtMs));this.lastContactRenderAtMs=processedTimestampMs;const contactHeadRotation=upperBody?.deltas.head??headRotation;for(const side of ["left","right"] as const){const match=handContext.matchResult[side];const candidate=match.matched&&match.candidateArrayIndex!==null?frame.rawHands[match.candidateArrayIndex]??null:null;this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,contactHeadRotation,this.contactCorrectionEnabled,candidate?.worldLandmarks??null,candidate?.handedness??side);}}
     if(this.continuousFingerEnabled){
       this.applyContinuousFinger(jointRotations,frame,handContext,processedTimestampMs);
       this.applyBimanualHand(jointRotations,frame,handContext,processedTimestampMs);
@@ -1363,6 +1399,13 @@ export class AvatarMotionProcessor {
       this.consumeMatchingResetMarker(state);
       return { output: poseLowerDelta, diagnostic };
     }
+    const isNewHandSample = hand.sampleClassification === "new-sample";
+    const match = hand.matchResult[side];
+    // A real identity reacquire must not inherit raw unwrap/temporal momentum from the previously
+    // owned candidate. Preserve neutral calibration and, critically, do NOT clear the new matcher anchor.
+    if (isNewHandSample && match.matched && match.matchChanged && state.lastAcceptedHandSampledAtMs !== null) {
+      this.resetHandTwistObservationHistoryPreservingMatch(side, nowMs);
+    }
     const dtSeconds = state.lastUpdatedAtMs === null ? 1 / 60 : (nowMs - state.lastUpdatedAtMs) / 1000;
     if (Number.isFinite(dtSeconds) && dtSeconds > 0) state.lastUpdatedAtMs = nowMs;
 
@@ -1411,8 +1454,6 @@ export class AvatarMotionProcessor {
     }
 
     const duplicateTimestamp = hand.sampleClassification === "duplicate";
-    const isNewHandSample = hand.sampleClassification === "new-sample";
-    const match = hand.matchResult[side];
     const palm = hand.palmBasisBySide[side];
     let observationMode: HandTwistRigDiagnostic["observationMode"] = hand.sampleClassification === "unsampled" ? "unsampled" : duplicateTimestamp ? "duplicate" : "missing";
     let rawWrappedTwistRadians: number | null = null;
@@ -1438,22 +1479,34 @@ export class AvatarMotionProcessor {
           restPalmNormalWorld: restPalmNormalWorld!, lowerRestWorldRotation: profileJoint.restWorldRotation,
           lowerTargetWorldRotation: lowerTargetWorldRotation!,
         }) : null;
-        alignmentMode = absoluteTwist?.accepted ? "rig-absolute" : "session-relative";
-        rawWrappedTwistRadians = absoluteTwist?.accepted ? absoluteTwist.twistRadians : twist.twistRadians;
+        const absoluteAccepted = absoluteTwist?.accepted === true && absoluteTwist.twistRadians !== null;
+        alignmentMode = absoluteAccepted ? "rig-absolute" : "session-relative";
+        // If absolute rig alignment is temporarily degenerate, fall back to the already-valid generic
+        // forearm twist instead of rejecting the whole observation. This matters most in two-hand
+        // occlusion where one palm normal can become edge-on for a few samples.
+        rawWrappedTwistRadians = absoluteAccepted ? absoluteTwist!.twistRadians : twist.twistRadians;
+        const absoluteProjectionQuality = absoluteAccepted ? absoluteRigTwistProjectionQuality(
+          forearmAxis!, normalized.basis.normal, restPalmNormalWorld!, profileJoint.restWorldRotation, lowerTargetWorldRotation!,
+        ) : null;
+        const selectedTwistAccepted = absoluteAccepted || twist.accepted;
         const confidence = computeHandTwistConfidence({
-          handMatched: match.matched, twistAccepted: absoluteTwist?.accepted ?? twist.accepted,
-          matchQuality: match.distance === null ? 0 : Math.max(0, 1 - match.distance / DEFAULT_HAND_MATCH_CONFIG.maxWristDistance),
+          handMatched: match.matched,
+          twistAccepted: selectedTwistAccepted,
+          matchQuality: match.matchQuality ?? (match.distance === null ? 0 : Math.max(0, 1 - match.distance / DEFAULT_HAND_MATCH_CONFIG.maxWristDistance)),
           palmGeometryQuality: palm.worldGeometryQuality,
-          palmProjectionRatio: twist.palmProjectionRatio, referenceProjectionRatio: twist.referenceProjectionRatio,
+          palmProjectionRatio: twist.palmProjectionRatio,
+          referenceProjectionRatio: twist.referenceProjectionRatio,
+          projectionQualityOverride: absoluteProjectionQuality,
           handAgeMs: frame.handSampledAtMs === null ? null : Math.max(0, nowMs - frame.handSampledAtMs),
           poseHandTimestampDeltaMs: frame.pose.sampledAtMs === null || frame.handSampledAtMs === null ? null : Math.abs(frame.pose.sampledAtMs - frame.handSampledAtMs),
-          handednessScore: match.handednessScore, previousTrusted: state.previousTrusted,
+          handednessScore: match.handednessScore,
+          handednessCompatibilityQuality: handednessCompatibilityQuality(side, match),
+          previousTrusted: state.previousTrusted,
         });
         trusted = confidence.trusted;
-        // Confidence là cổng tin cậy. Khi observation đã trusted, giữ đủ biên độ; temporal
-        // influence chỉ phục vụ acquire/hold/fade, không co góc liên tục theo chất lượng landmark.
+        // Confidence is a gate, not a continuous amplitude shrink. Temporal owns acquire/hold/fade.
         targetInfluenceWeight = confidence.trusted ? 1 : 0;
-        rejectionReason = (absoluteTwist && !absoluteTwist.accepted ? absoluteTwist.rejectionReason : twist.rejectionReason) ?? confidence.rejectionReason;
+        rejectionReason = (absoluteAccepted ? null : twist.rejectionReason) ?? confidence.rejectionReason;
         if (trusted && rawWrappedTwistRadians !== null) {
           const observationDtSeconds = state.lastAcceptedObservationAtMs === null ? 1 / 60 : Math.max(1 / 240, (nowMs - state.lastAcceptedObservationAtMs) / 1000);
           const limits = this.config.handTwist.correctionLimits[side];
@@ -1733,6 +1786,35 @@ export class AvatarMotionProcessor {
     this.handMatchPrevious[side].lastMatchedAtMs = null;
     this.handElbowBranchEvidence[side] = null;
   }
+  /**
+   * A candidate identity discontinuity invalidates unwrap/confidence history, but the matcher has
+   * already acquired a new valid candidate. Reset only twist observation state; keep the newly
+   * committed Hand↔Pose anchor and preserve absolute/session neutral calibration.
+   */
+  private resetHandTwistObservationHistoryPreservingMatch(side: ArmSide, nowMs: number): void {
+    const state = this.handTwistState[side];
+    const preservedNeutral = state.stabilization.neutralInitialized
+      ? resetHandTwistStabilizationKeepingNeutral(state.stabilization)
+      : { ...INITIAL_HAND_TWIST_STABILIZATION_STATE };
+    state.temporal = { ...INITIAL_HAND_TWIST_TEMPORAL_STATE };
+    state.stabilization = preservedNeutral;
+    state.previousTrusted = false;
+    state.lastUpdatedAtMs = null;
+    state.lastAcceptedObservationAtMs = null;
+    state.lastAcceptedHandSampledAtMs = null;
+    state.missingSinceMs = null;
+    state.lastStabilizationResult = null;
+    state.pendingNeutralReanchorReason = preservedNeutral.neutralInitialized ? "none" : "tracking-discontinuity";
+    state.trackingEpochId += 1;
+    state.trackingEpochStartedAtMs = nowMs;
+    state.trackingEpochResetReason = "tracking-discontinuity";
+    state.matchingStateReset = true;
+    state.matchingStateResetReason = "tracking-discontinuity";
+    state.neutralPreservedAcrossEpoch = preservedNeutral.neutralInitialized;
+    this.armStabilityState[side].previousHandRawTwistRadians = null;
+    this.armStabilityState[side].previousHandAppliedTwistRadians = null;
+  }
+
   private resetHandTrackingSide(
     side: ArmSide,
     reason: HandTrackingEpochResetReason,
