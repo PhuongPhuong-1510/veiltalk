@@ -405,6 +405,8 @@ export class AvatarMotionProcessor {
   // MediaPipe có thể làm hai shoulder image trùng nhau trong đúng frame cần dựng Hand wrist.
   // Giữ phép đo gần nhất từ hai vai đáng tin cậy để occlusion không vô hiệu hóa lower arm.
   private lastReliableShoulderImageToWorldScale: number | null = null;
+  /** Stable monocular depth branch used only while lifting a matched Hand wrist into Pose world. */
+  private readonly wristReconstructionDepthSign: Record<ArmSide, -1 | 1 | null> = { left: null, right: null };
   private diagnostics: AvatarMotionDiagnosticSnapshot | null = null;
   // Tư thế buông tay dựng từ rig hiện tại; mất theo dõi thì trả về đây thay vì T-pose.
   private idlePose: Record<ArmSide, IdleArmPose> | null = null;
@@ -832,8 +834,8 @@ export class AvatarMotionProcessor {
         };
       }
       const solved = isNewSample && preparedEvidence ? solveAnatomicalArmFrames(preparedEvidence.worldLandmarks, preparedEvidence.imageLandmarks, this.rigProfile, {
-        left: { previousPole: this.armState.left.previousPole, previousPoleWasFresh: this.armState.left.poleSource === "fresh", previousDepthDegenerate: this.armState.left.depthDegenerate, lastValidPoleAtMs: this.armState.left.lastValidPoleAtMs, previousPrimary: this.armState.left.previousPrimary, previousSecondary: this.armState.left.previousSecondary, calibratedLength: this.armState.left.calibratedLength, previousObservedElbow: this.armState.left.previousObservedElbow, inferenceStartedAtMs: this.armState.left.inferenceStartedAtMs, elbowWasVisible: this.armState.left.elbowWasVisible, wristWasVisible: this.armState.left.wristWasVisible, previousElbowDirection: this.armState.left.previousElbowDirection },
-        right: { previousPole: this.armState.right.previousPole, previousPoleWasFresh: this.armState.right.poleSource === "fresh", previousDepthDegenerate: this.armState.right.depthDegenerate, lastValidPoleAtMs: this.armState.right.lastValidPoleAtMs, previousPrimary: this.armState.right.previousPrimary, previousSecondary: this.armState.right.previousSecondary, calibratedLength: this.armState.right.calibratedLength, previousObservedElbow: this.armState.right.previousObservedElbow, inferenceStartedAtMs: this.armState.right.inferenceStartedAtMs, elbowWasVisible: this.armState.right.elbowWasVisible, wristWasVisible: this.armState.right.wristWasVisible, previousElbowDirection: this.armState.right.previousElbowDirection },
+        left: { previousPole: this.armState.left.previousPole, previousPoleWasFresh: this.armState.left.poleSource === "fresh", previousDepthDegenerate: this.armState.left.depthDegenerate, lastValidPoleAtMs: this.armState.left.lastValidPoleAtMs, previousPrimary: this.armState.left.previousPrimary, previousSecondary: this.armState.left.previousSecondary, calibratedLength: { upper: this.armState.left.calibratedLength.upper ?? this.lastGeometryDiagnostics.left?.upperSegmentLength ?? null, lower: this.armState.left.calibratedLength.lower ?? this.lastGeometryDiagnostics.left?.lowerSegmentLength ?? null }, previousObservedElbow: this.armState.left.previousObservedElbow, inferenceStartedAtMs: this.armState.left.inferenceStartedAtMs, elbowWasVisible: this.armState.left.elbowWasVisible, wristWasVisible: this.armState.left.wristWasVisible, previousElbowDirection: this.armState.left.previousElbowDirection },
+        right: { previousPole: this.armState.right.previousPole, previousPoleWasFresh: this.armState.right.poleSource === "fresh", previousDepthDegenerate: this.armState.right.depthDegenerate, lastValidPoleAtMs: this.armState.right.lastValidPoleAtMs, previousPrimary: this.armState.right.previousPrimary, previousSecondary: this.armState.right.previousSecondary, calibratedLength: { upper: this.armState.right.calibratedLength.upper ?? this.lastGeometryDiagnostics.right?.upperSegmentLength ?? null, lower: this.armState.right.calibratedLength.lower ?? this.lastGeometryDiagnostics.right?.lowerSegmentLength ?? null }, previousObservedElbow: this.armState.right.previousObservedElbow, inferenceStartedAtMs: this.armState.right.inferenceStartedAtMs, elbowWasVisible: this.armState.right.elbowWasVisible, wristWasVisible: this.armState.right.wristWasVisible, previousElbowDirection: this.armState.right.previousElbowDirection },
       }, processedTimestampMs, this.config.armFrame, this.constraints, this.filtered
         ? (name, direction) => this.directionFilter(name).filter(direction, sampledAtMs!) : undefined,
       this.filtered ? (side, pole) => this.poleFilter(side).filter(pole, sampledAtMs!) : undefined,
@@ -1331,7 +1333,17 @@ export class AvatarMotionProcessor {
         handImage,
       }, this.config.wristEvidence);
       wrist[side] = selected;
-      if (selected.source !== "hand-image") continue;
+      if (selected.source !== "hand-image") {
+        // A confidently observed Pose wrist is allowed to re-anchor the branch, but near-planar
+        // depth noise is not. This avoids alternating front/back solutions around z=0.
+        const observedElbowDepth = originalWorld[indices.elbow];
+        if (poseValid && observedElbowDepth && poseWristWorld) {
+          const dz = semantic(poseWristWorld).z - semantic(observedElbowDepth).z;
+          const referenceLength = this.lastGeometryDiagnostics[side]?.lowerSegmentLength ?? shoulderWidthWorld * 0.65;
+          if (Math.abs(dz) > Math.max(1e-4, referenceLength * 0.06)) this.wristReconstructionDepthSign[side] = dz < 0 ? -1 : 1;
+        }
+        continue;
+      }
 
       // Hand won wrist arbitration because Pose was missing or inconsistent. Until Hand image can
       // be reconstructed into a valid Pose-world wrist, explicitly invalidate the Pose wrist for
@@ -1346,8 +1358,17 @@ export class AvatarMotionProcessor {
       const shoulderWorldRaw = originalWorld[indices.shoulder], shoulderImage = originalImage[indices.shoulder];
       const elbowWorldRaw = originalWorld[indices.elbow], elbowImage = originalImage[indices.elbow];
       if (!shoulderWorldRaw || !shoulderImage) continue;
-      const observedLowerLength = this.armState[side].calibratedLength.lower ?? shoulderWidthWorld * 0.65;
-      const observedUpperLength = this.armState[side].calibratedLength.upper ?? shoulderWidthWorld * 0.65;
+      // Calibration deliberately needs several clean samples. During that warm-up, retain the
+      // latest accepted segment measurement instead of falling back immediately to an anatomical
+      // shoulder-width prior. The prior can be ~15% short for a real arm and used to make an exact
+      // Hand wrist look physically unreachable precisely when Pose loses it.
+      const recentGeometry = this.lastGeometryDiagnostics[side];
+      const recentLowerLength = recentGeometry?.lowerSegmentLength;
+      const recentUpperLength = recentGeometry?.upperSegmentLength;
+      const observedLowerLength = this.armState[side].calibratedLength.lower
+        ?? (recentLowerLength !== null && recentLowerLength !== undefined && recentLowerLength > 0 ? recentLowerLength : shoulderWidthWorld * 0.65);
+      const observedUpperLength = this.armState[side].calibratedLength.upper
+        ?? (recentUpperLength !== null && recentUpperLength !== undefined && recentUpperLength > 0 ? recentUpperLength : shoulderWidthWorld * 0.65);
       const elbowValid = Boolean(elbowWorldRaw && elbowImage && visible(elbowImage, this.armState[side].elbowWasVisible) && inBounds(elbowImage, this.config.armFrame.elbowOuterBoundsMargin));
       let result: WristReconstructionResult | null = null;
       if (elbowValid && this.armState[side].previousPrimary.lower) {
@@ -1355,6 +1376,7 @@ export class AvatarMotionProcessor {
           anchorWorld: semantic(elbowWorldRaw!), anchorImage: elbowImage!, targetImage: selected.handImage as RawNormalizedLandmarkV1,
           targetDistance: observedLowerLength, imageToWorldScale: scale,
           previousDirection: this.armState[side].previousPrimary.lower,
+          preferredDepthSign: this.wristReconstructionDepthSign[side],
           videoWidth, videoHeight, reachSlackRatio: this.config.armFrame.elbowInferenceReachSlackRatio,
         });
       } else if (this.armState[side].previousPrimary.upper && this.armState[side].previousPrimary.lower) {
@@ -1368,11 +1390,13 @@ export class AvatarMotionProcessor {
         result = reconstructPointOnSphereFromImage({
           anchorWorld: semantic(shoulderWorldRaw), anchorImage: shoulderImage, targetImage: selected.handImage as RawNormalizedLandmarkV1,
           targetDistance: distance, imageToWorldScale: scale, previousDirection: offset,
+          preferredDepthSign: this.wristReconstructionDepthSign[side],
           videoWidth, videoHeight, reachSlackRatio: this.config.armFrame.elbowInferenceReachSlackRatio,
         });
       }
       reconstruction[side] = result;
       if (!result?.accepted || !result.point) continue;
+      this.wristReconstructionDepthSign[side] = result.depthSign;
       if (worldLandmarks === originalWorld) worldLandmarks = [...originalWorld];
       worldLandmarks[indices.wrist] = { x: result.point.x, y: -result.point.y, z: -result.point.z, visibility: 1 };
       const projectedImage = result.projectedImage ?? selected.handImage;
@@ -1777,6 +1801,7 @@ export class AvatarMotionProcessor {
       for (const segment of ["upper", "lower"] as const) fresh.segments[segment].currentOutputDelta = this.idlePose?.[side][segment] ?? fresh.segments[segment].currentOutputDelta;
       Object.assign(this.armState[side], fresh); delete this.lastGeometryDiagnostics[side];
       Object.assign(this.wristEvidenceState[side], createWristEvidenceState());
+      this.wristReconstructionDepthSign[side] = null;
       Object.assign(this.armStabilityState[side], createArmStabilityProcessorState());
     }
     this.lastTorso = null; this.lastReliableShoulderImageToWorldScale = null; this.diagnostics = null;

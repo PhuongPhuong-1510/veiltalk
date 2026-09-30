@@ -1,4 +1,4 @@
-import { Vector3 } from "three";
+import { Quaternion,Vector3 } from "three";
 import type { Vector3Data } from "./avatarPoseTypes";
 
 export interface ContactArmIkInput {
@@ -31,6 +31,17 @@ export interface ContactArmIkResult {
 }
 
 const data=(v:Vector3):Vector3Data=>({x:v.x,y:v.y,z:v.z});
+
+export function buildContactPoleCandidates(shoulder:Vector3Data,wristTarget:Vector3Data,preferredPole:Vector3Data,count=20,maxAngleRadians=Math.PI*.82):Vector3Data[]{
+  const s=new Vector3(shoulder.x,shoulder.y,shoulder.z),axis=new Vector3(wristTarget.x,wristTarget.y,wristTarget.z).sub(s);
+  if(axis.lengthSq()<1e-10)return[data(new Vector3(preferredPole.x,preferredPole.y,preferredPole.z).normalize())];axis.normalize();
+  let base=new Vector3(preferredPole.x,preferredPole.y,preferredPole.z).addScaledVector(axis,-new Vector3(preferredPole.x,preferredPole.y,preferredPole.z).dot(axis));
+  if(base.lengthSq()<1e-8){base=Math.abs(axis.y)<.9?new Vector3(0,1,0):new Vector3(1,0,0);base.addScaledVector(axis,-base.dot(axis));}
+  if(base.lengthSq()<1e-8)return[];base.normalize();
+  const result=[data(base)],half=Math.max(1,Math.floor((count-1)/2));
+  for(let i=1;result.length<count;i++){const angle=Math.min(maxAngleRadians,maxAngleRadians*i/half);for(const sign of [1,-1]){if(result.length>=count)break;result.push(data(base.clone().applyQuaternion(new Quaternion().setFromAxisAngle(axis,angle*sign)).normalize()));}}
+  return result;
+}
 
 /**
  * Analytic length-preserving two-bone IK.

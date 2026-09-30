@@ -17,6 +17,8 @@ export interface WristReconstructionResult {
   imageToWorldScale: number | null;
   planarDistance: number | null;
   depthDelta: number | null;
+  /** Selected camera-depth hemisphere. Kept across occlusion frames to prevent branch chatter. */
+  depthSign: -1 | 1 | null;
   reachViolation: number;
   /** Image-space point consistent with the reconstructed world x/y after reach clamping. */
   projectedImage: Vector3Data | null;
@@ -30,7 +32,7 @@ const finiteLandmark = (point: RawNormalizedLandmarkV1 | null | undefined): poin
 const semanticWorld = (point: RawNormalizedLandmarkV1): Vector3 => new Vector3(point.x, -point.y, -point.z);
 const rejected = (reason: WristReconstructionRejectionReason): WristReconstructionResult => ({
   accepted: false, point: null, confidence: 0, imageToWorldScale: null,
-  planarDistance: null, depthDelta: null, reachViolation: 0, projectedImage: null,
+  planarDistance: null, depthDelta: null, depthSign: null, reachViolation: 0, projectedImage: null,
   depthAmbiguity: 1, rejectionReason: reason,
 });
 
@@ -88,6 +90,8 @@ export function reconstructPointOnSphereFromImage(input: {
   videoWidth: number;
   videoHeight: number;
   reachSlackRatio: number;
+  preferredDepthSign?: -1 | 1 | null;
+  depthSwitchHysteresisRatio?: number;
 }): WristReconstructionResult {
   const anchor = new Vector3(input.anchorWorld.x, input.anchorWorld.y, input.anchorWorld.z);
   const previous = input.previousDirection && new Vector3(input.previousDirection.x, input.previousDirection.y, input.previousDirection.z);
@@ -104,7 +108,12 @@ export function reconstructPointOnSphereFromImage(input: {
   const rawPlanarDistance = Math.hypot(dx, dy);
   const slack = input.targetDistance * Math.max(0, input.reachSlackRatio);
   const violation = Math.max(0, rawPlanarDistance - input.targetDistance);
-  if (violation > slack) return { ...rejected("outside-reach-slack"), imageToWorldScale: input.imageToWorldScale, planarDistance: rawPlanarDistance, reachViolation: violation };
+  // Shoulder-derived scale and calibrated bone length are accumulated through different floating
+  // point paths. At the exact reach boundary they can differ by a few ulps; treating that as a hard
+  // outlier makes a perfectly matching Hand wrist disappear for one frame. Keep the configured
+  // slack semantic, but include a scale-aware numerical tolerance at its boundary.
+  const reachEpsilon = Math.max(1e-6, input.targetDistance * 1e-5);
+  if (violation > slack + reachEpsilon) return { ...rejected("outside-reach-slack"), imageToWorldScale: input.imageToWorldScale, planarDistance: rawPlanarDistance, reachViolation: violation };
   if (rawPlanarDistance > input.targetDistance) {
     const clamp = input.targetDistance / rawPlanarDistance;
     dx *= clamp; dy *= clamp;
@@ -114,8 +123,19 @@ export function reconstructPointOnSphereFromImage(input: {
   const priorTarget = anchor.clone().add(previous.clone().normalize().multiplyScalar(input.targetDistance));
   const positive = anchor.clone().add(new Vector3(dx, dy, depthMagnitude));
   const negative = anchor.clone().add(new Vector3(dx, dy, -depthMagnitude));
-  const chosen = positive.distanceToSquared(priorTarget) <= negative.distanceToSquared(priorTarget) ? positive : negative;
-  const confidence = Math.max(0, Math.min(1, 1 - violation / Math.max(1e-6, slack)));
+  const positiveError = positive.distanceTo(priorTarget), negativeError = negative.distanceTo(priorTarget);
+  let depthSign: -1 | 1 = positiveError <= negativeError ? 1 : -1;
+  if (input.preferredDepthSign) {
+    const preferredError = input.preferredDepthSign === 1 ? positiveError : negativeError;
+    const alternateError = input.preferredDepthSign === 1 ? negativeError : positiveError;
+    const switchMargin = input.targetDistance * Math.max(0, input.depthSwitchHysteresisRatio ?? 0.08);
+    // Keep the previous depth hemisphere through small monocular jitter. Switch only when the
+    // alternate branch is materially closer to motion history, not merely microscopically closer.
+    depthSign = alternateError + switchMargin < preferredError ? (input.preferredDepthSign === 1 ? -1 : 1) : input.preferredDepthSign;
+  }
+  const chosen = depthSign === 1 ? positive : negative;
+  const effectiveViolation = violation <= reachEpsilon ? 0 : violation;
+  const confidence = Math.max(0, Math.min(1, 1 - effectiveViolation / Math.max(1e-6, slack)));
   const aspect = input.videoWidth / input.videoHeight;
   const projectedImage = {
     x: input.anchorImage.x + dx / input.imageToWorldScale,
@@ -131,6 +151,7 @@ export function reconstructPointOnSphereFromImage(input: {
     imageToWorldScale: input.imageToWorldScale,
     planarDistance,
     depthDelta: chosen.z - anchor.z,
+    depthSign,
     reachViolation: violation,
     projectedImage,
     depthAmbiguity,

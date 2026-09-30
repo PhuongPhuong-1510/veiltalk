@@ -52,4 +52,16 @@ describe("wrist reconstruction", () => {
     expect(value.projectedImage?.x).toBeCloseTo(.7);
     expect(value.point?.x).toBeCloseTo(.2);
   });
+
+  it("keeps the previous depth hemisphere through a small ambiguous-prior change", () => {
+    const value = reconstructPointOnSphereFromImage({
+      anchorWorld: { x: 0, y: 0, z: 0 }, anchorImage: lm(.5, .5), targetImage: lm(.6, .5),
+      targetDistance: .5, imageToWorldScale: 1, previousDirection: { x: .2, y: 0, z: -.001 },
+      preferredDepthSign: 1, depthSwitchHysteresisRatio: .08,
+      videoWidth: 100, videoHeight: 100, reachSlackRatio: .1,
+    });
+    expect(value.accepted).toBe(true);
+    expect(value.depthSign).toBe(1);
+    expect(value.point!.z).toBeGreaterThan(0);
+  });
 });

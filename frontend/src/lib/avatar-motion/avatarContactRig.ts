@@ -1,5 +1,5 @@
 import { Quaternion,Vector3 } from "three";
-import type { BodyContactRegion, HandContactProbe } from "./bodyContactTypes";
+import type { BodyContactRegion, BodyContactSurfaceFamily, HandContactProbe } from "./bodyContactTypes";
 import type { Vector3Data } from "./avatarPoseTypes";
 import type { ContactBodyJointName, NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 
@@ -16,7 +16,8 @@ export interface AvatarContactSurface {
   confidence:number;
 }
 export interface AvatarProbeProfile {probe:HandContactProbe;frameOffset:Vector3Data;contactNormal:Vector3Data;tangentHint:Vector3Data}
-export interface AvatarContactRig {modelGeneration:number;modelFingerprint:string;surfaces:Record<BodyContactRegion,AvatarContactSurface>;probes:Record<"left"|"right",Record<HandContactProbe,AvatarProbeProfile>>}
+export interface AvatarContactPhysicalSurface {family:BodyContactSurfaceFamily;centerLocal:Vector3Data;radii:Vector3Data;uAxisLocal:Vector3Data;vAxisLocal:Vector3Data;outwardLocal:Vector3Data;parentJoint:ContactBodyJointName;confidence:number;uvScale:Vector3Data}
+export interface AvatarContactRig {modelGeneration:number;modelFingerprint:string;surfaces:Record<BodyContactRegion,AvatarContactSurface>;probes:Record<"left"|"right",Record<HandContactProbe,AvatarProbeProfile>>;physicalSurfaces?:Partial<Record<BodyContactSurfaceFamily,AvatarContactPhysicalSurface>>}
 const data=(v:Vector3):Vector3Data=>({x:v.x,y:v.y,z:v.z});
 const vector=(v:Vector3Data)=>new Vector3(v.x,v.y,v.z);
 
@@ -87,6 +88,13 @@ export function buildAvatarContactRig(profile:NormalizedAvatarRigProfile):Avatar
   ].every(Boolean);
   if(!ok)return null;
 
+  // One anterior head surface owns cheek/forehead/chin continuity. Semantic labels select meaning,
+  // while family UV selects a stable physical point on the avatar.
+  const headCenterLocal=worldPointToLocal(profile,"head",head),headULocal=worldDirectionToLocal(profile,"head",right);
+  const headVLocal=worldDirectionToLocal(profile,"head",up.clone().negate()),headOutLocal=worldDirectionToLocal(profile,"head",forward);
+  if(!headCenterLocal||!headULocal||!headVLocal||!headOutLocal)return null;
+  const physicalSurfaces:AvatarContactRig["physicalSurfaces"]={head:{family:"head",centerLocal:data(headCenterLocal),radii:{x:r*.94,y:r*1.07,z:r*.93},uAxisLocal:data(headULocal),vAxisLocal:data(headVLocal),outwardLocal:data(headOutLocal),parentJoint:"head",confidence:.95,uvScale:{x:.78,y:.86,z:1}}};
+
   const probes={} as AvatarContactRig["probes"];
   for(const side of ["left","right"] as const){
     const frame=hands[side].contactFrame!;
@@ -96,5 +104,5 @@ export function buildAvatarContactRig(profile:NormalizedAvatarRigProfile):Avatar
       ulnarEdge:{probe:"ulnarEdge",frameOffset:frame.probes!.ulnarEdge.offsetLocal,contactNormal:frame.probes!.ulnarEdge.normalLocal,tangentHint:frame.probes!.ulnarEdge.tangentLocal},
     };
   }
-  return{modelGeneration:profile.modelGeneration,modelFingerprint:profile.modelFingerprint,surfaces,probes};
+  return{modelGeneration:profile.modelGeneration,modelFingerprint:profile.modelFingerprint,surfaces,probes,physicalSurfaces};
 }

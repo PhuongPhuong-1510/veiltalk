@@ -14,6 +14,7 @@ export type ContactDepthRelation = "in-front-separated" | "surface-compatible" |
 export type ContactPhase = "idle" | "approach" | "near" | "touch" | "hold" | "slide" | "release";
 
 export interface ContactPoint2 { x:number; y:number }
+export interface ContactPoint3 { x:number; y:number; z:number }
 
 export interface HumanBodyRegionCandidate {
   /** Existing avatar-side patch used only after the physical surface family is selected. */
@@ -35,6 +36,8 @@ export interface HumanBodyRegionCandidate {
   familyUv?:ContactPoint2;
   /** Coarser physical surface family. Semantic labels do not own contact continuity. */
   surfaceFamily?:BodyContactSurfaceFamily;
+  /** Approximate visible-surface normal in camera coordinates; directional evidence only. */
+  surfaceNormalCamera?:ContactPoint3|null;
   /** Generic topology/uncertainty cost, lower is better. */
   selectionBias?:number;
   /** Confidence of the normalized per-person body model from which this candidate was derived. */

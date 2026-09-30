@@ -2,16 +2,18 @@ import { Quaternion,Vector3 } from "three";
 import type { RawNormalizedLandmarkV1,RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
 import type { QuaternionData } from "./avatarPoseTypes";
 import type { ArmSide } from "./avatarMotionDiagnostics";
-import type { BodyContactRegion,BodyContactSurfaceFamily,ContactEvidenceBreakdown,ContactPoint2,HandContactProbe,HumanAnatomicalLabel,HumanAnatomicalSource,HumanContactObservation } from "./bodyContactTypes";
+import type { BodyContactRegion,BodyContactSurfaceFamily,ContactEvidenceBreakdown,ContactPoint2,ContactPoint3,HandContactProbe,HumanAnatomicalLabel,HumanAnatomicalSource,HumanContactObservation } from "./bodyContactTypes";
 import { fuseContactDepthEvidence } from "./contactDepthRelation";
 import { observeHumanContact } from "./contactObservation";
 import { createContactTemporalState,forceContactRelease,updateContactEvidence,updateContactVisualInfluence,type ContactTemporalState } from "./contactTemporal";
 import { buildAvatarContactRig,type AvatarContactRig } from "./avatarContactRig";
-import { mapContactAnchor,type AvatarContactLocalAnchor } from "./contactAnchorMapping";
+import { mapContactAnchorForObservation,type AvatarContactLocalAnchor } from "./contactAnchorMapping";
 import { solveContactPoseCorrection,type ContactPoseCorrection } from "./contactPoseCorrection";
 import { poseContactAnchor } from "./posedContactAnchor";
 import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
-import { computeHandPalmBasis,computeHandViewQuality } from "./handPalmBasis";
+import { computeHandPalmBasis } from "./handPalmBasis";
+import { buildHumanSemanticBodyModel } from "./humanSemanticBodyModel";
+import { evaluateHumanBodyRegions } from "./humanBodyRegions";
 
 export interface ContactRuntimeDiagnostic {
   side:ArmSide;
@@ -191,17 +193,19 @@ function candidatePoseCompatibility(region:BodyContactRegion,model:PoseDepthMode
 
 function orientationEvidence(
   landmarks:RawNormalizedLandmarkV1[]|null,worldLandmarks:RawNormalizedLandmarkV1[]|null,
-  handedness:"left"|"right"|"unknown",width:number,height:number,
+  handedness:"left"|"right"|"unknown",width:number,height:number,surfaceNormal:ContactPoint3|null|undefined,
 ):Partial<Record<HandContactProbe,number|null>>{
   const basis=computeHandPalmBasis(landmarks,worldLandmarks,handedness,width,height);
-  if(!basis.worldBasis)return{palmCenter:null,radialEdge:null,ulnarEdge:null};
-  const view=computeHandViewQuality(basis.worldBasis),geometry=clamp01(basis.worldGeometryQuality);
-  const palm=clamp01(view.cameraFacingQuality*geometry);
-  // Edge probes become observable as the palm turns edge-on; use the actual across-axis camera
-  // projection rather than recycling hand geometry confidence.
-  const acrossZ=Math.abs(basis.worldBasis.across.z)/Math.max(1e-8,Math.hypot(basis.worldBasis.across.x,basis.worldBasis.across.y,basis.worldBasis.across.z));
-  const edge=clamp01(acrossZ*geometry);
-  return{palmCenter:palm,radialEdge:edge,ulnarEdge:edge};
+  if(!basis.worldBasis||!surfaceNormal)return{palmCenter:null,radialEdge:null,ulnarEdge:null};
+  const geometry=clamp01(basis.worldGeometryQuality),normal=new Vector3(surfaceNormal.x,surfaceNormal.y,surfaceNormal.z).normalize().negate();
+  // Normalize the cross-product convention to an anatomical palm-facing direction. This keeps
+  // the sign stable across left/right hands while retaining Hand-world geometry.
+  const palmSign=handedness==="right"?-1:1;
+  const palm=new Vector3(basis.worldBasis.normal.x,basis.worldBasis.normal.y,basis.worldBasis.normal.z).multiplyScalar(palmSign).normalize();
+  const radial=new Vector3(basis.worldBasis.across.x,basis.worldBasis.across.y,basis.worldBasis.across.z).normalize();
+  const ulnar=radial.clone().negate();
+  const compatibility=(direction:Vector3,low:number,high:number)=>{const x=clamp01((direction.dot(normal)-low)/Math.max(1e-8,high-low));return x*x*(3-2*x)*geometry;};
+  return{palmCenter:compatibility(palm,-.05,.72),radialEdge:compatibility(radial,-.18,.58),ulnarEdge:compatibility(ulnar,-.18,.58)};
 }
 
 function probeDepthWristOffset(landmarks:RawNormalizedLandmarkV1[]|null,probe:HandContactProbe):number|null{
@@ -235,8 +239,8 @@ function acquisitionEvidenceQuality(observation:HumanContactObservation):number{
   return clamp01(Math.cbrt(Math.max(0,confidenceQ*overlapQ*depthQ))*relationScale*(.7+.3*topologyQ));
 }
 
-function mapLockedAnchor(rig:AvatarContactRig|null,region:BodyContactRegion,uv:ContactPoint2,tangentAngleRadians:number):AvatarContactLocalAnchor|null{
-  return rig?mapContactAnchor(rig.surfaces[region],uv,tangentAngleRadians):null;
+function mapLockedAnchor(rig:AvatarContactRig|null,region:BodyContactRegion,family:BodyContactSurfaceFamily,familyUv:ContactPoint2,uv:ContactPoint2,tangentAngleRadians:number):AvatarContactLocalAnchor|null{
+  return rig?mapContactAnchorForObservation(rig,region,family,familyUv,uv,tangentAngleRadians):null;
 }
 const vectorData=(v:Vector3)=>({x:v.x,y:v.y,z:v.z});
 function blendLocalAnchor(from:AvatarContactLocalAnchor|null,to:AvatarContactLocalAnchor|null,t:number):AvatarContactLocalAnchor|null{
@@ -266,13 +270,15 @@ export class ContactRuntime {
     if(isNew&&sampledAtMs!==null){
       state.lastDetectorArrivalRenderMs=renderNowMs;
       const depthModel=buildPoseDepthModel(frame,side);
-      const orientations=orientationEvidence(handLandmarks,handWorldLandmarks,handedness,frame.videoWidth??0,frame.videoHeight??0);
       const unknown=fuseContactDepthEvidence({occlusion:null,scaleChange:null,motionConsistency:null,posePrior:null,history:null});
       const preliminary=observeHumanContact({
         side,faceLandmarks:frame.face.landmarks,poseLandmarks:frame.pose.landmarks,handLandmarks,videoWidth:frame.videoWidth??0,videoHeight:frame.videoHeight??0,
         sampledAtMs,depth:unknown,posteriorHeadContactHint:depthModel.posteriorHeadHint,posteriorNeckContactHint:depthModel.posteriorNeckHint,
-        previousRegion:state.previousRegion,previousProbe:state.previousProbe,continuity:state.stableIdentitySamples>=2?.8:0,orientationByProbe:orientations,
+        previousRegion:state.previousRegion,previousProbe:state.previousProbe,continuity:state.stableIdentitySamples>=2?.8:0,
       });
+      const preparedModel=preliminary?buildHumanSemanticBodyModel({faceLandmarks:frame.face.landmarks,poseLandmarks:frame.pose.landmarks,videoWidth:frame.videoWidth??0,videoHeight:frame.videoHeight??0,posteriorHeadContactHint:depthModel.posteriorHeadHint,posteriorNeckContactHint:depthModel.posteriorNeckHint}):null;
+      const selectedRegion=preliminary&&preparedModel?evaluateHumanBodyRegions({faceLandmarks:frame.face.landmarks,poseLandmarks:frame.pose.landmarks,videoWidth:frame.videoWidth??0,videoHeight:frame.videoHeight??0,posteriorHeadContactHint:depthModel.posteriorHeadHint,posteriorNeckContactHint:depthModel.posteriorNeckHint},preliminary.imagePoint,preparedModel).find(candidate=>candidate.region===preliminary.region):null;
+      const orientations=orientationEvidence(handLandmarks,handWorldLandmarks,handedness,frame.videoWidth??0,frame.videoHeight??0,selectedRegion?.surfaceNormalCamera);
 
       let normalVelocity:number|null=null,tangentVelocity:number|null=null;
       const preliminaryFamily=preliminary?.surfaceFamily??(preliminary?regionFamily(preliminary.region):null);
@@ -330,12 +336,12 @@ export class ContactRuntime {
       const tangent=state.observation.tangentAngleRadians??0;
       state.locked={
         region:state.observation.region,family:state.observation.surfaceFamily??regionFamily(state.observation.region),probe:state.observation.probe,uv:{...state.observation.regionUv},tangentAngleRadians:tangent,
-        localAnchor:mapLockedAnchor(this.rig,state.observation.region,state.observation.regionUv,tangent),acquiredAtMs:renderNowMs,lastUpdatedAtMs:renderNowMs,
+        localAnchor:mapLockedAnchor(this.rig,state.observation.region,state.observation.surfaceFamily??regionFamily(state.observation.region),state.observation.familyUv??state.observation.regionUv,state.observation.regionUv,tangent),acquiredAtMs:renderNowMs,lastUpdatedAtMs:renderNowMs,
         evidenceQuality:acquisitionEvidenceQuality(state.observation),
       };
     }else if(nowActive&&!state.locked&&state.observation&&state.observation.correctionEligible!==false){
       const tangent=state.observation.tangentAngleRadians??0;
-      state.locked={region:state.observation.region,family:state.observation.surfaceFamily??regionFamily(state.observation.region),probe:state.observation.probe,uv:{...state.observation.regionUv},tangentAngleRadians:tangent,localAnchor:mapLockedAnchor(this.rig,state.observation.region,state.observation.regionUv,tangent),acquiredAtMs:renderNowMs,lastUpdatedAtMs:renderNowMs,evidenceQuality:acquisitionEvidenceQuality(state.observation)};
+      state.locked={region:state.observation.region,family:state.observation.surfaceFamily??regionFamily(state.observation.region),probe:state.observation.probe,uv:{...state.observation.regionUv},tangentAngleRadians:tangent,localAnchor:mapLockedAnchor(this.rig,state.observation.region,state.observation.surfaceFamily??regionFamily(state.observation.region),state.observation.familyUv??state.observation.regionUv,state.observation.regionUv,tangent),acquiredAtMs:renderNowMs,lastUpdatedAtMs:renderNowMs,evidenceQuality:acquisitionEvidenceQuality(state.observation)};
     }
 
     if(nowActive&&state.temporal.phase==="slide"&&state.locked&&state.observation&&(state.observation.surfaceFamily??regionFamily(state.observation.region))===state.locked.family&&state.observation.probe===state.locked.probe){
@@ -343,7 +349,7 @@ export class ContactRuntime {
       const dx=state.observation.regionUv.x-state.locked.uv.x,dy=state.observation.regionUv.y-state.locked.uv.y,length=Math.hypot(dx,dy),scale=length>maxDelta&&length>1e-8?maxDelta/length:1;
       state.locked.uv={x:Math.max(-1,Math.min(1,state.locked.uv.x+dx*scale)),y:Math.max(-1,Math.min(1,state.locked.uv.y+dy*scale))};
       state.locked.tangentAngleRadians=state.observation.tangentAngleRadians??state.locked.tangentAngleRadians;
-      const targetAnchor=mapLockedAnchor(this.rig,state.observation.region,state.observation.regionUv,state.locked.tangentAngleRadians);
+      const targetAnchor=mapLockedAnchor(this.rig,state.observation.region,state.locked.family,state.observation.familyUv??state.observation.regionUv,state.observation.regionUv,state.locked.tangentAngleRadians);
       state.locked.localAnchor=blendLocalAnchor(state.locked.localAnchor,targetAnchor,Math.min(1,dt*6));
       state.locked.region=state.observation.region;state.locked.uv={...state.observation.regionUv};
       const liveQuality=acquisitionEvidenceQuality(state.observation);

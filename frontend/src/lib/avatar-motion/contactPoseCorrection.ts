@@ -5,7 +5,7 @@ import type { ArmSide } from "./avatarMotionDiagnostics";
 import type { AvatarContactRig } from "./avatarContactRig";
 import type { AvatarContactAnchor } from "./contactAnchorMapping";
 import { solveContactWristTarget } from "./contactWristTarget";
-import { solveContactArmIk,type ContactReachProjection } from "./contactArmIk";
+import { buildContactPoleCandidates,solveContactArmIk,type ContactReachProjection } from "./contactArmIk";
 import { solveParentLocalArmRotations } from "./jointSolver";
 import type { ContactBodyJointName,NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import { capsuleCapsulePenetration,capsuleSpherePenetration } from "./contactCollision";
@@ -127,10 +127,9 @@ export function solveContactPoseCorrection(
 
   // The elbow lies on a solution circle. Try a small deterministic manifold instead of fading a
   // perfectly reachable contact merely because the single preferred pole intersects the body.
-  const reachAxis=target.clone().sub(shoulder).normalize();
-  const poleAngles=[0,Math.PI/4,-Math.PI/4,Math.PI/2,-Math.PI/2];
-  const candidates=poleAngles.map(angle=>{
-    const pole=preferredPole.clone().applyAxisAngle(reachAxis,angle);
+  const poleCandidates=buildContactPoleCandidates(data(shoulder),wristTarget.wrist,data(preferredPole),20,Math.PI*.82);
+  const candidates=poleCandidates.map((poleData,index)=>{
+    const pole=new Vector3(poleData.x,poleData.y,poleData.z);
     const value=solveContactArmIk({shoulder:data(shoulder),wristTarget:wristTarget.wrist,upperLength:arm.upperLength,lowerLength:arm.lowerLength,preferredPole:data(pole)});
     if(!value)return null;
     const lower={start:value.elbow,end:value.wrist,radius:arm.radius};
@@ -138,7 +137,8 @@ export function solveContactPoseCorrection(
     const tp=capsuleCapsulePenetration(lower,{start:data(torsoStart),end:data(torsoEnd),radius:collision.torso.radius});
     if(!hp.valid||!tp.valid)return null;
     // Prefer clearance first, then remain near the tracked elbow plane when solutions are similar.
-    return{value,head:hp,torso:tp,cost:hp.penetration+tp.penetration+Math.abs(angle)*arm.radius*.025};
+    const continuityCost=1-clamp01((new Vector3(value.pole.x,value.pole.y,value.pole.z).normalize().dot(preferredPole)+1)*.5);
+    return{value,head:hp,torso:tp,cost:(hp.penetration+tp.penetration)*5.5+continuityCost*.45+index*1e-6};
   }).filter((entry):entry is NonNullable<typeof entry>=>entry!==null).sort((a,b)=>a.cost-b.cost);
   const selected=candidates[0];if(!selected)return rejected("invalid-target");
   const ik=selected.value;
