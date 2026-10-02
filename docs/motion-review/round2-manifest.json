@@ -1,0 +1,336 @@
+{
+  "generatedAt": "2026-10-02T08:07:42.822Z",
+  "baselineHead": "8ebee95ea7a05345db78241394ca07174104ee1c",
+  "sourceHash": "3c561e8c4f9846200be3da8663a8795a7cc4503f55c73c86afa24d10fbd21b57",
+  "files": [
+    {
+      "file": "frontend/scripts/audit-motion-rigs.mjs",
+      "sha256": "64bc468da339f71b5244dff0e10e3fde51863180a79d8769adb3f65b13941633"
+    },
+    {
+      "file": "frontend/src/components/avatar/AvatarMotionPreview.tsx",
+      "sha256": "a65abf553f5a8ba6fe33f8e4bf57608f8268b51f667f8ab5bdf71fd0afc1f948"
+    },
+    {
+      "file": "frontend/src/components/dev/AvatarRendererDevHarness.tsx",
+      "sha256": "cd7c10ef70d7f62a2515d600a61be356674fc769141621e5bc70c7e2a853dc85"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarCollision.test.ts",
+      "sha256": "3b6892c6dc541c41a6e4422c4cd0d62a2c9c121d7fda080d45a348fe07281613"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarInterArmCollision.ts",
+      "sha256": "89e6191148ccea8d1014d1b19aba6761d9650b9124e5c8973d80671fda871375"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionProcessor.test.ts",
+      "sha256": "feb488e87c0e35ee6ee189ddd256dad61b585336d07dddaf5693f21e0a69415b"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionProcessor.ts",
+      "sha256": "d3fd938acd5eb5439b94e659b0de096d5236e8c7c9baed957d1209b147b7a46a"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarPoseTypes.ts",
+      "sha256": "716cd64eb16c1b850ae0adc68f2e919a1b1a583bb47c043093bd490f3f3e08f7"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/bodyLocalDepth.test.ts",
+      "sha256": "5f491f2669240cdfde86a1826840895a7ff6df86c94e9b6233218ee031cc1ee8"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/bodyLocalDepth.ts",
+      "sha256": "94479350b70a15b358ffde6097891b7795e1e072b94275c5c978fc6497947822"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/contactRuntime.ts",
+      "sha256": "45b8f0729d4fa6da952814fbadc87fa873bf709a9729608be5a3dd920943d536"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/fingertipContactEvidence.test.ts",
+      "sha256": "306d92063e2a44e732654e0c3a15f43feb41bb6bc3a25dbe72885a679d1b29f7"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/fingertipContactEvidence.ts",
+      "sha256": "2cc745af663b7c51b81820fe3599a52d8568d2a48309d328bfa3aa183e16330d"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/fingertipContactIk.test.ts",
+      "sha256": "383a26f9e7e69c51c3c5b0cc8e2f8d064953edb79a61b01026342d95047be7d7"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/fingertipContactIk.ts",
+      "sha256": "7879e3e31605dea8e65576ef2ce6839e5ef6163e312fa7956826560eb94037db"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/observedBodyDepth.test.ts",
+      "sha256": "a910c961bb0277cb13741d60334e22e5fafe06b987c6712d0be0fb34cfca1d17"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/observedBodyDepth.ts",
+      "sha256": "c2b162b20a4b80094a44c4edcb551ae6693839808e7f51c2d367ce98742d487c"
+    },
+    {
+      "file": "frontend/src/lib/avatar-renderer/avatarRenderer.ts",
+      "sha256": "29fb0aacdc84f45b75318a007619e005dfdb1390cabed09291f56de97f005788"
+    },
+    {
+      "file": "frontend/src/lib/avatar-renderer/renderedContactGeometry.test.ts",
+      "sha256": "88cc8f1984e3be9dbbb2b16e3c215ea6e7abeb08a42d0cd235caf3fe841505e9"
+    },
+    {
+      "file": "frontend/src/lib/avatar-renderer/renderedContactGeometry.ts",
+      "sha256": "b69b296dd65ef010f3f5b6ce952a4835124d621cb13af4588f38aaacf84d679e"
+    }
+  ],
+  "xrSources": [
+    {
+      "file": "C:/project/SystemAnimatorOnline/js/mocap_lib_module.js",
+      "sha256": "60345d94ea625a02d3ddf123d3953f3d541055d09fb6ec1b72775ef332768ae6",
+      "bytes": 59175,
+      "lines": 1970,
+      "deepReadRanges": [
+        [
+          954,
+          1036
+        ],
+        [
+          1176,
+          1250
+        ]
+      ],
+      "coverage": "File reopened and relevant algorithm ranges reviewed; large unrelated sections not claimed fully understood"
+    },
+    {
+      "file": "C:/project/SystemAnimatorOnline/js/one_euro_filter.js",
+      "sha256": "06c8cff4446b832fa165696a4f49e86b9f85f2d6b3f0655d81a12d2e309525ff",
+      "bytes": 4909,
+      "lines": 188,
+      "deepReadRanges": "full",
+      "coverage": "File reopened and relevant algorithm ranges reviewed; large unrelated sections not claimed fully understood"
+    },
+    {
+      "file": "C:/project/SystemAnimatorOnline/images/XR Animator/animate.js",
+      "sha256": "07dd1ab718a4226a7a7380901a3801eaf7b86546c8c016cdb1a282f2c8005cbc",
+      "bytes": 610525,
+      "lines": 15859,
+      "deepReadRanges": [
+        [
+          12859,
+          12895
+        ]
+      ],
+      "coverage": "File reopened and relevant algorithm ranges reviewed; large unrelated sections not claimed fully understood"
+    },
+    {
+      "file": "C:/project/SystemAnimatorOnline/MMD.js/MMD_SA.js",
+      "sha256": "a6d2c5191df5363319228ae3d4af0a85f56b77de71b14774ba8470a8989f42d4",
+      "bytes": 613147,
+      "lines": 19158,
+      "deepReadRanges": [
+        [
+          14717,
+          14760
+        ],
+        [
+          14826,
+          14918
+        ]
+      ],
+      "coverage": "File reopened and relevant algorithm ranges reviewed; large unrelated sections not claimed fully understood"
+    },
+    {
+      "file": "C:/project/SystemAnimatorOnline/jThree/MMDplugin/v2.1.2_jThree.MMD.js",
+      "sha256": "9de30ffe265d71eb5782ac67c3cb3735a3557d5360881d528d863f0e48107d35",
+      "bytes": 450667,
+      "lines": 9837,
+      "deepReadRanges": [
+        [
+          3941,
+          4048
+        ]
+      ],
+      "coverage": "File reopened and relevant algorithm ranges reviewed; large unrelated sections not claimed fully understood"
+    },
+    {
+      "file": "C:/project/SystemAnimatorOnline/jThree/index.js",
+      "sha256": "93f77ef71c8dd18a7f7f9b735e5b802797706d198839ca48e0a3dc6ce6b34616",
+      "bytes": 54711,
+      "lines": 1507,
+      "deepReadRanges": [
+        [
+          96,
+          170
+        ]
+      ],
+      "coverage": "File reopened and relevant algorithm ranges reviewed; large unrelated sections not claimed fully understood"
+    },
+    {
+      "file": "C:/project/SystemAnimatorOnline/js/SA_system_emulation.readable.js",
+      "sha256": "fd76a8993907c5f7fcc96d546cfb6da2b3b70d19309acc60b6bb4fdb879c8ec3",
+      "bytes": 753473,
+      "lines": 19577,
+      "deepReadRanges": [
+        [
+          7971,
+          8070
+        ],
+        [
+          8401,
+          8625
+        ]
+      ],
+      "coverage": "File reopened and relevant algorithm ranges reviewed; large unrelated sections not claimed fully understood"
+    }
+  ],
+  "checks": {
+    "tests": {
+      "passed": 985,
+      "files": 120,
+      "exitCode": 0
+    },
+    "build": {
+      "exitCode": 0,
+      "warning": "existing large bundle"
+    },
+    "lint": {
+      "exitCode": 0,
+      "warning": "existing irregular whitespace"
+    },
+    "rigAudit": {
+      "exitCode": 0,
+      "models": 3,
+      "scenesPerModel": 6,
+      "variantsPerScene": 5,
+      "nonFiniteRotations": 0,
+      "file": "docs/motion-review/rig-audit-and-synthetic-benchmark.json",
+      "sha256": "0f7ea8bc255cf0e6b9779e023f79310f2b14f7c9a22a77e5a5045f6386a72d2f",
+      "fingertip": [
+        {
+          "name": "reference-avatar.vrm",
+          "stage": "synthetic-tip-gap-on-actual-raw-rest-bones",
+          "sources": {
+            "left:thumb": "estimated-distal",
+            "left:index": "estimated-distal",
+            "left:middle": "estimated-distal",
+            "left:ring": "estimated-distal",
+            "left:little": "estimated-distal",
+            "right:thumb": "estimated-distal",
+            "right:index": "estimated-distal",
+            "right:middle": "estimated-distal",
+            "right:ring": "estimated-distal",
+            "right:little": "estimated-distal"
+          },
+          "result": {
+            "applied": true,
+            "reason": "bounded-fingertip-assist",
+            "pairs": [
+              {
+                "left": "index",
+                "right": "index",
+                "before": 0.005883438806151911,
+                "after": 0.0035292494863465814,
+                "leftProbe": "estimated-distal",
+                "rightProbe": "estimated-distal"
+              }
+            ],
+            "changedJoints": [
+              "leftIndexIntermediate",
+              "leftIndexDistal",
+              "rightIndexIntermediate",
+              "rightIndexDistal"
+            ]
+          }
+        },
+        {
+          "name": "reference-avatar-1.vrm",
+          "stage": "synthetic-tip-gap-on-actual-raw-rest-bones",
+          "sources": {
+            "left:thumb": "estimated-distal",
+            "left:index": "estimated-distal",
+            "left:middle": "estimated-distal",
+            "left:ring": "estimated-distal",
+            "left:little": "estimated-distal",
+            "right:thumb": "estimated-distal",
+            "right:index": "estimated-distal",
+            "right:middle": "estimated-distal",
+            "right:ring": "estimated-distal",
+            "right:little": "estimated-distal"
+          },
+          "result": {
+            "applied": true,
+            "reason": "bounded-fingertip-assist",
+            "pairs": [
+              {
+                "left": "index",
+                "right": "index",
+                "before": 0.006076915915292205,
+                "after": 0.003854784534668905,
+                "leftProbe": "estimated-distal",
+                "rightProbe": "estimated-distal"
+              }
+            ],
+            "changedJoints": [
+              "leftIndexIntermediate",
+              "leftIndexDistal",
+              "rightIndexIntermediate",
+              "rightIndexDistal"
+            ]
+          }
+        },
+        {
+          "name": "reference-avatar-2.vrm",
+          "stage": "synthetic-tip-gap-on-actual-raw-rest-bones",
+          "sources": {
+            "left:thumb": "end-node",
+            "left:index": "end-node",
+            "left:middle": "end-node",
+            "left:ring": "end-node",
+            "left:little": "end-node",
+            "right:thumb": "end-node",
+            "right:index": "end-node",
+            "right:middle": "end-node",
+            "right:ring": "end-node",
+            "right:little": "end-node"
+          },
+          "result": {
+            "applied": true,
+            "reason": "bounded-fingertip-assist",
+            "pairs": [
+              {
+                "left": "index",
+                "right": "index",
+                "before": 0.005796209143473772,
+                "after": 0.00458654752294455,
+                "leftProbe": "end-node",
+                "rightProbe": "end-node"
+              }
+            ],
+            "changedJoints": [
+              "leftIndexDistal",
+              "rightIndexDistal"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "No browser tool available, no webcam or skin-contact acceptance",
+    "Collider proxies and bone/end-node tips, not mesh SDF",
+    "Synthetic gap audit moves wrist node and isolates finger solve, not arm retarget acceptance",
+    "No dedicated XR bimanual solver inferred from the seven sources",
+    "No full interlacing or remote changes"
+  ],
+  "devUrl": "http://127.0.0.1:5175/dev/avatar-renderer",
+  "httpChecks": {
+    "devHarness": 200,
+    "devPreview": 200,
+    "productionPreview": 200,
+    "newSwitchServed": true,
+    "productionFeatureArtifact": "AvatarMotionPreview-C_0aZYRK.js",
+    "sourceHashScope": "source tree at server-start/build; replay panel exists only in DEV and is removed from production bundle",
+    "visualBrowserAcceptance": false
+  }
+}

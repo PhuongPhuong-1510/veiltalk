@@ -8,6 +8,15 @@ export class BodyLocalDepthMemory {
   private last: {side:BodyDepthSide;at:number}|null=null;
   private lastObservationKey:number|null=null;
   reset():void {this.last=null;this.lastObservationKey=null;}
+  observeSide(side:BodyDepthSide|null,at:number,observationKey:number|null):BodyDepthSide|null{
+    if(!Number.isFinite(at))return null;
+    if(this.last&&(at<this.last.at||at-this.last.at>600))this.last=null;
+    if(observationKey!==null&&Number.isFinite(observationKey)&&(this.lastObservationKey===null||observationKey>this.lastObservationKey)){
+      this.lastObservationKey=observationKey;
+      if(side===1||side===-1)this.last={side,at};
+    }
+    return this.last?.side??null;
+  }
   update(point:Vector3Data,center:Vector3Data,forward:Vector3Data,radius:number,at:number,observed:boolean,observationKey?:number|null):BodyDepthSide|null {
     if(!Number.isFinite(at)||!(radius>0)||![...v(point).toArray(),...v(center).toArray(),...v(forward).toArray()].every(Number.isFinite)||v(forward).length()<1e-6)return null;
     if(this.last&&(at<this.last.at||at-this.last.at>600))this.last=null;

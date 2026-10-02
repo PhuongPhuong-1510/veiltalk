@@ -58,6 +58,7 @@ export default function AvatarRendererDevHarness() {
   const replayActiveRef = useRef(false);
   const replayRequestRef = useRef<number | null>(null);
   const [bimanualPalmAssistEnabled,setBimanualPalmAssistEnabled] = useState(false);
+  const [fingertipContactEnabled,setFingertipContactEnabled] = useState(false);
   const [dofConstraintsEnabled,setDofConstraintsEnabled] = useState(false);
   const [bodyDepthBarrierEnabled,setBodyDepthBarrierEnabled] = useState(false);
   const [depthFusionEnabled,setDepthFusionEnabled] = useState(false);
@@ -155,6 +156,7 @@ export default function AvatarRendererDevHarness() {
   useEffect(()=>{processorRef.current.setBodyDepthBarrierEnabled(bodyDepthBarrierEnabled);},[bodyDepthBarrierEnabled]);
   useEffect(()=>{processorRef.current.setDepthFusionEnabled(depthFusionEnabled);},[depthFusionEnabled]);
   useEffect(()=>{processorRef.current.setBimanualPalmAssistEnabled(bimanualPalmAssistEnabled);},[bimanualPalmAssistEnabled]);
+  useEffect(()=>{processorRef.current.setFingertipContactEnabled(fingertipContactEnabled);},[fingertipContactEnabled]);
   useEffect(()=>{processorRef.current.setRigEndpointEnabled(rigEndpointEnabled);},[rigEndpointEnabled]);
   useEffect(()=>{processorRef.current.setHandConditioningEnabled(handConditioningEnabled);},[handConditioningEnabled]);
   useEffect(()=>{processorRef.current.setProcessorArmTemporal(processorArmTemporal);},[processorArmTemporal]);
@@ -443,6 +445,7 @@ export default function AvatarRendererDevHarness() {
       <button className="evidence-capture-button" onClick={captureEvidenceAfterCountdown} disabled={evidenceCaptureCountdown !== null}>{evidenceCaptureCountdown === null ? "Chụp bằng chứng sau 5s" : `Chuẩn bị chụp: ${evidenceCaptureCountdown}s`}</button>
       {evidenceCaptureStatus && <span className="evidence-capture-status" role="status">{evidenceCaptureStatus}</span>}
       <label><input type="checkbox" checked={bimanualPalmAssistEnabled} onChange={(e)=>setBimanualPalmAssistEnabled(e.target.checked)} /> Palms-together assist (A/B)</label>
+      <label><input type="checkbox" checked={fingertipContactEnabled} onChange={e=>setFingertipContactEnabled(e.target.checked)} /> Fingertip contact assist (A/B)</label>
       <label><input type="checkbox" checked={dofConstraintsEnabled} onChange={e=>setDofConstraintsEnabled(e.target.checked)} /> Rig-local swing/twist limits (A/B)</label>
       <label><input type="checkbox" checked={bodyDepthBarrierEnabled} onChange={e=>setBodyDepthBarrierEnabled(e.target.checked)} /> Body-local depth barrier (A/B)</label>
       <label><input type="checkbox" checked={depthFusionEnabled} onChange={e=>setDepthFusionEnabled(e.target.checked)} /> Relative arm depth fusion (A/B)</label>
@@ -654,6 +657,9 @@ export default function AvatarRendererDevHarness() {
       </article>
       <article><h2>Avatar self-collision</h2>
         <p>Runtime: <strong>{selfCollision?.enabled ? selfCollision.mode : "off"}</strong> · inter-arm {selfCollision?.interArm.length ?? 0}</p>
+        <p>Final raw-bone FK: left {selfCollision?.rendered?.left.length??0} · right {selfCollision?.rendered?.right.length??0} · inter-arm {selfCollision?.rendered?.interArm.length??0}</p>
+        <p>Fingertip: {selfCollision?.fingertip?.reason??"off"} · pairs {selfCollision?.fingertip?.pairs.length??0}</p>
+        <pre>{JSON.stringify({finalContactErrors:selfCollision?.rendered?.contactErrors,finalFingertipGaps:selfCollision?.rendered?.fingertipGaps,fingertip:selfCollision?.fingertip},null,2)}</pre>
         {(["left", "right"] as const).map((side) => {
           const value = selfCollision?.[side];
           return <p key={side}><strong>{side}</strong>: {value ? `${value.reason} · baseline ${value.baselinePreserved ? "preserved" : "corrected"} · before ${value.contactsBefore.length} · after ${value.contactsAfter.length}` : "—"}
@@ -663,6 +669,6 @@ export default function AvatarRendererDevHarness() {
       </article>
       <article><h2>Phase 3A arm-frame</h2><p>Head: legacy/unverified, excluded from arm acceptance.</p><pre>{JSON.stringify(motionDiagnostics, null, 2)}</pre></article>
     </section>
-  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
+  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,fingertipContactEnabled,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
     </main>;
 }

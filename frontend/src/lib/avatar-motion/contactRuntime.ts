@@ -260,6 +260,11 @@ export class ContactRuntime {
   reset(){this.sides={left:memory(),right:memory()};this.diagnostics={left:diagnostic("left"),right:diagnostic("right")};}
   snapshot(){return structuredClone(this.diagnostics);}
   correctionOwners():Record<ArmSide,boolean>{return{left:this.diagnostics.left.correctionApplied,right:this.diagnostics.right.correctionApplied};}
+  rendererGoals(){
+    const goals:Partial<Record<ArmSide,{anchor:AvatarContactLocalAnchor;probe:HandContactProbe}>>={};
+    for(const side of ["left","right"] as const){const locked=this.sides[side].locked;if(this.diagnostics[side].correctionApplied&&locked?.localAnchor)goals[side]={anchor:structuredClone(locked.localAnchor),probe:locked.probe};}
+    return this.profile&&Object.keys(goals).length?{modelFingerprint:this.profile.modelFingerprint,goals}:undefined;
+  }
 
   update(
     side:ArmSide,frame:RawTrackingFrameV1,handLandmarks:RawNormalizedLandmarkV1[]|null,sampledAtMs:number|null,

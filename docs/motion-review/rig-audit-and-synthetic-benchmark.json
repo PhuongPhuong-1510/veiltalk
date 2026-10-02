@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "createdAt": "2026-10-02T07:20:12.690Z",
+  "createdAt": "2026-10-02T08:03:17.240Z",
   "stage": "raw-vrm-rest-graph",
   "limitations": [
     "Reads actual GLB humanoid bone graphs without textures or WebGL. Does not load normalized three-vrm skin rendering.",
@@ -104,7 +104,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 3.8759000000000015,
+              "processorP95Ms": 2.3326999999999316,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -159,7 +159,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.5408000000002176,
+              "processorP95Ms": 1.488800000000083,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -214,7 +214,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.231499999999869,
+              "processorP95Ms": 1.2360999999996238,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -269,7 +269,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.7774999999996908,
+              "processorP95Ms": 1.2660000000000764,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -324,7 +324,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.2818999999999505,
+              "processorP95Ms": 1.0329999999999018,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -384,7 +384,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.9333999999998923,
+              "processorP95Ms": 2.066899999999805,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -439,7 +439,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 2.0760999999997694,
+              "processorP95Ms": 1.815099999999802,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -494,7 +494,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.374699999999848,
+              "processorP95Ms": 1.462999999999738,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -549,7 +549,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.1796999999996842,
+              "processorP95Ms": 1.1541999999999462,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -604,7 +604,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.1863000000003012,
+              "processorP95Ms": 1.2997999999997774,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -664,7 +664,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.0368000000007669,
+              "processorP95Ms": 1.206600000000435,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -719,7 +719,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.0796000000000276,
+              "processorP95Ms": 1.202900000000227,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -774,7 +774,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.222099999999955,
+              "processorP95Ms": 1.097099999999955,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -829,7 +829,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.3175000000001091,
+              "processorP95Ms": 1.0231000000003405,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -884,7 +884,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.0574999999998909,
+              "processorP95Ms": 0.9038000000000466,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -944,7 +944,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9526999999998225,
+              "processorP95Ms": 0.9281999999993786,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -999,7 +999,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.0592999999998938,
+              "processorP95Ms": 0.9093999999995503,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1054,7 +1054,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9619000000002416,
+              "processorP95Ms": 0.9251000000003842,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1109,7 +1109,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.1093999999993684,
+              "processorP95Ms": 0.8612000000002809,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1164,7 +1164,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.8581999999996697,
+              "processorP95Ms": 0.8068999999995867,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1224,7 +1224,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.8039000000007945,
+              "processorP95Ms": 0.8257000000003245,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1279,7 +1279,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9158999999999651,
+              "processorP95Ms": 0.8580000000001746,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1334,7 +1334,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7879000000002634,
+              "processorP95Ms": 0.7867999999998574,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1389,7 +1389,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.185099999999693,
+              "processorP95Ms": 0.777299999999741,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1444,7 +1444,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7115999999996347,
+              "processorP95Ms": 0.8895000000002256,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1504,7 +1504,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.2403000000003885,
+              "processorP95Ms": 1.1198999999996886,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1559,7 +1559,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.1629999999995562,
+              "processorP95Ms": 1.0267000000003463,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1614,7 +1614,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.065099999999802,
+              "processorP95Ms": 1.0090000000000146,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1669,7 +1669,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.4653000000007523,
+              "processorP95Ms": 1.3249000000005253,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1724,7 +1724,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.2767999999996391,
+              "processorP95Ms": 1.210200000000441,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -1777,7 +1777,42 @@
             }
           ]
         }
-      ]
+      ],
+      "fingertipAudit": {
+        "stage": "synthetic-tip-gap-on-actual-raw-rest-bones",
+        "sources": {
+          "left:thumb": "estimated-distal",
+          "left:index": "estimated-distal",
+          "left:middle": "estimated-distal",
+          "left:ring": "estimated-distal",
+          "left:little": "estimated-distal",
+          "right:thumb": "estimated-distal",
+          "right:index": "estimated-distal",
+          "right:middle": "estimated-distal",
+          "right:ring": "estimated-distal",
+          "right:little": "estimated-distal"
+        },
+        "result": {
+          "applied": true,
+          "reason": "bounded-fingertip-assist",
+          "pairs": [
+            {
+              "left": "index",
+              "right": "index",
+              "before": 0.005883438806151911,
+              "after": 0.0035292494863465814,
+              "leftProbe": "estimated-distal",
+              "rightProbe": "estimated-distal"
+            }
+          ],
+          "changedJoints": [
+            "leftIndexIntermediate",
+            "leftIndexDistal",
+            "rightIndexIntermediate",
+            "rightIndexDistal"
+          ]
+        }
+      }
     },
     {
       "name": "reference-avatar-1.vrm",
@@ -1875,7 +1910,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.6184000000002925,
+              "processorP95Ms": 1.3611999999993714,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -1930,7 +1965,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.2384999999994761,
+              "processorP95Ms": 1.1333000000004176,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -1985,7 +2020,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9968000000008033,
+              "processorP95Ms": 0.7368999999998778,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -2040,7 +2075,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9790000000002692,
+              "processorP95Ms": 0.8293000000003303,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -2095,7 +2130,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7164999999986321,
+              "processorP95Ms": 0.6284000000005108,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -2155,7 +2190,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.1023000000004686,
+              "processorP95Ms": 0.8503999999993539,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2210,7 +2245,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.3423000000002503,
+              "processorP95Ms": 0.8501999999989494,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2265,7 +2300,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.2674999999999272,
+              "processorP95Ms": 0.8052999999999884,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2320,7 +2355,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.3166999999994005,
+              "processorP95Ms": 0.737699999999677,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2375,7 +2410,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.231500000001688,
+              "processorP95Ms": 0.8060000000004948,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2435,7 +2470,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9873000000006869,
+              "processorP95Ms": 0.6971000000012282,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2490,7 +2525,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.98109999999906,
+              "processorP95Ms": 0.8148000000001048,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2545,7 +2580,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.0592000000015105,
+              "processorP95Ms": 0.8454000000001543,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2600,7 +2635,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.914600000000064,
+              "processorP95Ms": 1.0189999999984138,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2655,7 +2690,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.0306999999993423,
+              "processorP95Ms": 0.8833999999988009,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2715,7 +2750,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.1092999999982567,
+              "processorP95Ms": 0.8575000000000728,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2770,7 +2805,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9853000000002794,
+              "processorP95Ms": 0.9226999999991676,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2825,7 +2860,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9332999999987805,
+              "processorP95Ms": 0.6375000000007276,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2880,7 +2915,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.8502000000007683,
+              "processorP95Ms": 0.7879999999986467,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2935,7 +2970,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9940999999998894,
+              "processorP95Ms": 0.7458000000005995,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -2995,7 +3030,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.792699999999968,
+              "processorP95Ms": 0.7759999999998399,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3050,7 +3085,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.8909000000003289,
+              "processorP95Ms": 0.6924999999991996,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3105,7 +3140,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7028000000009342,
+              "processorP95Ms": 0.6329999999998108,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3160,7 +3195,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9781000000002678,
+              "processorP95Ms": 0.8511999999991531,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3215,7 +3250,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9213999999992666,
+              "processorP95Ms": 0.7723999999998341,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3275,7 +3310,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.3792000000012195,
+              "processorP95Ms": 1.3337000000010448,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3330,7 +3365,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.372400000000198,
+              "processorP95Ms": 1.3494000000009692,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3385,7 +3420,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.3065000000005966,
+              "processorP95Ms": 0.8618999999998778,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3440,7 +3475,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.624599999999191,
+              "processorP95Ms": 1.0923000000002503,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3495,7 +3530,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.0834999999988213,
+              "processorP95Ms": 0.9709999999995489,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3548,7 +3583,42 @@
             }
           ]
         }
-      ]
+      ],
+      "fingertipAudit": {
+        "stage": "synthetic-tip-gap-on-actual-raw-rest-bones",
+        "sources": {
+          "left:thumb": "estimated-distal",
+          "left:index": "estimated-distal",
+          "left:middle": "estimated-distal",
+          "left:ring": "estimated-distal",
+          "left:little": "estimated-distal",
+          "right:thumb": "estimated-distal",
+          "right:index": "estimated-distal",
+          "right:middle": "estimated-distal",
+          "right:ring": "estimated-distal",
+          "right:little": "estimated-distal"
+        },
+        "result": {
+          "applied": true,
+          "reason": "bounded-fingertip-assist",
+          "pairs": [
+            {
+              "left": "index",
+              "right": "index",
+              "before": 0.006076915915292205,
+              "after": 0.003854784534668905,
+              "leftProbe": "estimated-distal",
+              "rightProbe": "estimated-distal"
+            }
+          ],
+          "changedJoints": [
+            "leftIndexIntermediate",
+            "leftIndexDistal",
+            "rightIndexIntermediate",
+            "rightIndexDistal"
+          ]
+        }
+      }
     },
     {
       "name": "reference-avatar-2.vrm",
@@ -3647,7 +3717,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.2121999999999389,
+              "processorP95Ms": 1.1732000000010885,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -3702,7 +3772,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.1295000000009168,
+              "processorP95Ms": 1.0309999999990396,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -3757,7 +3827,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.122800000001007,
+              "processorP95Ms": 0.8829999999998108,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -3812,7 +3882,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.2993999999998778,
+              "processorP95Ms": 0.8248999999996158,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -3867,7 +3937,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9138000000002648,
+              "processorP95Ms": 0.6828000000004977,
               "measuredStage": "processor-packet",
               "staticScene": true,
               "rotationStepRmsDegrees": {
@@ -3927,7 +3997,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9516999999996187,
+              "processorP95Ms": 0.956000000000131,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -3982,7 +4052,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9557000000004336,
+              "processorP95Ms": 0.8822000000000116,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4037,7 +4107,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.944100000000617,
+              "processorP95Ms": 0.9076999999997497,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4092,7 +4162,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 1.1053000000010798,
+              "processorP95Ms": 0.9377999999996973,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4147,7 +4217,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.9276000000008935,
+              "processorP95Ms": 0.9863999999997759,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4207,7 +4277,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.8426999999992404,
+              "processorP95Ms": 0.9068999999999505,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4262,7 +4332,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.8742000000002008,
+              "processorP95Ms": 0.8309000000008382,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4317,7 +4387,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7744000000002416,
+              "processorP95Ms": 0.8276999999998225,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4372,7 +4442,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.6713999999992666,
+              "processorP95Ms": 0.6773000000011962,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4427,7 +4497,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.661099999999351,
+              "processorP95Ms": 0.7282999999988533,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4487,7 +4557,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7930000000014843,
+              "processorP95Ms": 0.7600999999995111,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4542,7 +4612,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.8504999999986467,
+              "processorP95Ms": 0.7503999999989901,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4597,7 +4667,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.6867000000002008,
+              "processorP95Ms": 0.8004999999993743,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4652,7 +4722,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7240999999994528,
+              "processorP95Ms": 0.8607000000010885,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4707,7 +4777,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7494999999998981,
+              "processorP95Ms": 0.5951999999997497,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4767,7 +4837,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.5668000000005122,
+              "processorP95Ms": 0.5623999999988882,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4822,7 +4892,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.6231999999999971,
+              "processorP95Ms": 0.6858000000011089,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4877,7 +4947,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.6319000000003143,
+              "processorP95Ms": 0.4860000000007858,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4932,7 +5002,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.6728000000002794,
+              "processorP95Ms": 0.6867000000002008,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -4987,7 +5057,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.6025999999983469,
+              "processorP95Ms": 0.6769000000003871,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -5047,7 +5117,7 @@
               "name": "rig-local-dof",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7113000000008469,
+              "processorP95Ms": 0.6688000000012835,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -5102,7 +5172,7 @@
               "name": "relative-arm-depth",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.819999999999709,
+              "processorP95Ms": 0.8041000000011991,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -5157,7 +5227,7 @@
               "name": "baseline",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.6871000000010099,
+              "processorP95Ms": 0.7250000000003638,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -5212,7 +5282,7 @@
               "name": "wrist-relative-shape",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.7430999999996857,
+              "processorP95Ms": 0.6451000000015483,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -5267,7 +5337,7 @@
               "name": "rig-aware-endpoint",
               "frames": 180,
               "durationMs": 5966.666666666667,
-              "processorP95Ms": 0.6079000000027008,
+              "processorP95Ms": 0.690599999999904,
               "measuredStage": "processor-packet",
               "staticScene": false,
               "rotationStepRmsDegrees": {
@@ -5320,7 +5390,40 @@
             }
           ]
         }
-      ]
+      ],
+      "fingertipAudit": {
+        "stage": "synthetic-tip-gap-on-actual-raw-rest-bones",
+        "sources": {
+          "left:thumb": "end-node",
+          "left:index": "end-node",
+          "left:middle": "end-node",
+          "left:ring": "end-node",
+          "left:little": "end-node",
+          "right:thumb": "end-node",
+          "right:index": "end-node",
+          "right:middle": "end-node",
+          "right:ring": "end-node",
+          "right:little": "end-node"
+        },
+        "result": {
+          "applied": true,
+          "reason": "bounded-fingertip-assist",
+          "pairs": [
+            {
+              "left": "index",
+              "right": "index",
+              "before": 0.005796209143473772,
+              "after": 0.00458654752294455,
+              "leftProbe": "end-node",
+              "rightProbe": "end-node"
+            }
+          ],
+          "changedJoints": [
+            "leftIndexDistal",
+            "rightIndexDistal"
+          ]
+        }
+      }
     }
   ]
 }

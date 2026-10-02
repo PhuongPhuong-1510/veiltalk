@@ -61,6 +61,8 @@ import { ContactRuntime } from "./contactRuntime";
 import { computeBimanualHandFeatures } from "./bimanualHandFeatures";
 import { computeBimanualGestureEvidence, EMPTY_BIMANUAL_GESTURE_EVIDENCE } from "./bimanualGestureEvidence";
 import { BimanualContactRuntime } from "./bimanualContactRuntime";
+import { FingertipContactEvidence } from "./fingertipContactEvidence";
+import { observeBodyDepth } from "./observedBodyDepth";
 import { computeWristSwing, createWristSwingTemporalState, handWorldVectorToAvatarSemantic, updateWristSwingTemporal, type WristSwingTemporalState } from "./wristSwing";
 import { Quaternion, Vector3 } from "three";
 
@@ -69,7 +71,7 @@ import type { RigImageObjective } from "./rigAwareArmEndpoint";
 import { ArmDepthFusion } from "./armDepthFusion";
 import { WristDepthMemory } from "./wristDepthMemory";
 
-export interface AvatarMotionProcessorOptions { dofConstraintsEnabled?:boolean; bodyDepthBarrierEnabled?:boolean; depthFusionEnabled?: boolean; handConditioningEnabled?: boolean; processorArmTemporal?: boolean; rigEndpointEnabled?: boolean; bimanualPalmAssistEnabled?: boolean; filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; wristSwingEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
+export interface AvatarMotionProcessorOptions { fingertipContactEnabled?:boolean; dofConstraintsEnabled?:boolean; bodyDepthBarrierEnabled?:boolean; depthFusionEnabled?: boolean; handConditioningEnabled?: boolean; processorArmTemporal?: boolean; rigEndpointEnabled?: boolean; bimanualPalmAssistEnabled?: boolean; filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; wristSwingEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
 
 export interface ShoulderVerticalDiagnosticSnapshot {
   raw: { left: number; right: number };
@@ -336,6 +338,8 @@ export class AvatarMotionProcessor {
   private readonly contactRuntime=new ContactRuntime();
   /** M6-M8: hand↔hand relation/contact runtime. Separate from body ContactRuntime. */
   private readonly bimanualRuntime=new BimanualContactRuntime();
+  private readonly fingertipEvidence=new FingertipContactEvidence();
+  private fingertipContactEnabled=false;
   private contactShadowEnabled=false;
   private contactCorrectionEnabled=false;
   private lastContactRenderAtMs:number|null=null;
@@ -405,6 +409,7 @@ export class AvatarMotionProcessor {
 
   constructor(options: AvatarMotionProcessorOptions = {}) {
     this.bimanualPalmAssistEnabled = options.bimanualPalmAssistEnabled ?? false;
+    this.fingertipContactEnabled=options.fingertipContactEnabled??false;
     this.rigEndpointEnabled = options.rigEndpointEnabled ?? false;
     this.dofConstraintsEnabled=options.dofConstraintsEnabled??false;
     this.bodyDepthBarrierEnabled = options.bodyDepthBarrierEnabled??false;
@@ -454,6 +459,7 @@ export class AvatarMotionProcessor {
   }
 
   setBimanualPalmAssistEnabled(enabled: boolean): void { this.bimanualPalmAssistEnabled = enabled; }
+  setFingertipContactEnabled(enabled:boolean):void{if(this.fingertipContactEnabled!==enabled)this.fingertipEvidence.reset();this.fingertipContactEnabled=enabled;}
 
   setDofConstraintsEnabled(enabled:boolean):void {this.dofConstraintsEnabled=enabled;}
   setBodyDepthBarrierEnabled(enabled:boolean):void {this.bodyDepthBarrierEnabled=enabled;}
@@ -555,7 +561,7 @@ export class AvatarMotionProcessor {
     this.continuousFingerEnabled=enabled;
     this.continuousFingerSolver.left.reset();this.continuousFingerSolver.right.reset();
     this.continuousFingerDiagnostics={left:{},right:{}};
-    this.bimanualRuntime.reset();
+    this.bimanualRuntime.reset();this.fingertipEvidence.reset();
     // Dọn pose do pipeline trước sở hữu ở cả hai chiều chuyển chế độ; nếu không, một frame cũ có thể
     // giữ bàn tay nắm khi bật continuous tracking nhưng frame camera đầu tiên chưa hợp lệ.
     if(this.ownedFingerJoints.size>0)this.pendingFingerClear=true;
@@ -580,7 +586,7 @@ export class AvatarMotionProcessor {
     this.fingerRig = rig;
     this.continuousFingerSolver.left.reset();this.continuousFingerSolver.right.reset();
     this.continuousFingerDiagnostics={left:{},right:{}};
-    this.bimanualRuntime.reset();
+    this.bimanualRuntime.reset();this.fingertipEvidence.reset();
     if (this.ownedFingerJoints.size > 0) this.pendingFingerClear = true;
   }
   getFingerRig(): FingerRigProfile | null { return this.fingerRig; }
@@ -1171,16 +1177,19 @@ export class AvatarMotionProcessor {
       this.applyContinuousFinger(jointRotations,frame,handContext,processedTimestampMs);
       this.applyBimanualHand(jointRotations,frame,handContext,processedTimestampMs);
     }else{
-      this.bimanualRuntime.reset();
+      this.bimanualRuntime.reset();this.fingertipEvidence.reset();
       this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
     }
     const contact = this.contactRuntime.correctionOwners();
-    const motionOwnership = { version: 1 as const, bodyDepthBarrier:this.bodyDepthBarrierEnabled, armTemporal: this.processorArmTemporal ? "processor" as const : "legacy-renderer" as const, contactArms: { left: this.contactCorrectionEnabled && contact.left, right: this.contactCorrectionEnabled && contact.right } };
+    const motionOwnership = { version: 1 as const, bodyDepthBarrier:this.bodyDepthBarrierEnabled,bodyDepthEvidence:this.bodyDepthBarrierEnabled?"observed-pose" as const:undefined, armTemporal: this.processorArmTemporal ? "processor" as const : "legacy-renderer" as const, contactArms: { left: this.contactCorrectionEnabled && contact.left, right: this.contactCorrectionEnabled && contact.right } };
     const bimanual = this.bimanualPalmAssistEnabled ? this.bimanualRuntime.snapshot() : null;
     const freshBimanual = bimanual && bimanual.lastObservedAtMs !== null && processedTimestampMs - bimanual.lastObservedAtMs >= 0 && processedTimestampMs - bimanual.lastObservedAtMs <= 100;
     const bimanualPalmContact = this.bimanualPalmAssistEnabled && bimanual && bimanual.mode === "palmsTogether" && !bimanual.occluded && freshBimanual && bimanual.confidence >= 0.62
       ? { version: 1 as const, influence: Math.min(0.35, bimanual.confidence * 0.35) } : undefined;
-    const common = { motionOwnership, bimanualPalmContact, sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics, armObservability };
+    const fingertipContact=this.fingertipContactIntent(frame,handContext,processedTimestampMs);
+    const localBodyContactGoals=this.contactCorrectionEnabled?this.contactRuntime.rendererGoals():undefined;
+    const observedBodyDepth=this.bodyDepthBarrierEnabled?observeBodyDepth(frame,processedTimestampMs):undefined;
+    const common = { motionOwnership, bimanualPalmContact, fingertipContact,localBodyContactGoals,observedBodyDepth,sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics, armObservability };
     return upperBody
       ? { ...common, version: 2, headRotation: upperBody.deltas.head ?? null, shoulderMotion: upperBody.shoulderMotion }
       : { ...common, version: 1, headRotation } as AvatarPosePacketV1;
@@ -1741,7 +1750,7 @@ export class AvatarMotionProcessor {
 
   /** Camera/clock histories expire; neutral remains valid for the same rig and person. */
   resetCameraTracking(): void {
-    this.contactRuntime.reset(); this.bimanualRuntime.reset(); this.lastContactRenderAtMs = null;
+    this.contactRuntime.reset(); this.bimanualRuntime.reset();this.fingertipEvidence.reset(); this.lastContactRenderAtMs = null;
     this.resetArmState(); this.resetHandSampleClassification(); this.resetFilters();
     for (const side of ["left", "right"] as const) this.resetHandTrackingSide(side, "tracking-discontinuity", this.now(), { preserveNeutralCalibration: true });
     this.wristSwingState = { left: createWristSwingTemporalState(), right: createWristSwingTemporalState() };
@@ -1754,12 +1763,12 @@ export class AvatarMotionProcessor {
 
   reset(): void {
     this.videoGeometry = null;
-    this.contactRuntime.reset(); this.bimanualRuntime.reset(); this.lastContactRenderAtMs = null;
+    this.contactRuntime.reset(); this.bimanualRuntime.reset();this.fingertipEvidence.reset(); this.lastContactRenderAtMs = null;
     this.wristSwingState = { left: createWristSwingTemporalState(), right: createWristSwingTemporalState() };
     this.sequence = 0; this.resetArmState(); this.resetHandTrackingState("processor-reset"); this.resetHandSampleClassification(); this.resetFilters(); this.resetFacialState(true); this.resetUpperBodyState(); Object.values(this.loss).forEach((machine) => machine.reset());
   }
   dispose(): void {
-    this.contactRuntime.reset(); this.bimanualRuntime.reset(); this.lastContactRenderAtMs = null;
+    this.contactRuntime.reset(); this.bimanualRuntime.reset();this.fingertipEvidence.reset(); this.lastContactRenderAtMs = null;
     this.wristSwingState = { left: createWristSwingTemporalState(), right: createWristSwingTemporalState() };
     this.rigProfile = null;
     this.upperBodyRigProfile = null;
@@ -1936,7 +1945,7 @@ export class AvatarMotionProcessor {
     this.resetMatchingSide(side);
     // A tracking epoch boundary invalidates cross-hand continuity as well; never carry an old
     // heart/interlace lock into a newly reacquired hand identity.
-    this.bimanualRuntime.reset();
+    this.bimanualRuntime.reset();this.fingertipEvidence.reset();
   }
   private resetHandTrackingState(reason: HandTrackingEpochResetReason): void {
     this.resetHandTrackingSide("left", reason);
@@ -1984,7 +1993,7 @@ export class AvatarMotionProcessor {
   private applyBimanualHand(
     jointRotations:AvatarPosePacketV2["jointRotations"],frame:RawTrackingFrameV1,hand:HandMotionContext,nowMs:number,
   ):void{
-    if(!this.fingerRig){this.bimanualRuntime.reset();return;}
+    if(!this.fingerRig){this.bimanualRuntime.reset();this.fingertipEvidence.reset();return;}
     const isNew=hand.sampleClassification==="new-sample"&&frame.handSampledAtMs!==null;
     const matchedCandidate=(side:ArmSide):RawHandCandidateV1|null=>{
       if(!isNew)return null;
@@ -2002,6 +2011,32 @@ export class AvatarMotionProcessor {
     this.bimanualRuntime.update({
       features,evidence,sampledAtMs:isNew?frame.handSampledAtMs:null,nowMs,jointRotations,fingerRig:this.fingerRig,
     });
+  }
+
+  private fingertipContactIntent(frame:RawTrackingFrameV1,hand:HandMotionContext,nowMs:number){
+    if(!this.fingertipContactEnabled||!this.continuousFingerEnabled||!this.fingerRig){this.fingertipEvidence.reset();return undefined;}
+    const matches=hand.matchResult;
+    const validMatch=(side:ArmSide)=>matches[side].matched&&(matches[side].matchQuality??0)>=.6;
+    const pose=frame.pose.worldLandmarks,images=frame.pose.landmarks;
+    const freshPose=frame.pose.sampledAtMs!==null&&nowMs-frame.pose.sampledAtMs>=0&&nowMs-frame.pose.sampledAtMs<=150;
+    const visible=[11,12,15,16].every(i=>pose?.[i]&&images?.[i]&&(images[i].visibility??0)>=.6&&[pose[i].x,pose[i].y,pose[i].z].every(Number.isFinite));
+    const shoulderWidth=pose?Math.hypot(pose[11]?.x-pose[12]?.x,pose[11]?.y-pose[12]?.y,pose[11]?.z-pose[12]?.z):0;
+    const compatibleDepth=visible&&shoulderWidth>1e-5&&Math.abs(pose![15].z-pose![16].z)<shoulderWidth*.25;
+    const eligible=freshPose&&compatibleDepth&&validMatch("left")&&validMatch("right");
+    const intent=this.fingertipEvidence.update(eligible?hand.candidatesBySide.left?.landmarks??null:null,eligible?hand.candidatesBySide.right?.landmarks??null:null,frame.handSampledAtMs,nowMs,frame.videoWidth??0,frame.videoHeight??0,matches.left.matchChanged||matches.right.matchChanged);
+    if(!intent)return undefined;
+    const observed=(side:ArmSide,finger:typeof intent.pairs[number]["left"])=>{
+      const chain=this.fingerRig![side].chains.find(c=>c.finger===finger);
+      return chain?.truncatedAtSegment===null&&chain.segments.slice(0,2).every(segment=>{const d=this.continuousFingerDiagnostics[side][segment.joint];return d?.source==="observed"&&d.measurementAccepted&&d.confidence>=.5;});
+    };
+    const pairs=intent.pairs.filter(pair=>observed("left",pair.left)&&observed("right",pair.right));
+    const flexionWindows:NonNullable<typeof intent.flexionWindows>={};
+    for(const pair of pairs)for(const side of ["left","right"] as const){const chain=this.fingerRig[side].chains.find(c=>c.finger===pair[side])!;chain.segments.forEach((segment,index)=>{
+      const d=this.continuousFingerDiagnostics[side][segment.joint];if(!d)return;
+      const limits=this.config.continuousFinger.humanObservationLimits,limit=chain.finger==="thumb"?limits.thumb:index===0?limits.mcp:index===1?limits.pip:limits.dip;
+      flexionWindows[segment.joint]={min:limit.min-d.angleRad,max:limit.max-d.angleRad};
+    });}
+    return pairs.length?{...intent,pairs,flexionWindows}:undefined;
   }
 
   private applyFingerGesture(

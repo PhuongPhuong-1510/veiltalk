@@ -16,12 +16,13 @@ export default function AvatarMotionPreview() {
   const [modelLabel,setModelLabel]=useState("Avatar thử nghiệm"),[ready,setReady]=useState(false);
   const [running,setRunning]=useState(false),[starting,setStarting]=useState(false);
   const [error,setError]=useState<string|null>(null),[status,setStatus]=useState("Đang tải avatar…");
-  const [features,setFeatures]=useState({depth:false,barrier:false,dof:false,shape:false,reach:false,contact:false,palms:false});
+  const [features,setFeatures]=useState({depth:false,barrier:false,dof:false,shape:false,reach:false,contact:false,palms:false,fingertips:false});
   useEffect(()=>{
     const p=processorRef.current!;
     p.setDepthFusionEnabled(features.depth);p.setBodyDepthBarrierEnabled(features.barrier);p.setDofConstraintsEnabled(features.dof);
     p.setHandConditioningEnabled(features.shape);p.setRigEndpointEnabled(features.reach);
     p.setContactCorrectionEnabled(features.contact);p.setBimanualPalmAssistEnabled(features.palms);
+    p.setFingertipContactEnabled(features.fingertips);
   },[features]);
   const onFrame=useCallback((frame:RawTrackingFrameV1)=>{const packet=processorRef.current?.process(frame);if(packet)rendererRef.current?.applyPose(packet);},[]);
   const onError=useCallback((reason:unknown)=>{setError(reason instanceof Error?reason.message:"Không thể theo dõi chuyển động.");setRunning(false);},[]);
@@ -68,6 +69,7 @@ export default function AvatarMotionPreview() {
         ["reach","Điều chỉnh tầm với theo avatar"],
         ["contact","Hỗ trợ chạm đầu và cơ thể"],
         ["palms","Hỗ trợ chắp hai bàn tay"],
+        ["fingertips","Hỗ trợ tiếp xúc đầu ngón hai tay"],
       ] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={features[key]} onChange={event=>setFeatures(value=>({...value,[key]:event.target.checked}))}/>{label}</label>)}
     </details>
     <p role="status">{status}</p>{error&&<p role="alert">{error}</p>}

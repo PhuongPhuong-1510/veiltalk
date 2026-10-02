@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
-import { Object3D, Matrix4 } from 'three';
+import { Object3D, Matrix4, Vector3,Quaternion } from 'three';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = await createServer({ root, server: { middlewareMode: true }, appType: 'custom' });
@@ -14,6 +14,7 @@ const out = { version: 1, createdAt: new Date().toISOString(), stage: 'raw-vrm-r
 try {
   const loader = await server.ssrLoadModule('/src/lib/avatar-renderer/modelLoader.ts');
   const finger = await server.ssrLoadModule('/src/lib/avatar-motion/fingerRig.ts');
+  const fingertip = await server.ssrLoadModule('/src/lib/avatar-motion/fingertipContactIk.ts');
   const benchmark = await server.ssrLoadModule('/src/lib/avatar-motion/motionBenchmark.ts');
   const fixtures = await server.ssrLoadModule('/src/lib/avatar-motion/syntheticMotionRecording.ts');
   for (const name of ['reference-avatar.vrm','reference-avatar-1.vrm','reference-avatar-2.vrm']) {
@@ -40,6 +41,25 @@ try {
       const results=benchmark.compareMotionRecording(recording);
       if(results.some(result=>result.nonFiniteRotations>0))throw Error('Nonfinite output: '+name+'/'+scene);
       model.scenes.push({scene,results});
+    }
+    const probes=new Map(),sources={};
+    for(const side of ['left','right'])for(const chain of fingerRig[side].chains){const probe=fingertip.buildFingertipProbe(chain,bones);if(probe){probes.set(side+':'+chain.finger,probe);sources[side+':'+chain.finger]=probe.source;}}
+    model.fingertipAudit={stage:'synthetic-tip-gap-on-actual-raw-rest-bones',sources,result:null};
+    const lp=probes.get('left:index'),rp=probes.get('right:index');
+    if(lp&&rp){
+      const hand=bones.rightHand,position=hand.position.clone(),rotation=hand.quaternion.clone();
+      const palmWidth=bones.leftIndexProximal.getWorldPosition(new Vector3()).distanceTo(bones.leftLittleProximal.getWorldPosition(new Vector3()));
+      const leftTip=fingertip.fingertipPosition(lp),rightTip=fingertip.fingertipPosition(rp),segment=fingerRig.left.chains.find(c=>c.finger==='index').segments.at(-1);
+      const axis=new Vector3(segment.flexAxisLocal.x,segment.flexAxisLocal.y,segment.flexAxisLocal.z).applyQuaternion(lp.bone.getWorldQuaternion(new Quaternion()));
+      const direction=axis.cross(leftTip.clone().sub(lp.bone.getWorldPosition(new Vector3()))).normalize();
+      const shift=leftTip.clone().addScaledVector(direction,palmWidth*.12).sub(rightTip);
+      hand.position.copy(hand.parent.worldToLocal(hand.getWorldPosition(new Vector3()).add(shift)));modelRoot.updateMatrixWorld(true);
+      const baseline=Object.fromEntries(Object.entries(bones).map(([name,bone])=>[name,{x:bone.quaternion.x,y:bone.quaternion.y,z:bone.quaternion.z,w:bone.quaternion.w}]));
+      const result=fingertip.correctFingertipContacts({rig:fingerRig,bones,probes,baseline,palmWidth,deltaSeconds:1/60,sampleAgeMs:0,intent:{version:1,sampledAtMs:0,pairs:[{left:'index',right:'index',influence:.35}]}});
+      if(!Object.values(bones).every(b=>b.quaternion.toArray().every(Number.isFinite)))throw Error('Nonfinite fingertip solve: '+name);
+      if(hand.quaternion.angleTo(rotation)>1e-7)throw Error('Fingertip solve changed wrist: '+name);
+      model.fingertipAudit.result=result;
+      hand.position.copy(position);for(const[joint,q]of Object.entries(baseline))bones[joint].quaternion.set(q.x,q.y,q.z,q.w);modelRoot.updateMatrixWorld(true);
     }
     out.models.push(model);
     process.stdout.write(`${name}: raw rig valid, ${model.fingerJoints} finger joints, ${model.scenes.length} synthetic scenes\n`);

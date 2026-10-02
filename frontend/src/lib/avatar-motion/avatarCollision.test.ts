@@ -6,6 +6,7 @@ import { formatAvatarCollisionDiagnostics } from "./avatarCollisionDiagnostics";
 import { poseAvatarCollisionProfile } from "./avatarCollisionProfile";
 import { correctAvatarInterArmCollision, queryAvatarInterArmCollisions } from "./avatarInterArmCollision";
 import type { AvatarCollisionCorrectionBudget, AvatarCollisionPose } from "./avatarCollisionTypes";
+import {Vector3,Quaternion} from "three";
 
 const profile: AvatarCollisionProfile = {
   body: {
@@ -22,6 +23,24 @@ const budget: AvatarCollisionCorrectionBudget = { maxWristDisplacementPerFrame: 
 const clear: AvatarCollisionPose = { shoulder: {x:-.4,y:.65,z:0}, elbow: {x:-.85,y:.45,z:0}, wrist: {x:-1.15,y:.15,z:0} };
 
 describe("avatar self collision", () => {
+  it("bounds total inter-arm displacement and does not worsen body clearance",()=>{
+    const left={shoulder:{x:-.8,y:.6,z:.02},elbow:{x:-.4,y:.4,z:.02},wrist:{x:.05,y:.2,z:.02},hand:{x:.3,y:.2,z:.02}};
+    const right={shoulder:{x:.8,y:.6,z:-.02},elbow:{x:.4,y:.4,z:-.02},wrist:{x:-.05,y:.2,z:-.02},hand:{x:-.3,y:.2,z:-.02}};
+    const score=(side:"left"|"right",pose:AvatarCollisionPose)=>queryAvatarArmBodyCollisions(profile,side,pose).reduce((s,c)=>s+c.penetrationDepth**2,0);
+    const r=correctAvatarInterArmCollision(profile,left,right,{left:"S-W",right:"SEW"},.08,4);
+    for(const[side,baseline]of [["left",left],["right",right]] as const){expect(new Vector3().copy(r[side].wrist).distanceTo(new Vector3().copy(baseline.wrist))).toBeLessThanOrEqual(.080001);expect(score(side,r[side])).toBeLessThanOrEqual(score(side,baseline)+1e-8);}
+    expect(correctAvatarInterArmCollision(profile,left,right,{left:"SEW",right:"SEW"},0).baselinePreserved).toBe(true);
+  });
+  it("checks inter-arm ordering in the body's rotated forward frame",()=>{
+    const q=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.PI/2),t=new Vector3(2,1,-3),point=(p:{x:number;y:number;z:number})=>new Vector3().copy(p).applyQuaternion(q).add(t);
+    const left={shoulder:{x:-.8,y:.6,z:.03},elbow:{x:-.4,y:.4,z:.03},wrist:{x:.05,y:.2,z:.03},hand:{x:.3,y:.2,z:.03}};
+    const right={shoulder:{x:.8,y:.6,z:-.03},elbow:{x:.4,y:.4,z:-.03},wrist:{x:-.05,y:.2,z:-.03},hand:{x:-.3,y:.2,z:-.03}};
+    const moved=poseAvatarCollisionProfile(profile,{headCenter:point(profile.body.head.center),neckStart:point(profile.body.neck.start),neckEnd:point(profile.body.neck.end),torsoStart:point(profile.body.torso.start),torsoEnd:point(profile.body.torso.end),frontNormal:new Vector3(0,0,1).applyQuaternion(q)});
+    const pose=(p:typeof left)=>({shoulder:point(p.shoulder),elbow:point(p.elbow),wrist:point(p.wrist),hand:point(p.hand)});
+    const a=correctAvatarInterArmCollision(profile,left,right,{left:"S-W",right:"SEW"},.08,3,"left-front"),b=correctAvatarInterArmCollision(moved,pose(left),pose(right),{left:"S-W",right:"SEW"},.08,3,"left-front",false,moved.body.frontNormal);
+    expect(new Vector3().copy(b.left.wrist).distanceTo(point(a.left.wrist))).toBeLessThan(1e-6);
+    expect(new Vector3().copy(b.right.wrist).distanceTo(point(a.right.wrist))).toBeLessThan(1e-6);
+  });
   it("keeps a recent posterior hand correction behind the head in body-local coordinates",()=>{
     const p={...profile,body:{...profile.body,frontNormal:{x:0,y:0,z:1}}};
     const pose={shoulder:{x:-.4,y:1.2,z:0},elbow:{x:-.1,y:1.45,z:0},wrist:{x:.05,y:1.45,z:0}};

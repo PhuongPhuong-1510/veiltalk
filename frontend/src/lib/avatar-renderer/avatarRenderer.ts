@@ -26,6 +26,8 @@ import { correctAvatarArmCollision } from "../avatar-motion/avatarCollisionCorre
 import { correctAvatarInterArmCollision, queryAvatarInterArmCollisions, type InterArmCollisionContact } from "../avatar-motion/avatarInterArmCollision";
 import type { AvatarCollisionCorrectionResult, AvatarCollisionPose } from "../avatar-motion/avatarCollisionTypes";
 import { processorOwnsJointTemporal, rendererClearanceMask } from "../avatar-motion/motionOwnership";
+import { buildFingertipProbe,correctFingertipContacts,fingertipBodyScore,type FingertipProbe,type FingertipContactDiagnostic } from "../avatar-motion/fingertipContactIk";
+import { captureSemanticBoneFrames,semanticRenderedRotation,renderedArmPose,renderedBodyProfile,measureRenderedContacts,type SemanticBoneFrame,type ContactBoneMap } from "./renderedContactGeometry";
 
 
 
@@ -40,6 +42,9 @@ export interface AppliedSelfCollisionDiagnostic {
   right: AvatarCollisionCorrectionResult | null;
   interArm: InterArmCollisionContact[];
   palmAssist?: BimanualPalmAssistResult;
+  fingertip?:FingertipContactDiagnostic;
+  /** Measured again after VRM transfer and raw shoulder translation. Collider proxies, not mesh SDF. */
+  rendered?:ReturnType<typeof measureRenderedContacts>&{space:"raw-bone-fk";contactErrors:Partial<Record<"left"|"right",number>>;fingertipGaps:Array<{left:string;right:string;distance:number;leftProbe:string;rightProbe:string}>};
 }
 
 export interface AppliedShoulderTranslationDiagnostic {
@@ -203,6 +208,10 @@ export class AvatarRenderer {
   private collisionProfile: AvatarCollisionProfile | null = null;
   private selfCollisionDiagnostic: AppliedSelfCollisionDiagnostic = { enabled: false, mode: "correction", left: null, right: null, interArm: [] };
   private interArmDepthOrdering:"left-front"|"right-front"|null=null;
+  private readonly interArmDepthMemory=new BodyLocalDepthMemory();
+  private renderedBoneFrames=new Map<string,SemanticBoneFrame>();
+  private normalizedBoneFrames=new Map<string,SemanticBoneFrame>();
+  private fingertipProbes=new Map<string,FingertipProbe>();
 
   private appliedShoulderTranslation: AppliedShoulderTranslationDiagnostic = {
 
@@ -262,6 +271,15 @@ export class AvatarRenderer {
     for(const memory of Object.values(this.bodyDepthMemory)){memory.head.reset();memory.torso.reset();}
     this.collisionProfile = loaded.rigProfile ? buildAvatarCollisionProfile(loaded.rigProfile) : null;
     this.interArmDepthOrdering = null;
+    this.interArmDepthMemory.reset();
+    loaded.root.updateMatrixWorld(true);
+    const raw:ContactBoneMap={};
+    const humanoid=loaded.vrm?.humanoid;
+    if(humanoid)for(const name of Object.keys(loaded.bones)){const bone=humanoid.getRawBoneNode(name as Parameters<typeof humanoid.getRawBoneNode>[0]);if(bone)raw[name as AvatarPoseJointNameV2]=bone;}
+    this.renderedBoneFrames=captureSemanticBoneFrames(loaded.bones,raw);
+    this.normalizedBoneFrames=captureSemanticBoneFrames(loaded.bones,{});
+    this.fingertipProbes.clear();
+    if(loaded.fingerRig)for(const side of ["left","right"] as const)for(const chain of loaded.fingerRig[side].chains){const probe=buildFingertipProbe(chain,loaded.bones,humanoid?raw:loaded.bones);if(probe)this.fingertipProbes.set(side+":"+chain.finger,probe);}
     this.selfCollisionDiagnostic = { enabled: Boolean(this.collisionProfile), mode: "correction", left: null, right: null, interArm: [] };
 
     this.appliedShoulderTranslation = applyShoulderTranslation(loaded, null); return loaded.capability;
@@ -444,8 +462,10 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
     // then restore raw shoulder translation because humanoid.update does not own that channel.
     if (this.model && this.target) {
       this.applySelfCollision(this.target, dt);
+      this.applyFingertipContact(this.target,dt);
       this.model.vrm?.update(0);
       this.appliedShoulderTranslation = applyShoulderTranslation(this.model, this.target.version === 2 ? this.target.shoulderMotion : null);
+      this.measureFinalContact(this.target);
     }
 
     if (this.model) applyRawMorphWeights(this.model.morphTargets, this.currentRawMorphWeights);
@@ -469,7 +489,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
 
 
   /** Normalized humanoid FK after the most recent draw; sequence may lag a new input packet. */
-  getFinalArmSnapshot(): { sequence: number | null; atMs: number; space: "normalized-avatar-world"; arms: Record<string, unknown>; skinnedArms: Record<string, unknown> } {
+  getFinalArmSnapshot(): { sequence: number | null; atMs: number; space: "normalized-avatar-world"; arms: Record<string, unknown>; skinnedArms: Record<string, unknown>; contacts:AppliedSelfCollisionDiagnostic } {
     const arms: Record<string, unknown> = {};
     const skinnedArms: Record<string, unknown> = {};
     const model = this.model;
@@ -502,7 +522,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
         }
       }
     }
-    return { sequence: this.appliedSequence, atMs: this.now(), space: "normalized-avatar-world", arms, skinnedArms };
+    return { sequence: this.appliedSequence, atMs: this.now(), space: "normalized-avatar-world", arms, skinnedArms,contacts:this.getSelfCollisionDiagnostics() };
   }
 
   private applyTarget(packet: AvatarPosePacket, dt: number): void {
@@ -614,7 +634,12 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
       const depthMemory=this.bodyDepthMemory[side],forward=posedProfile.body.frontNormal;
       const observed=packet.armObservability?.[side]==="SEW"&&packet.tracking.pose.outputState==="active"&&!packet.motionOwnership?.contactArms[side];
       if(!depthEnabled){depthMemory.head.reset();depthMemory.torso.reset();}
-      const depthSides=depthEnabled&&forward?{head:depthMemory.head.update(palmCenter??wrist,posedProfile.body.head.center,forward,posedProfile.body.head.radius,this.now(),observed,packet.tracking.pose.sampledAtMs),torso:depthMemory.torso.update(palmCenter??wrist,posedProfile.body.torso.start,forward,posedProfile.body.torso.radius,this.now(),observed,packet.tracking.pose.sampledAtMs)}:undefined;
+      const depthObservation=packet.observedBodyDepth,sourceAge=this.now()-packet.processedTimestampMs;
+      const freshDepth=depthObservation&&sourceAge>=0&&sourceAge<=150&&packet.processedTimestampMs-depthObservation.sampledAtMs<=150?depthObservation:null;
+      const depthSides=depthEnabled&&packet.motionOwnership?.bodyDepthEvidence==="observed-pose"?{
+        head:depthMemory.head.observeSide(freshDepth?.[side].head??null,this.now(),freshDepth?.sampledAtMs??null),
+        torso:depthMemory.torso.observeSide(freshDepth?.[side].torso??null,this.now(),freshDepth?.sampledAtMs??null),
+      }:depthEnabled&&forward?{head:depthMemory.head.update(palmCenter??wrist,posedProfile.body.head.center,forward,posedProfile.body.head.radius,this.now(),observed,packet.tracking.pose.sampledAtMs),torso:depthMemory.torso.update(palmCenter??wrist,posedProfile.body.torso.start,forward,posedProfile.body.torso.radius,this.now(),observed,packet.tracking.pose.sampledAtMs)}:undefined;
       const result=correctAvatarArmCollision(posedProfile,{side,baseline:pose,bodyDepthSides:depthSides,deltaSeconds:dt,observability:rendererClearanceMask(packet.armObservability?.[side]??"---",packet.motionOwnership,side),bendPole:pole,budget:{maxWristDisplacementPerFrame:total*.08,maxElbowAngularCorrectionPerSecond:8,maxTotalCorrection:total*.3,maxIterations:4,influence:1}});
       diagnostic[side]=result;if(!result.baselinePreserved){this.applyCorrectedArm(side,pose,result.pose);poses[side]=result.pose;model.root.updateMatrixWorld(true);}
     }
@@ -624,9 +649,13 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
         diagnostic.palmAssist=assist;
         if(assist.applied){this.applyCorrectedArm("left",poses.left,assist.left);model.root.updateMatrixWorld(true);this.applyCorrectedArm("right",poses.right,assist.right);model.root.updateMatrixWorld(true);poses.left=assist.left;poses.right=assist.right;}
       }
-      const depthDelta=poses.left.wrist.z-poses.right.wrist.z,depthThreshold=Math.max(posedProfile.arms.left.handRadius,posedProfile.arms.right.handRadius);
-      if(Math.abs(depthDelta)>depthThreshold)this.interArmDepthOrdering=depthDelta>0?"left-front":"right-front";
-      const inter=correctAvatarInterArmCollision(posedProfile,poses.left,poses.right,{left:rendererClearanceMask(packet.armObservability?.left??"---",packet.motionOwnership,"left"),right:rendererClearanceMask(packet.armObservability?.right??"---",packet.motionOwnership,"right")},(posedProfile.arms.left.lowerLength+posedProfile.arms.right.lowerLength)*.04,3,this.interArmDepthOrdering,diagnostic.palmAssist?.applied===true||diagnostic.palmAssist?.reason==="already-touching");
+      const depthForward=posedProfile.body.frontNormal??{x:0,y:0,z:1},depthThreshold=Math.max(posedProfile.arms.left.handRadius,posedProfile.arms.right.handRadius);
+      const observed=packet.armObservability?.left==="SEW"&&packet.armObservability?.right==="SEW"&&packet.tracking.pose.outputState==="active"&&!packet.motionOwnership?.contactArms.left&&!packet.motionOwnership?.contactArms.right;
+      const depthObservation=packet.observedBodyDepth,sourceAge=this.now()-packet.processedTimestampMs;
+      const freshDepth=depthObservation&&sourceAge>=0&&sourceAge<=150?depthObservation:null;
+      const depthSide=packet.motionOwnership?.bodyDepthEvidence==="observed-pose"?this.interArmDepthMemory.observeSide(freshDepth?.interArm??null,this.now(),freshDepth?.sampledAtMs??null):this.interArmDepthMemory.update(poses.left.wrist,poses.right.wrist,depthForward,depthThreshold,this.now(),observed,packet.tracking.pose.sampledAtMs);
+      this.interArmDepthOrdering=depthSide===null?null:depthSide>0?"left-front":"right-front";
+      const inter=correctAvatarInterArmCollision(posedProfile,poses.left,poses.right,{left:rendererClearanceMask(packet.armObservability?.left??"---",packet.motionOwnership,"left"),right:rendererClearanceMask(packet.armObservability?.right??"---",packet.motionOwnership,"right")},(posedProfile.arms.left.lowerLength+posedProfile.arms.right.lowerLength)*Math.min(.04,Math.max(0,dt)*.6),3,this.interArmDepthOrdering,diagnostic.palmAssist?.applied===true||diagnostic.palmAssist?.reason==="already-touching",depthForward);
       if(!inter.baselinePreserved){this.applyCorrectedArm("left",poses.left,inter.left);model.root.updateMatrixWorld(true);this.applyCorrectedArm("right",poses.right,inter.right);model.root.updateMatrixWorld(true);poses.left=inter.left;poses.right=inter.right;}
       diagnostic.interArm=queryAvatarInterArmCollisions(posedProfile,poses.left,poses.right);
     }
@@ -643,6 +672,44 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
     this.currentRotations[`${side}LowerArm`]={x:lower.quaternion.x,y:lower.quaternion.y,z:lower.quaternion.z,w:lower.quaternion.w};
     model.root.updateMatrixWorld(true);
     if(preservedHandWorld){const palm=model.bones[`${side}Hand`]!;const parent=palm.parent?.getWorldQuaternion(new Quaternion())??new Quaternion();palm.quaternion.copy(parent.invert().multiply(preservedHandWorld)).normalize();this.currentRotations[`${side}Hand`]={x:palm.quaternion.x,y:palm.quaternion.y,z:palm.quaternion.z,w:palm.quaternion.w};}
+  }
+
+  private applyFingertipContact(packet:AvatarPosePacket,dt:number):void{
+    const model=this.model,rig=model?.fingerRig;
+    if(!model||!rig||packet.motionOwnership?.contactArms.left||packet.motionOwnership?.contactArms.right)return;
+    const baseline:Parameters<typeof correctFingertipContacts>[0]["baseline"]={};
+    for(const hand of [rig.left,rig.right])for(const chain of hand.chains)for(const segment of chain.segments){const rest=model.restRotations[segment.joint],delta=packet.jointRotations[segment.joint];if(rest&&delta)baseline[segment.joint]=absoluteLocalFromRestDelta(rest,delta);}
+    const index=model.bones.leftIndexProximal,little=model.bones.leftLittleProximal;
+    const palmWidth=index&&little?index.getWorldPosition(new Vector3()).distanceTo(little.getWorldPosition(new Vector3())):0;
+    const age=packet.fingertipContact?this.now()-packet.processedTimestampMs+(packet.processedTimestampMs-packet.fingertipContact.sampledAtMs):Infinity;
+    const body=this.collisionProfile?renderedBodyProfile(this.normalizedBoneFrames,this.collisionProfile):null;
+    const diagnostic=correctFingertipContacts({rig,bones:model.bones,probes:this.fingertipProbes,intent:packet.fingertipContact,baseline,palmWidth,deltaSeconds:dt,sampleAgeMs:age,clearanceScore:body?()=>fingertipBodyScore(this.fingertipProbes.values(),body,palmWidth):undefined});
+    this.selfCollisionDiagnostic.fingertip=diagnostic;
+    for(const name of diagnostic.changedJoints){const q=model.bones[name]!.quaternion;this.currentRotations[name]={x:q.x,y:q.y,z:q.z,w:q.w};}
+  }
+
+  private measureFinalContact(packet:AvatarPosePacket):void{
+    const model=this.model,rig=model?.rigProfile,profile=this.collisionProfile;if(!model||!rig||!profile)return;
+    model.root.updateMatrixWorld(true);
+    const posed=renderedBodyProfile(this.renderedBoneFrames,profile);if(!posed)return;
+    const left=renderedArmPose(this.renderedBoneFrames,rig,"left"),right=renderedArmPose(this.renderedBoneFrames,rig,"right");
+    const contactErrors:Partial<Record<"left"|"right",number>>={};
+    if(packet.localBodyContactGoals?.modelFingerprint===rig.modelFingerprint)for(const side of ["left","right"] as const){
+      const goal=packet.localBodyContactGoals.goals[side],hand=this.renderedBoneFrames.get(side+"Hand"),parent=goal?this.renderedBoneFrames.get(goal.anchor.parentJoint):null;
+      const probe=goal?rig.hands?.[side]?.contactFrame?.probes?.[goal.probe]:null;
+      if(!goal||!parent||!hand||!probe)continue;
+      const point=new Vector3(goal.anchor.pointLocal.x,goal.anchor.pointLocal.y,goal.anchor.pointLocal.z).applyQuaternion(semanticRenderedRotation(parent)).add(parent.bone.getWorldPosition(new Vector3()));
+      const actual=new Vector3(probe.offsetLocal.x,probe.offsetLocal.y,probe.offsetLocal.z).applyQuaternion(semanticRenderedRotation(hand)).add(hand.bone.getWorldPosition(new Vector3()));
+      const error=point.distanceTo(actual);if(Number.isFinite(error))contactErrors[side]=error;
+    }
+    const fingertipGaps:NonNullable<AppliedSelfCollisionDiagnostic["rendered"]>["fingertipGaps"]=[];
+    const tip=(side:"left"|"right",finger:string)=>{
+      const probe=this.fingertipProbes.get(side+":"+finger);if(!probe)return null;
+      const frame=this.renderedBoneFrames.get([...Object.entries(model.bones)].find(([,bone])=>bone===probe.bone)?.[0]??"");if(!frame)return null;
+      return{source:probe.source,point:probe.offsetLocal.clone().multiply(frame.bone.getWorldScale(new Vector3())).applyQuaternion(semanticRenderedRotation(frame)).add(frame.bone.getWorldPosition(new Vector3()))};
+    };
+    for(const pair of packet.fingertipContact?.pairs??[]){const a=tip("left",pair.left),b=tip("right",pair.right);if(a&&b){const distance=a.point.distanceTo(b.point);if(Number.isFinite(distance))fingertipGaps.push({left:pair.left,right:pair.right,distance,leftProbe:a.source,rightProbe:b.source});}}
+    this.selfCollisionDiagnostic.rendered={...measureRenderedContacts(posed,left,right),space:"raw-bone-fk",contactErrors,fingertipGaps};
   }
 
   private rotateBoneDirectionWorld(bone:import("three").Object3D,from:Vector3,to:Vector3):void{

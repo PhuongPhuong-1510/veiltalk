@@ -105,6 +105,7 @@ export interface AvatarPartTrackingInfo {
 /** Plain optional policy metadata. Old packets retain their renderer behavior. */
 export interface AvatarMotionOwnershipV1 {
   bodyDepthBarrier?:boolean;
+  bodyDepthEvidence?:"observed-pose";
   version: 1;
   armTemporal: "legacy-renderer" | "processor";
   /** Only true while an enabled contact correction actually changes that chain. */
@@ -153,6 +154,11 @@ export interface AvatarPosePacketV1 {
   motionOwnership?: AvatarMotionOwnershipV1;
   /** Experimental confirmed palm contact. No raw image/world landmarks cross this contract. */
   bimanualPalmContact?: { version: 1; influence: number };
+  /** Local experimental geometry intent; no raw landmarks and no gesture preset. */
+  fingertipContact?: import("./fingertipContactEvidence").FingertipContactIntent;
+  observedBodyDepth?: import("./observedBodyDepth").ObservedBodyDepth;
+  /** Model-specific local anchors for final renderer validation, not remote retargeting. */
+  localBodyContactGoals?: {modelFingerprint:string;goals:Partial<Record<"left"|"right",{anchor:import("./contactAnchorMapping").AvatarContactLocalAnchor;probe:"palmCenter"|"radialEdge"|"ulnarEdge"}>>};
 }
 
 /**

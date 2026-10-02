@@ -6,8 +6,30 @@ import { buildIdleArmPose } from "./idleArmPose";
 import { rotateVector, vectorAngularDeltaDegrees } from "./motionMath";
 import { DEFAULT_AVATAR_MOTION_CONFIG } from "./motionConfig";
 import type { UpperBodyJointProfile, UpperBodyRigProfileV1 } from "./upperBodyRigProfile";
+import type {FingerRigProfile} from "./fingerRig";
+import {fingerJointName} from "./avatarPoseTypes";
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
+it("adds fingertip intent only when enabled and observed, without changing processor wrist/arm/finger rotations",()=>{
+  let now=100;const rig:FingerRigProfile={version:1,modelGeneration:1,left:{side:"left",chains:[],controllableSegmentCount:3},right:{side:"right",chains:[],controllableSegmentCount:3}};
+  for(const side of ["left","right"] as const)rig[side].chains=[{finger:"index",truncatedAtSegment:null,segments:(["Proximal","Intermediate","Distal"] as const).map(s=>({joint:fingerJointName(side,"index",s),flexAxisLocal:{x:1,y:0,z:0},hasChild:true}))}];
+  const a=new AvatarMotionProcessor({now:()=>now,continuousFingerEnabled:true}),b=new AvatarMotionProcessor({now:()=>now,continuousFingerEnabled:true,fingertipContactEnabled:true});
+  for(const processor of [a,b]){processor.setRigProfile(rigProfile);processor.setFingerRig(rig);}
+  try{
+    let intent;
+    for(let i=0;i<12;i++){
+      now=100+i*40;const raw=sampledFrame(now);
+      raw.rawHands=[handCandidate(0,LEFT_WRIST_IMAGE,"left",now),handCandidate(1,RIGHT_WRIST_IMAGE,"right",now)];
+      for(const[index,candidate]of raw.rawHands.entries()){
+        const positions=index===0?[.3,.4,.5]:[.7,.6,.5];
+        for(const[j,id]of [6,7,8].entries()){candidate.landmarks[id]=landmark(positions[j],.55-j*.05);candidate.worldLandmarks[id]={...candidate.landmarks[id],z:.01};}
+      }
+      const original=JSON.stringify(raw),pa=a.process(raw),pb=b.process(raw);expect(pa.fingertipContact).toBeUndefined();expect(pb.jointRotations).toEqual(pa.jointRotations);expect(JSON.stringify(raw)).toBe(original);intent=pb.fingertipContact;
+    }
+    expect(intent?.pairs).toEqual(expect.arrayContaining([expect.objectContaining({left:"index",right:"index"})]));
+    b.setFingertipContactEnabled(false);now+=40;expect(b.process(sampledFrame(now)).fingertipContact).toBeUndefined();
+  }finally{a.dispose();b.dispose();}
+});
 
 it("wires independent rig-local constraints and body-depth policy into the runtime",()=>{
   const processor=new AvatarMotionProcessor({dofConstraintsEnabled:true,bodyDepthBarrierEnabled:true,now:()=>100});

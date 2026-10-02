@@ -2,6 +2,12 @@ import { describe,expect,it } from "vitest";
 import { Quaternion,Vector3 } from "three";
 import { BodyLocalDepthMemory,bodyLocalOutwardNormal } from "./bodyLocalDepth";
 describe("posed body depth ordering",()=>{
+  it("consumes genuine signed evidence once, expires during silence and ignores old packet keys",()=>{
+    const m=new BodyLocalDepthMemory();expect(m.observeSide(-1,100,100)).toBe(-1);
+    expect(m.observeSide(1,200,100)).toBe(-1);expect(m.observeSide(1,300,90)).toBe(-1);
+    expect(m.observeSide(null,500,null)).toBe(-1);expect(m.observeSide(1,701,100)).toBeNull();
+    expect(m.observeSide(1,710,200)).toBe(1);
+  });
   const origin={x:0,y:0,z:0},front={x:0,y:0,z:1};
   it("uses recent observed hemisphere near the mid-plane but not forever during occlusion",()=>{
     const m=new BodyLocalDepthMemory();expect(m.update({x:0,y:0,z:-.4},origin,front,1,0,true)).toBe(-1);

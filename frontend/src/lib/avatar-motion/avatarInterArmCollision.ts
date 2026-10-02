@@ -6,6 +6,7 @@ import type { Vector3Data } from "./avatarPoseTypes";
 import type { ArmObservability } from "./armObservability";
 import { solveContactArmIk } from "./contactArmIk";
 import { Vector3 } from "three";
+import { queryAvatarArmBodyCollisions } from "./avatarCollisionQuery";
 
 export interface InterArmCollisionContact {
   leftPart: AvatarCollisionArmPart;
@@ -49,12 +50,14 @@ const freedom=(mask:ArmObservability)=>{
 const vector=(p:Vector3Data)=>new Vector3(p.x,p.y,p.z);
 
 /** Deepest-first mutual projection. The less-observed arm receives more displacement. */
-export function correctAvatarInterArmCollision(profile:AvatarCollisionProfile,leftBaseline:AvatarCollisionPose,rightBaseline:AvatarCollisionPose,observability:Record<"left"|"right",ArmObservability>,maxDisplacement:number,maxIterations=3,depthOrdering:"left-front"|"right-front"|null=null,ignoreHandPair=false):InterArmCorrectionResult{
+export function correctAvatarInterArmCollision(profile:AvatarCollisionProfile,leftBaseline:AvatarCollisionPose,rightBaseline:AvatarCollisionPose,observability:Record<"left"|"right",ArmObservability>,maxDisplacement:number,maxIterations=3,depthOrdering:"left-front"|"right-front"|null=null,ignoreHandPair=false,depthForward:Vector3Data={x:0,y:0,z:1}):InterArmCorrectionResult{
   let left=leftBaseline,right=rightBaseline,contacts=queryAvatarInterArmCollisions(profile,left,right,ignoreHandPair);const before=contacts;
   const leftPole=vector(left.elbow).sub(vector(left.shoulder)),rightPole=vector(right.elbow).sub(vector(right.shoulder));
   const leftFreedom=freedom(observability.left),rightFreedom=freedom(observability.right),sum=Math.max(1e-8,leftFreedom+rightFreedom);
   if(leftFreedom+rightFreedom<=1e-8)return{left,right,contactsBefore:before,contactsAfter:contacts,iterations:0,baselinePreserved:true};
-  for(let iteration=1;iteration<=maxIterations&&contacts.length;iteration++){
+  let iterations=0;
+  if(!Number.isFinite(maxDisplacement)||maxDisplacement<=0)return{left,right,contactsBefore:before,contactsAfter:contacts,iterations,baselinePreserved:true};
+  for(let iteration=1;iteration<=Math.min(4,maxIterations)&&contacts.length;iteration++){
     const hit=contacts[0],step=Math.min(hit.penetrationDepth,maxDisplacement),normal=vector(hit.normalRightToLeft);
     const leftCorrection=normal.clone().multiplyScalar(step*leftFreedom/sum),rightCorrection=normal.clone().multiplyScalar(-step*rightFreedom/sum),leftWeights=projectionWeights(hit.leftPart,hit.leftParameter),rightWeights=projectionWeights(hit.rightPart,hit.rightParameter);
     const nextLeft=vector(left.wrist).addScaledVector(leftCorrection,leftWeights.wrist),nextRight=vector(right.wrist).addScaledVector(rightCorrection,rightWeights.wrist);
@@ -64,12 +67,17 @@ export function correctAvatarInterArmCollision(profile:AvatarCollisionProfile,le
     if(!leftIk||!rightIk)break;
     const leftShift=vector(leftIk.wrist).sub(vector(left.wrist)),rightShift=vector(rightIk.wrist).sub(vector(right.wrist));
     const candidateLeft=leftFreedom===0?left:{...left,elbow:leftIk.elbow,wrist:leftIk.wrist,...(left.hand?{hand:vector(left.hand).add(leftShift)}:{}),...(left.palmCenter?{palmCenter:vector(left.palmCenter).add(leftShift)}:{})};const candidateRight=rightFreedom===0?right:{...right,elbow:rightIk.elbow,wrist:rightIk.wrist,...(right.hand?{hand:vector(right.hand).add(rightShift)}:{}),...(right.palmCenter?{palmCenter:vector(right.palmCenter).add(rightShift)}:{})};
-    const depthDelta=candidateLeft.wrist.z-candidateRight.wrist.z;
+    if(vector(candidateLeft.wrist).distanceTo(vector(leftBaseline.wrist))>maxDisplacement+1e-6||vector(candidateRight.wrist).distanceTo(vector(rightBaseline.wrist))>maxDisplacement+1e-6)break;
+    const depthDelta=vector(candidateLeft.wrist).sub(vector(candidateRight.wrist)).dot(vector(depthForward).normalize());
     if((depthOrdering==="left-front"&&depthDelta<0)||(depthOrdering==="right-front"&&depthDelta>0))break;
+    // Clearing two arms must not trade their intersection for a deeper body intersection.
+    if(bodyScore(profile,"left",candidateLeft)>bodyScore(profile,"left",left)+1e-8||bodyScore(profile,"right",candidateRight)>bodyScore(profile,"right",right)+1e-8)break;
     const next=queryAvatarInterArmCollisions(profile,candidateLeft,candidateRight,ignoreHandPair);if(score(next)>=score(contacts))break;left=candidateLeft;right=candidateRight;contacts=next;
+    iterations=iteration;
   }
-  return{left,right,contactsBefore:before,contactsAfter:contacts,iterations:maxIterations,baselinePreserved:left===leftBaseline&&right===rightBaseline};
+  return{left,right,contactsBefore:before,contactsAfter:contacts,iterations,baselinePreserved:left===leftBaseline&&right===rightBaseline};
 }
+const bodyScore=(profile:AvatarCollisionProfile,side:"left"|"right",pose:AvatarCollisionPose)=>queryAvatarArmBodyCollisions(profile,side,pose).reduce((sum,hit)=>sum+hit.penetrationDepth**2,0);
 const score=(contacts:InterArmCollisionContact[])=>contacts.reduce((sum,c)=>sum+c.penetrationDepth*c.penetrationDepth,0);
 const projectionWeights=(part:AvatarCollisionArmPart,parameter:number)=>{const t=Math.max(0,Math.min(1,parameter));if(part==="upperArm")return{elbow:.35+.65*t,wrist:.12*t};if(part==="forearm")return{elbow:.5*(1-t),wrist:.35+.65*t};return{elbow:0,wrist:1};};
 const poleFromDesired=(shoulder:Vector3Data,wrist:Vector3,elbow:Vector3,fallback:Vector3)=>{const origin=vector(shoulder),axis=wrist.clone().sub(origin);if(axis.lengthSq()<1e-10)return{x:fallback.x,y:fallback.y,z:fallback.z};axis.normalize();const pole=elbow.clone().sub(origin);pole.addScaledVector(axis,-pole.dot(axis));const value=pole.lengthSq()>1e-10?pole:fallback;return{x:value.x,y:value.y,z:value.z};};
