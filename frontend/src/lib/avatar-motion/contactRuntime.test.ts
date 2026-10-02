@@ -16,6 +16,27 @@ const hand=()=>{const points=Array.from({length:21},()=>lm(.5,.28));points[0]=lm
 const frame=(at:number):RawTrackingFrameV1=>{const pose=Array.from({length:33},()=>lm(.5,.5,0));pose[0]=lm(.5,.4,0);pose[15]=lm(.5,.3,.02);return{version:1,frameTimestampMs:at,overall:"full",face:{state:"tracked",sampledAtMs:at,landmarks:face,blendshapes:{},facialTransform:null},leftHand:{state:"tracked",sampledAtMs:at,handedness:"left",handednessScore:1,landmarks:hand(),worldLandmarks:null},rightHand:{state:"lost",sampledAtMs:at,handedness:"right",handednessScore:0,landmarks:null,worldLandmarks:null},rawHands:[],handSampledThisFrame:true,handSampledAtMs:at,pose:{state:"tracked",sampledAtMs:at,landmarks:pose,worldLandmarks:pose},videoWidth:1_000,videoHeight:1_000};};
 
 describe("AR9 contact runtime",()=>{
+  it("passes world geometry support through the research runtime for an edge-on palm",()=>{
+    const runtime=new ContactRuntime();runtime.setProfile(profile);runtime.setResearchOptions({jointProbeSelection:true});
+    const points=hand();points[5]=lm(.5,.25);points[9]=lm(.5,.22);points[13]=lm(.5,.24);points[17]=lm(.5,.26);
+    const world=Array.from({length:21},()=>lm(0,0));world[5]=lm(-.035,.07);world[9]=lm(0,.09);world[13]=lm(.02,.08);world[17]=lm(.04,.07);
+    runtime.update("left",frame(100),points,100,100,60,{},null,false,world);
+    const diag=runtime.snapshot().left;
+    expect(diag.research?.observationTrace?.status).toBe("selected");
+    expect(diag.research?.inputs?.worldGeometryQuality).toBeGreaterThan(.65);
+    expect(diag.research?.observationTrace?.probes).toHaveLength(3);
+    expect(diag.correctionRequested).toBe(false);
+  });
+  it("reports absent hand input without treating the historical region as a current observation",()=>{
+    const runtime=new ContactRuntime();runtime.setProfile(profile);
+    runtime.setResearchOptions({headSurface:true,jointProbeSelection:true,registeredDepth:true,meshSurface:false,finalRefinement:false,indexTip:false});
+    runtime.update("left",frame(100),null,100,100,60,{},null,true);
+    const diag=runtime.snapshot().left;
+    expect(diag.research?.observationTrace?.status).toBe("missing-hand-image");
+    expect(diag.research?.inputs?.handImagePoints).toBe(0);
+    expect(diag.research?.registration?.reason).toBe("no-contact-candidate");
+    expect(diag.correctionRequested).toBe(false);
+  });
   it("observes in shadow without writes, then either applies or safely rejects confirmed contact",()=>{
     const runtime=new ContactRuntime();runtime.setProfile(profile);
     const shadowRotations={};

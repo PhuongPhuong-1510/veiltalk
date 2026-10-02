@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "createdAt": "2026-10-02T11:52:06.777Z",
+  "experimentVersion": "face-contact-v1-2026-10-02",
+  "gitBase": "be9c634c768bdf4ebfbc81b984c3b7eda9a56a10",
+  "sourceSha256": "20993e7d098e3df3b25069e346d60efc50165332dac3ab31fb62378de6b46636",
+  "hashScope": "all src ts/tsx/css/json files, same algorithm as VITE_MOTION_SOURCE_HASH; hashes identify a dirty working tree, not a commit",
+  "packageLockSha256": "41e3a9ab9820f7fcd4a4304e84452d8b2b2bed2d8f9f166a32608474bf09582a",
+  "node": "v24.18.0",
+  "packages": {
+    "@mediapipe/tasks-vision": "0.10.35",
+    "@pixiv/three-vrm": "3.5.5",
+    "three": "0.185.1",
+    "typescript": "6.0.3",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  },
+  "machine": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 5800H with Radeon Graphics         ",
+    "logicalProcessors": 16
+  },
+  "topology": {
+    "source": "https://raw.githubusercontent.com/google-ai-edge/mediapipe/a908d668c730da128dfa8d9f6bd25d519d006692/mediapipe/modules/face_geometry/data/canonical_face_model.obj",
+    "revision": "a908d668c730da128dfa8d9f6bd25d519d006692",
+    "sha256": "8bac80443397e113f41a8b565ea72c59390bc031d9defab289dba7bc0c54e618",
+    "vertices": 468,
+    "triangles": 898
+  },
+  "assets": [
+    {
+      "path": "public/mediapipe/models/face_landmarker.task",
+      "bytes": 3758596,
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
+    },
+    {
+      "path": "public/mediapipe/models/hand_landmarker.task",
+      "bytes": 7819105,
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1"
+    },
+    {
+      "path": "public/mediapipe/models/pose_landmarker_full.task",
+      "bytes": 9398198,
+      "sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1"
+    },
+    {
+      "path": "public/mediapipe/models/pose_landmarker_lite.task",
+      "bytes": 5777746,
+      "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
+    },
+    {
+      "path": "public/mediapipe/wasm/vision_wasm_internal.wasm",
+      "bytes": 11153617,
+      "sha256": "6a5c64584c2ab61c763b6e204afbdbc7ce1caf7f5216187322bca8df94f646bc"
+    },
+    {
+      "path": "public/mediapipe/wasm/vision_wasm_nosimd_internal.wasm",
+      "bytes": 10481398,
+      "sha256": "8a3092d34c79d3f57e6ba8592105e8a90f6b07c27891ffecd14cca428bfd3e31"
+    }
+  ],
+  "webcamAcceptance": "not performed",
+  "browserSmoke": "unavailable in this session",
+  "researchClaims": "No measured webcam accuracy, learned calibration or acceptance threshold passed without labelled recordings."
+}

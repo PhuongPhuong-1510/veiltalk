@@ -9,7 +9,7 @@ const average=(points:ContactPoint2[]):ContactPoint2=>({x:points.reduce((s,p)=>s
 const lerp=(a:ContactPoint2,b:ContactPoint2,t:number):ContactPoint2=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
 
 /** Rigid probes only. Fingertips are intentionally excluded until finger/contact ownership is coupled. */
-export function observeRigidHandContactProbes(landmarks:RawNormalizedLandmarkV1[]|null|undefined,videoWidth:number,videoHeight:number):HandContactProbeObservation[]{
+export function observeRigidHandContactProbes(landmarks:RawNormalizedLandmarkV1[]|null|undefined,videoWidth:number,videoHeight:number,worldGeometryQuality?:number):HandContactProbeObservation[]{
   if(!landmarks||!(videoWidth>0&&videoHeight>0))return[];
   // wrist + four MCPs. Using the whole MCP row makes palmCenter less sensitive to one finger being
   // foreshortened and avoids the old centroid drifting too far toward index/middle.
@@ -19,20 +19,28 @@ export function observeRigidHandContactProbes(landmarks:RawNormalizedLandmarkV1[
   const wrist=p(0),index=p(5),middle=p(9),ring=p(13),little=p(17);
   const mcpCenter=average([index,middle,ring,little]);
   const acrossRaw={x:index.x-little.x,y:index.y-little.y},forwardRaw={x:mcpCenter.x-wrist.x,y:mcpCenter.y-wrist.y};
-  const across=normalize(acrossRaw),forward0=normalize(forwardRaw);if(!across||!forward0)return[];
-  const dot=forward0.x*across.x+forward0.y*across.y;
-  const forward=normalize({x:forward0.x-dot*across.x,y:forward0.y-dot*across.y});if(!forward)return[];
+  const across=normalize(acrossRaw),forward0=normalize(forwardRaw);
+  const worldSupported=worldGeometryQuality!==undefined&&Number.isFinite(worldGeometryQuality)&&worldGeometryQuality>=.65;
+  // A palm against a cheek can project almost to a line. Centroid/edge positions remain
+  // observable when its independent 3D MCP geometry is valid; 2D Gram-Schmidt must not erase it.
+  if((!across||!forward0)&&!worldSupported)return[];
+  const dot=across&&forward0?forward0.x*across.x+forward0.y*across.y:0;
+  const projectedForward=across&&forward0?normalize({x:forward0.x-dot*across.x,y:forward0.y-dot*across.y}):null;
+  if(!projectedForward&&!worldSupported)return[];
+  const forward=projectedForward??forward0;
   // Anatomical palm center is roughly halfway from wrist to the MCP row, not the arithmetic mean
   // of wrist+MCPs (which sits too close to the fingers and was pushing cheek contacts toward ear/top boundaries).
   const palmCenter=lerp(wrist,mcpCenter,.52);
   const palmWidth=Math.hypot(acrossRaw.x,acrossRaw.y),palmLength=Math.hypot(forwardRaw.x,forwardRaw.y);
-  const orthogonality=Math.abs(forward0.x*across.y-forward0.y*across.x);
+  if(worldSupported&&Math.max(palmWidth,palmLength)<.002)return[];
+  const orthogonality=forward0&&across?Math.abs(forward0.x*across.y-forward0.y*across.x):0;
   const scaleQuality=Math.min(palmWidth/.035,palmLength/.035);
-  const quality=clamp01(Math.min(scaleQuality,orthogonality/.35));
+  const imageQuality=clamp01(Math.min(scaleQuality,orthogonality/.35));
+  const quality=worldSupported?Math.max(imageQuality,Math.min(.9,worldGeometryQuality!*.8+Math.min(1,Math.max(palmWidth,palmLength)/.035)*.1)):imageQuality;
   return [
     // Palm surface-normal cannot be recovered from a 2D projection. Keep it null instead of inventing one.
     {probe:"palmCenter",point:palmCenter,contactNormal:null,tangentHint:forward,confidence:quality},
     {probe:"radialEdge",point:midpoint(wrist,index),contactNormal:across,tangentHint:forward,confidence:quality*.92},
-    {probe:"ulnarEdge",point:midpoint(wrist,little),contactNormal:{x:-across.x,y:-across.y},tangentHint:forward,confidence:quality*.92},
+    {probe:"ulnarEdge",point:midpoint(wrist,little),contactNormal:across?{x:-across.x,y:-across.y}:null,tangentHint:forward,confidence:quality*.92},
   ];
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MOTION_SCENES, parseMotionRecording, type MotionRecorder, type MotionRecordingV1, type MotionScene } from "../../lib/avatar-motion/motionReplay";
 import { compareMotionRecording, type MotionBenchmarkResult } from "../../lib/avatar-motion/motionBenchmark";
 import { createSyntheticMotionRecording } from "../../lib/avatar-motion/syntheticMotionRecording";
+import { compareFaceContactRecording, createFaceContactAnnotationTemplate, parseFaceContactAnnotations } from "../../lib/avatar-motion/faceContactEvaluation";
 
 function download(value: unknown, name: string): void {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value)], { type: "application/json" }));
@@ -18,6 +19,8 @@ export function MotionReplayPanel({ recorder, metadata, onReplay, onStop }: {
   const [status, setStatus] = useState("Thu một cảnh để phát lại cùng dữ liệu với các công tắc khác nhau.");
   const [results, setResults] = useState<MotionBenchmarkResult[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [annotationJson,setAnnotationJson]=useState("");
+  const [faceResults,setFaceResults]=useState<Awaited<ReturnType<typeof compareFaceContactRecording>>|null>(null);
   useEffect(() => { const id = window.setInterval(() => { setCount(recorder.count()); setActive(recorder.active); if(recorder.stoppedByLimit)setStatus("Đã dừng thu ở giới hạn dung lượng. Xuất file rồi thu cảnh tiếp theo."); }, 200); return () => window.clearInterval(id); }, [recorder]);
   const recording = () => loaded ?? recorder.snapshot();
   return <section className="motion-replay-panel">
@@ -44,6 +47,15 @@ export function MotionReplayPanel({ recorder, metadata, onReplay, onStop }: {
       catch (error) { setStatus(error instanceof Error ? error.message : "Benchmark lỗi."); } finally { setBusy(false); } }, 0);
     }}>So A/B tracking tay</button>
     {results && <><button onClick={() => download({ version: 1, scene: recording()?.scene, metadata: recording()?.metadata, results }, `veiltalk-motion-ab-${Date.now()}.json`)}>Xuất kết quả A/B</button><pre>{JSON.stringify(results, null, 2)}</pre></>}
+    <details><summary>Nghiên cứu tiếp xúc tay–mặt: nhãn và ablation</summary>
+      <p>Nhãn dùng thời gian atMs trong replay, trái/phải theo người. Chỉ đặt verified khi đã xác nhận thao tác; vùng không chắc chắn giữ contact=null, certainty=uncertain. Gộp mỗi thao tác liên tục thành một khoảng. Mã người và phiên dùng để chia dữ liệu, tránh kiểm thử lại trên người đã tinh chỉnh.</p>
+      <button disabled={busy||active} onClick={async()=>{const value=recording();if(!value?.frames.length){setStatus("Chưa có replay.");return;}try{setAnnotationJson(JSON.stringify(await createFaceContactAnnotationTemplate(value),null,2));setFaceResults(null);}catch(e){setStatus(String(e));}}}>Tạo mẫu nhãn cho replay</button>
+      <label>Nạp nhãn JSON <input type="file" accept=".json" disabled={busy} onChange={async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>1_000_000)throw new Error("Nhãn vượt 1 MB.");const text=await file.text();parseFaceContactAnnotations(text);setAnnotationJson(text);setFaceResults(null);}catch(reason){setStatus(String(reason));}}}/></label>
+      <label>Nhãn và khoảng thời gian <textarea rows={14} value={annotationJson} disabled={busy} onChange={e=>{setAnnotationJson(e.target.value);setFaceResults(null);}}/></label>
+      <button disabled={busy||!annotationJson} onClick={()=>{try{download(parseFaceContactAnnotations(annotationJson),"veiltalk-face-contact-labels.json");}catch(e){setStatus(String(e));}}}>Xuất nhãn</button>
+      <button disabled={busy||active} onClick={async()=>{const value=recording();if(!value?.frames.length){setStatus("Chưa có replay.");return;}setBusy(true);onStop();recorder.stop();setStatus("Đang chạy các biến thể contact…");try{const labels=annotationJson.trim()?parseFaceContactAnnotations(annotationJson):null;setFaceResults(await compareFaceContactRecording(value,labels));setStatus("Đã so contact. Chưa có nhãn verified thì chỉ có diagnostics và timing, không có điểm độ chính xác.");}catch(e){setStatus(e instanceof Error?e.message:String(e));}finally{setBusy(false);}}}>So các thuật toán chạm mặt</button>
+      {faceResults&&<><button onClick={()=>download(faceResults,`veiltalk-face-contact-ab-${Date.now()}.json`)}>Xuất kết quả nghiên cứu</button><pre>{JSON.stringify(faceResults,null,2)}</pre></>}
+    </details>
     <p role="status">{status}</p>
   </section>;
 }

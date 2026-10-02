@@ -158,7 +158,7 @@ export interface AvatarPosePacketV1 {
   fingertipContact?: import("./fingertipContactEvidence").FingertipContactIntent;
   observedBodyDepth?: import("./observedBodyDepth").ObservedBodyDepth;
   /** Model-specific local anchors for final renderer validation, not remote retargeting. */
-  localBodyContactGoals?: {modelFingerprint:string;goals:Partial<Record<"left"|"right",{anchor:import("./contactAnchorMapping").AvatarContactLocalAnchor;probe:"palmCenter"|"radialEdge"|"ulnarEdge"}>>};
+  localBodyContactGoals?: {modelFingerprint:string;research?:import("./faceContactResearch").FaceContactResearchOptions;sampledAtMs?:number;goals:Partial<Record<"left"|"right",{anchor:import("./contactAnchorMapping").AvatarContactLocalAnchor;probe:import("./bodyContactTypes").HandContactProbe;probeReference?:import("./avatarContactRig").AvatarProbeProfile;influence?:number;sampledAtMs?:number}>>};
 }
 
 /**

@@ -4,6 +4,7 @@ import { AvatarMotionProcessor } from "../../lib/avatar-motion/avatarMotionProce
 import { AvatarRenderer } from "../../lib/avatar-renderer/avatarRenderer";
 import type { RawTrackingFrameV1 } from "../../lib/tracking/rawTrackingTypes";
 import { useTracking } from "../../lib/tracking/useTracking";
+import { FACE_CONTACT_BASELINE, FACE_CONTACT_COMBINED } from "../../lib/avatar-motion/faceContactResearch";
 import "./avatarMotionPreview.css";
 
 /** Local preview uses the same processor/renderer in production builds, independently of DEV. */
@@ -16,13 +17,14 @@ export default function AvatarMotionPreview() {
   const [modelLabel,setModelLabel]=useState("Avatar thử nghiệm"),[ready,setReady]=useState(false);
   const [running,setRunning]=useState(false),[starting,setStarting]=useState(false);
   const [error,setError]=useState<string|null>(null),[status,setStatus]=useState("Đang tải avatar…");
-  const [features,setFeatures]=useState({depth:false,barrier:false,dof:false,shape:false,reach:false,contact:false,palms:false,fingertips:false});
+  const [features,setFeatures]=useState({depth:false,barrier:false,dof:false,shape:false,reach:false,contact:false,palms:false,fingertips:false,faceContact:false,indexFace:false});
   useEffect(()=>{
     const p=processorRef.current!;
     p.setDepthFusionEnabled(features.depth);p.setBodyDepthBarrierEnabled(features.barrier);p.setDofConstraintsEnabled(features.dof);
     p.setHandConditioningEnabled(features.shape);p.setRigEndpointEnabled(features.reach);
     p.setContactCorrectionEnabled(features.contact);p.setBimanualPalmAssistEnabled(features.palms);
     p.setFingertipContactEnabled(features.fingertips);
+    p.setFaceContactResearchOptions(features.faceContact?{...FACE_CONTACT_COMBINED,indexTip:features.indexFace}:FACE_CONTACT_BASELINE);
   },[features]);
   const onFrame=useCallback((frame:RawTrackingFrameV1)=>{const packet=processorRef.current?.process(frame);if(packet)rendererRef.current?.applyPose(packet);},[]);
   const onError=useCallback((reason:unknown)=>{setError(reason instanceof Error?reason.message:"Không thể theo dõi chuyển động.");setRunning(false);},[]);
@@ -68,6 +70,8 @@ export default function AvatarMotionPreview() {
         ["shape","Lọc hình dạng bàn tay"],
         ["reach","Điều chỉnh tầm với theo avatar"],
         ["contact","Hỗ trợ chạm đầu và cơ thể"],
+        ["faceContact","Ánh xạ chạm mặt theo bề mặt avatar (bật cùng hỗ trợ chạm)"],
+        ["indexFace","Thử chạm mặt bằng đầu ngón trỏ"],
         ["palms","Hỗ trợ chắp hai bàn tay"],
         ["fingertips","Hỗ trợ tiếp xúc đầu ngón hai tay"],
       ] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={features[key]} onChange={event=>setFeatures(value=>({...value,[key]:event.target.checked}))}/>{label}</label>)}

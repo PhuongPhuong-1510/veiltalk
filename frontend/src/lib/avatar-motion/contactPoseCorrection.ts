@@ -101,7 +101,7 @@ function currentElbowPole(
  */
 export function solveContactPoseCorrection(
   profile:NormalizedAvatarRigProfile,contactRig:AvatarContactRig,side:ArmSide,anchor:AvatarContactAnchor,
-  probeName:"palmCenter"|"radialEdge"|"ulnarEdge",baseline:Partial<Record<AvatarPoseJointNameV2,QuaternionData>>={},
+  probeName:import("./bodyContactTypes").HandContactProbe,baseline:Partial<Record<AvatarPoseJointNameV2,QuaternionData>>={},
   headRotation:QuaternionData|null=null,
   /** Reach error at which the projected solution fades to zero influence. */
   maximumReachErrorRatio=.24,
@@ -109,7 +109,8 @@ export function solveContactPoseCorrection(
   const hand=profile.hands?.[side],collision=profile.collisionReference,arm=collision?.arms[side];
   if(!hand?.contactFrame?.probes||!arm||!collision||!profile.contactSkeleton)return rejected("missing-contact-rig");
 
-  const wristTarget=solveContactWristTarget(anchor,contactRig.probes[side][probeName]);
+  const probeReference=contactRig.probes[side][probeName];if(!probeReference)return rejected("missing-contact-rig");
+  const wristTarget=solveContactWristTarget(anchor,probeReference);
   if(!wristTarget)return rejected("invalid-target");
 
   const shoulderParent=`${side}Shoulder` as ContactBodyJointName;
@@ -211,7 +212,7 @@ export function solveContactPoseCorrection(
     .multiply(new Quaternion(hand.restLocalRotation.x,hand.restLocalRotation.y,hand.restLocalRotation.z,hand.restLocalRotation.w))
     .multiply(new Quaternion(normalized.x,normalized.y,normalized.z,normalized.w))
     .normalize();
-  const probe=contactRig.probes[side][probeName];
+  const probe=probeReference;
   const actualProbePoint=actualWrist.clone().add(new Vector3(probe.frameOffset.x,probe.frameOffset.y,probe.frameOffset.z).applyQuaternion(actualHandWorld));
   const actualProbeNormal=new Vector3(probe.contactNormal.x,probe.contactNormal.y,probe.contactNormal.z).normalize().applyQuaternion(actualHandWorld);
   const targetNormal=new Vector3(-anchor.normal.x,-anchor.normal.y,-anchor.normal.z).normalize();

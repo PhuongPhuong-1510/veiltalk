@@ -1,5 +1,5 @@
 import { Quaternion,Vector3 } from "three";
-import type { BodyContactRegion, BodyContactSurfaceFamily, HandContactProbe } from "./bodyContactTypes";
+import type { BodyContactRegion, BodyContactSurfaceFamily, HandContactProbe,ContactProbeMap } from "./bodyContactTypes";
 import type { Vector3Data } from "./avatarPoseTypes";
 import type { ContactBodyJointName, NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 
@@ -17,7 +17,7 @@ export interface AvatarContactSurface {
 }
 export interface AvatarProbeProfile {probe:HandContactProbe;frameOffset:Vector3Data;contactNormal:Vector3Data;tangentHint:Vector3Data}
 export interface AvatarContactPhysicalSurface {family:BodyContactSurfaceFamily;centerLocal:Vector3Data;radii:Vector3Data;uAxisLocal:Vector3Data;vAxisLocal:Vector3Data;outwardLocal:Vector3Data;parentJoint:ContactBodyJointName;confidence:number;uvScale:Vector3Data}
-export interface AvatarContactRig {modelGeneration:number;modelFingerprint:string;surfaces:Record<BodyContactRegion,AvatarContactSurface>;probes:Record<"left"|"right",Record<HandContactProbe,AvatarProbeProfile>>;physicalSurfaces?:Partial<Record<BodyContactSurfaceFamily,AvatarContactPhysicalSurface>>}
+export interface AvatarContactRig {modelGeneration:number;modelFingerprint:string;surfaces:Record<BodyContactRegion,AvatarContactSurface>;probes:Record<"left"|"right",ContactProbeMap<AvatarProbeProfile>>;physicalSurfaces?:Partial<Record<BodyContactSurfaceFamily,AvatarContactPhysicalSurface>>;faceSurface?:import("./avatarFaceSurface").AvatarFaceSurfaceProfile}
 const data=(v:Vector3):Vector3Data=>({x:v.x,y:v.y,z:v.z});
 const vector=(v:Vector3Data)=>new Vector3(v.x,v.y,v.z);
 
@@ -37,7 +37,7 @@ function projectedAxis(preferred:Vector3,outward:Vector3,fallback:Vector3):Vecto
   return axis.normalize();
 }
 
-export function buildAvatarContactRig(profile:NormalizedAvatarRigProfile):AvatarContactRig|null{
+export function buildAvatarContactRig(profile:NormalizedAvatarRigProfile,useMeshSurface=false):AvatarContactRig|null{
   const collision=profile.collisionReference,skeleton=profile.contactSkeleton,hands=profile.hands;
   if(!collision||!skeleton||!hands)return null;
   const torsoParent:ContactBodyJointName=skeleton.joints.upperChest?"upperChest":skeleton.joints.chest?"chest":skeleton.joints.spine?"spine":"hips";
@@ -103,6 +103,7 @@ export function buildAvatarContactRig(profile:NormalizedAvatarRigProfile):Avatar
       radialEdge:{probe:"radialEdge",frameOffset:frame.probes!.radialEdge.offsetLocal,contactNormal:frame.probes!.radialEdge.normalLocal,tangentHint:frame.probes!.radialEdge.tangentLocal},
       ulnarEdge:{probe:"ulnarEdge",frameOffset:frame.probes!.ulnarEdge.offsetLocal,contactNormal:frame.probes!.ulnarEdge.normalLocal,tangentHint:frame.probes!.ulnarEdge.tangentLocal},
     };
+    if(useMeshSurface)for(const name of ["palmCenter","radialEdge","ulnarEdge"] as const){const skin=profile.handSkinProbes?.[side]?.[name];if(skin)probes[side][name]={probe:name,frameOffset:skin.offsetLocal,contactNormal:skin.normalLocal,tangentHint:skin.tangentLocal};}
   }
-  return{modelGeneration:profile.modelGeneration,modelFingerprint:profile.modelFingerprint,surfaces,probes,physicalSurfaces};
+  return{modelGeneration:profile.modelGeneration,modelFingerprint:profile.modelFingerprint,surfaces,probes,physicalSurfaces,...(useMeshSurface&&profile.faceSurface?{faceSurface:profile.faceSurface}:{})};
 }

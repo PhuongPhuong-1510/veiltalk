@@ -23,6 +23,8 @@ import { isCurrentModelLoadRequest } from "../../lib/avatar-renderer/modelLoader
 import type { RawTrackingFrameV1 } from "../../lib/tracking/rawTrackingTypes";
 import type { TrackingMetricsSnapshot } from "../../lib/tracking/trackingMetrics";
 import { MotionReplayPanel } from "./MotionReplayPanel";
+import { FaceContactResearchControls } from "./FaceContactResearchControls";
+import { FACE_CONTACT_BASELINE, type FaceContactResearchOptions } from "../../lib/avatar-motion/faceContactResearch";
 import { MotionRecorder, rebaseTrackingFrame, type MotionRecordingV1 } from "../../lib/avatar-motion/motionReplay";
 import { useTracking } from "../../lib/tracking/useTracking";
 import { DEFAULT_POSE_MODEL, type PoseModelVariant } from "../../lib/tracking/mediaPipeRuntime";
@@ -67,6 +69,9 @@ export default function AvatarRendererDevHarness() {
   const [processorArmTemporal,setProcessorArmTemporal] = useState(false);
   const [contactShadowEnabled,setContactShadowEnabled]=useState(true);
   const [contactCorrectionEnabled,setContactCorrectionEnabled]=useState(false);
+  const [faceContactResearch,setFaceContactResearch]=useState<FaceContactResearchOptions>({...FACE_CONTACT_BASELINE});
+  const faceMaterialOverrides=useRef<Record<string,string[]>>({});
+  const [faceMaterialNames,setFaceMaterialNames]=useState("");
   const [contactDiagnostics,setContactDiagnostics]=useState(()=>processorRef.current.getContactDiagnostics());
   const [continuousFingerDiagnostics,setContinuousFingerDiagnostics]=useState(()=>processorRef.current.getContinuousFingerDiagnostics());
   const fingerTraceActiveRef=useRef(false);
@@ -124,10 +129,12 @@ export default function AvatarRendererDevHarness() {
   const [fixtureStatus, setFixtureStatus] = useState<string>("Chưa thu mẫu nào.");
 
   const trackingMetricsRef = useRef(trackingMetrics); trackingMetricsRef.current = trackingMetrics;
+  const latestContactInput=useRef<RawTrackingFrameV1|null>(null);
   const simulatedLossRef = useRef(simulatedLoss); simulatedLossRef.current = simulatedLoss;
   const processInput = useCallback((frame: RawTrackingFrameV1) => {
     const input = simulatedLossRef.current ? { ...frame, face: { ...frame.face, state: "lost" as const }, leftHand: { ...frame.leftHand, state: "lost" as const }, rightHand: { ...frame.rightHand, state: "lost" as const }, pose: { ...frame.pose, state: "lost" as const } } : frame;
     const next = processorRef.current.process(input); latestPacket.current = next; rendererRef.current?.applyPose(next);
+    latestContactInput.current=input;
     if (!replayActiveRef.current && motionRecorderRef.current.active) motionRecorderRef.current.record(input,next,performance.now(),{arm:processorRef.current.getLastDiagnostics(),contact:processorRef.current.getContactDiagnostics(),fingers:processorRef.current.getContinuousFingerDiagnostics(),bimanual:processorRef.current.getBimanualHandDiagnostics(),tracking:trackingMetricsRef.current},rendererRef.current?.getFinalArmSnapshot()??null);
     if(fingerTraceActiveRef.current&&fingerTraceRef.current.length<300){
       const entry={capturedAtMs:performance.now(),frameTimestampMs:frame.frameTimestampMs,video:{width:frame.videoWidth,height:frame.videoHeight},handSamples:{left:frame.leftHand,right:frame.rightHand},rawHands:frame.rawHands,poseWrists:{left:frame.pose.landmarks?.[15]??null,right:frame.pose.landmarks?.[16]??null},handMotion:next.handMotion??null,continuousFinger:processorRef.current.getContinuousFingerDiagnostics(),jointRotations:next.jointRotations};
@@ -144,6 +151,16 @@ export default function AvatarRendererDevHarness() {
     const anchor=document.createElement("a");anchor.href=url;anchor.download=`ar6-finger-trace-${Date.now()}.json`;anchor.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   },[avatarModelId,fingerRig]);
   const onFrame = useCallback((frame: RawTrackingFrameV1) => { if (frozenRaw.current || replayActiveRef.current) return; latestRaw.current = frame; processInput(frame); }, [processInput]);
+  function downloadContactEvidence(){
+    if(!latestContactInput.current||!latestPacket.current)return;
+    const renderer=rendererRef.current;
+    const payload={version:1,kind:"face-contact-evidence-snapshot",createdAt:new Date().toISOString(),capturedAtMs:performance.now(),
+      metadata:{avatarModelId,poseModel,simulatedLoss,fingertipContactEnabled,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactShadowEnabled,contactCorrectionEnabled,faceContactResearch},
+      raw:latestContactInput.current,packet:latestPacket.current,contact:processorRef.current.getContactDiagnostics(),
+      finalPose:renderer?.getFinalArmSnapshot()??null,rigProfile:renderer?.getRigProfile()??null,faceMeshCapability:renderer?.getFaceContactMeshCapability()??null};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:"application/json"}));
+    const anchor=document.createElement("a");anchor.href=url;anchor.download=`face-contact-evidence-${new Date().toISOString().replace(/[:.]/g,"-")}.json`;anchor.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
   const onMetrics = useCallback((value: TrackingMetricsSnapshot) => { setTrackingMetrics(value); }, []);
   const onError = useCallback((reason: unknown) => setError(reason instanceof Error ? reason.message : "Tracking error"), []);
   // Đổi model pose phải dựng lại pipeline (useTracking dispose theo options), nên tracking sẽ
@@ -179,6 +196,7 @@ export default function AvatarRendererDevHarness() {
   useEffect(()=>{processorRef.current.setContinuousFingerEnabled(continuousFingerEnabled);},[continuousFingerEnabled]);
   useEffect(()=>{processorRef.current.setContactShadowEnabled(contactShadowEnabled);},[contactShadowEnabled]);
   useEffect(()=>{processorRef.current.setContactCorrectionEnabled(contactCorrectionEnabled);},[contactCorrectionEnabled]);
+  useEffect(()=>{processorRef.current.setFaceContactResearchOptions(faceContactResearch);},[faceContactResearch]);
   useEffect(()=>{if(!continuousFingerEnabled)return;const timer=window.setInterval(()=>setContinuousFingerDiagnostics(processorRef.current.getContinuousFingerDiagnostics()),100);return()=>window.clearInterval(timer);},[continuousFingerEnabled]);
   useEffect(() => { processorRef.current.setGazeMode(gazeMode); }, [gazeMode]);
   useEffect(() => { processorRef.current.setGazeAttentionStrength(gazeAttention); }, [gazeAttention]);
@@ -240,7 +258,7 @@ export default function AvatarRendererDevHarness() {
     resetModelMotionState();
     if (helpersRef.current) { clearDiagnosticHelpers(helpersRef.current); helpersRef.current = null; }
     try {
-      const report = await renderer.loadModel(model.url, { licenseStatus: "unknown" });
+      const report = await renderer.loadModel(model.url, { licenseStatus: "unknown",faceContactMaterials:faceMaterialOverrides.current[model.id] });
       if (!report || !isCurrentModelLoadRequest(rendererRef.current, renderer, modelLoadRequestRef.current, requestId)) return;
       const rigProfile = renderer.getRigProfile();
       processorRef.current.setUpperBodyRigProfile(renderer.getUpperBodyRigProfile());
@@ -540,6 +558,15 @@ export default function AvatarRendererDevHarness() {
       }} />
       <article><h2>AR9 hand-body contact</h2>
         <p>Trạng thái: <strong>{contactCorrectionEnabled?"CORRECTION ON":contactShadowEnabled?"SHADOW — diagnostic only":"OFF"}</strong></p>
+        <FaceContactResearchControls value={faceContactResearch} onChange={setFaceContactResearch} capability={rendererRef.current?.getFaceContactMeshCapability()}/>
+        <details><summary>Chọn thủ công vật liệu da mặt khi avatar chưa được nhận diện</summary>
+          <label>Tên vật liệu chính xác, ngăn bằng dấu phẩy <input value={faceMaterialNames} onChange={e=>setFaceMaterialNames(e.target.value)}/></label>
+          <button disabled={modelLoading} onClick={()=>{const names=faceMaterialNames.split(",").map(s=>s.trim()).filter(Boolean);if(names.length)faceMaterialOverrides.current[avatarModelId]=names;else delete faceMaterialOverrides.current[avatarModelId];reloadModel();}}>Áp dụng cho avatar này và tải lại</button>
+          <p>Để trống để trở về nhận diện tự động. Chỉ chọn vật liệu đã kiểm tra là da mặt; tên tóc, mắt và phụ kiện không phù hợp.</p>
+        </details>
+        <button onClick={downloadContactEvidence} disabled={!packet}>Tải input + diagnostics contact JSON</button>
+        <p>Snapshot gồm landmarks đầu vào, cấu hình và kết quả contact; tải về máy. Dùng Record/replay để kiểm tra diễn biến theo thời gian.</p>
+        <p>Quan sát trái: {contactDiagnostics.left.research?.observationTrace?.status??"chưa có mẫu"} · phải: {contactDiagnostics.right.research?.observationTrace?.status??"chưa có mẫu"}</p>
         <details open={contactShadowEnabled}><summary>Contact diagnostics</summary><pre>{JSON.stringify(contactDiagnostics,null,2)}</pre></details>
       </article>
       <article><h2>Finger rig (3B.3)</h2>
@@ -669,6 +696,6 @@ export default function AvatarRendererDevHarness() {
       </article>
       <article><h2>Phase 3A arm-frame</h2><p>Head: legacy/unverified, excluded from arm acceptance.</p><pre>{JSON.stringify(motionDiagnostics, null, 2)}</pre></article>
     </section>
-  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,fingertipContactEnabled,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
+  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,fingertipContactEnabled,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,faceContactResearch,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
     </main>;
 }

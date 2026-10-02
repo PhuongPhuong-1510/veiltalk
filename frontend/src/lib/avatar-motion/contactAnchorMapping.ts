@@ -3,8 +3,12 @@ import type { BodyContactRegion,BodyContactSurfaceFamily,ContactPoint2 } from ".
 import type { Vector3Data } from "./avatarPoseTypes";
 import type { ContactBodyJointName } from "./normalizedRigProfile";
 import type { AvatarContactPhysicalSurface,AvatarContactRig,AvatarContactSurface } from "./avatarContactRig";
+import { mapAvatarFaceSurface } from "./avatarFaceSurface";
 
 export interface AvatarContactLocalAnchor {
+  skinBinding?:import("./avatarFaceSurface").AvatarSkinBinding;
+  surfaceSource?:import("./avatarFaceSurface").AvatarFaceSurfaceProfile["source"];
+  faceHeight?:number;
   region:AvatarContactSurface["region"];
   pointLocal:Vector3Data;
   normalLocal:Vector3Data;
@@ -59,6 +63,7 @@ export function mapPhysicalContactAnchor(surface:AvatarContactPhysicalSurface,re
 }
 
 export function mapContactAnchorForObservation(rig:AvatarContactRig,region:BodyContactRegion,family:BodyContactSurfaceFamily,familyUv:ContactPoint2,regionUv:ContactPoint2,tangentAngleRadians=0):AvatarContactLocalAnchor|null{
+  if(family==="head"&&region!=="backHead"&&region!=="headTop"&&rig.faceSurface){const mapped=mapAvatarFaceSurface(rig.faceSurface,familyUv,region,tangentAngleRadians);if(mapped)return mapped;}
   if(family==="head"&&region!=="backHead"&&rig.physicalSurfaces?.head)return mapPhysicalContactAnchor(rig.physicalSurfaces.head,region,familyUv,tangentAngleRadians);
   const surface=rig.surfaces[region];return surface?mapContactAnchor(surface,regionUv,tangentAngleRadians):null;
 }

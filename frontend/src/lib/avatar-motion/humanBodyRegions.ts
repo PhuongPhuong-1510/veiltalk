@@ -5,6 +5,7 @@ import {
   buildHumanSemanticBodyModel, classifyHeadAnatomy, pointSegmentNormalizedDistance,
   type HumanSemanticBodyModel,
 } from "./humanSemanticBodyModel";
+import { faceSurfaceCandidate } from "./humanFaceContactSurface";
 
 const clamp01=(value:number)=>Math.max(0,Math.min(1,value));
 const ellipseSignedDistance=(point:ContactPoint2,center:ContactPoint2,radius:ContactPoint2)=>Math.hypot((point.x-center.x)/Math.max(1e-6,radius.x),(point.y-center.y)/Math.max(1e-6,radius.y))-1;
@@ -14,6 +15,7 @@ const normalize3=(value:ContactPoint3):ContactPoint3|null=>{const length=Math.hy
 const anteriorNormal=(uv:ContactPoint2,lateralGain=.55,verticalGain=.30):ContactPoint3=>normalize3({x:uv.x*lateralGain,y:uv.y*verticalGain,z:-1})??{x:0,y:0,z:-1};
 
 function headCandidate(input:HumanBodyRegionInput,model:HumanSemanticBodyModel,point:ContactPoint2):HumanBodyRegionCandidate|null{
+  if(input.faceSurface&&(input.posteriorHeadContactHint??0)<.5){const face=faceSurfaceCandidate(input.faceSurface,point);if(face)return face;}
   const head=model.head;if(!head)return null;
   const semantic=classifyHeadAnatomy(head,point,input.posteriorHeadContactHint??input.posteriorContactHint??0,input.headYawRadians??0);
   const familyDistance=ellipseSignedDistance(point,head.center,head.radius);
@@ -64,9 +66,13 @@ function shoulderCandidates(model:HumanSemanticBodyModel,point:ContactPoint2):Hu
   });
 }
 
-function torsoCandidate(model:HumanSemanticBodyModel,point:ContactPoint2):HumanBodyRegionCandidate|null{
+function torsoCandidate(model:HumanSemanticBodyModel,point:ContactPoint2,strictFamilyBounds=false):HumanBodyRegionCandidate|null{
   const torso=model.torso;if(!torso)return null;
   const end=torso.hipCenter??{x:torso.shoulderCenter.x,y:torso.shoulderCenter.y+torso.length};
+  if(strictFamilyBounds){const dx=end.x-torso.shoulderCenter.x,dy=end.y-torso.shoulderCenter.y,length=Math.hypot(dx,dy);
+    const axial=length>1e-8?((point.x-torso.shoulderCenter.x)*dx+(point.y-torso.shoulderCenter.y)*dy)/length:0;
+    if(axial < -torso.halfWidth*.12)return null;
+  }
   const geometry=pointSegmentNormalizedDistance(point,torso.shoulderCenter,end,torso.halfWidth);
   const t=geometry.t;
   const region:BodyContactRegion=t<.36?"upperChest":t<.68?"lowerChest":"abdomen";
@@ -92,7 +98,7 @@ export function evaluateHumanBodyRegions(
   const head=headCandidate(input,preparedModel,point);if(head)result.push(head);
   const neck=neckCandidate(input,preparedModel,point);if(neck)result.push(neck);
   result.push(...shoulderCandidates(preparedModel,point));
-  const torso=torsoCandidate(preparedModel,point);if(torso)result.push(torso);
+  const torso=torsoCandidate(preparedModel,point,input.strictFamilyBounds);if(torso)result.push(torso);
   return result;
 }
 

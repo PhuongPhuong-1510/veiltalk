@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RawHandCandidateV1, RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
 import { AvatarMotionProcessor } from "./avatarMotionProcessor";
 import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
@@ -8,8 +8,32 @@ import { DEFAULT_AVATAR_MOTION_CONFIG } from "./motionConfig";
 import type { UpperBodyJointProfile, UpperBodyRigProfileV1 } from "./upperBodyRigProfile";
 import type {FingerRigProfile} from "./fingerRig";
 import {fingerJointName} from "./avatarPoseTypes";
+import { FACE_CONTACT_BASELINE, FACE_CONTACT_COMBINED } from "./faceContactResearch";
+import { ContactRuntime } from "./contactRuntime";
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
+it("passes current-frame continuous finger rotations into optional index-face contact",()=>{
+  let clock=100;const seen:Array<Record<string,unknown>>=[];
+  const spy=vi.spyOn(ContactRuntime.prototype,"update").mockImplementation((_side,_frame,_hand,_at,_now,_dt,rotations)=>{seen.push(structuredClone(rotations));});
+  const processor=new AvatarMotionProcessor({now:()=>clock,continuousFingerEnabled:true});
+  const rig:FingerRigProfile={version:1,modelGeneration:1,left:{side:"left",chains:[],controllableSegmentCount:3},right:{side:"right",chains:[],controllableSegmentCount:3}};
+  for(const side of ["left","right"] as const)rig[side].chains=[{finger:"index",truncatedAtSegment:null,segments:(["Proximal","Intermediate","Distal"] as const).map(s=>({joint:fingerJointName(side,"index",s),flexAxisLocal:{x:1,y:0,z:0},hasChild:true}))}];
+  try{processor.setRigProfile(rigProfile);processor.setFingerRig(rig);processor.setContactShadowEnabled(true);processor.setFaceContactResearchOptions({...FACE_CONTACT_BASELINE,indexTip:true});
+    let observed=0;
+    for(let i=0;i<8;i++){clock=100+i*40;const raw=sampledFrame(clock),hand=handCandidate(0,LEFT_WRIST_IMAGE,"left",clock);
+      for(const id of [6,7,8]){hand.landmarks[id]={...hand.landmarks[5],y:LEFT_WRIST_IMAGE.y-(id-5)*.04};hand.worldLandmarks[id]={...hand.landmarks[id],z:.005*(id-5)};}raw.rawHands=[hand];
+      const packet=processor.process(raw),contact=seen.at(-2)!;
+      if(packet.jointRotations.leftIndexDistal){observed++;for(const segment of rig.left.chains[0].segments){expect(contact[segment.joint]).toBeDefined();expect(contact[segment.joint]).toEqual(packet.jointRotations[segment.joint]);}}
+    }expect(observed).toBeGreaterThan(0);
+  }finally{processor.dispose();spy.mockRestore();}
+});
+it("preserves baseline rotations with research disabled and refuses new depth contact without world geometry",()=>{
+  let clock=100;const a=new AvatarMotionProcessor({now:()=>clock}),b=new AvatarMotionProcessor({now:()=>clock}),experimental=new AvatarMotionProcessor({now:()=>clock});
+  for(const p of [a,b,experimental]){p.setRigProfile(rigProfile);p.setContactShadowEnabled(true);p.setContactCorrectionEnabled(true);}
+  b.setFaceContactResearchOptions(FACE_CONTACT_BASELINE);experimental.setFaceContactResearchOptions(FACE_CONTACT_COMBINED);
+  try{for(let i=0;i<20;i++){clock=100+i*40;const raw=sampledFrame(clock),before=JSON.stringify(raw);expect(b.process(raw).jointRotations).toEqual(a.process(raw).jointRotations);experimental.process(raw);expect(JSON.stringify(raw)).toBe(before);for(const side of ["left","right"] as const)expect(experimental.getContactDiagnostics()[side].correctionApplied).toBe(false);}}
+  finally{a.dispose();b.dispose();experimental.dispose();}
+});
 it("adds fingertip intent only when enabled and observed, without changing processor wrist/arm/finger rotations",()=>{
   let now=100;const rig:FingerRigProfile={version:1,modelGeneration:1,left:{side:"left",chains:[],controllableSegmentCount:3},right:{side:"right",chains:[],controllableSegmentCount:3}};
   for(const side of ["left","right"] as const)rig[side].chains=[{finger:"index",truncatedAtSegment:null,segments:(["Proximal","Intermediate","Distal"] as const).map(s=>({joint:fingerJointName(side,"index",s),flexAxisLocal:{x:1,y:0,z:0},hasChild:true}))}];

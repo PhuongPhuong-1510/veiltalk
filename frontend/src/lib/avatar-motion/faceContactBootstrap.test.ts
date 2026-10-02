@@ -1,0 +1,4 @@
+import { expect,it } from "vitest";
+import { bootstrapFaceContactSubjects } from "./faceContactBootstrap";
+it("does not turn many clips from one person into independent subjects",()=>{const rows=Array.from({length:100},()=>({subjectId:"same-person",tp:10,fp:1,fn:1,abstainedPositive:1}));const result=bootstrapFaceContactSubjects(rows);expect(result.subjects).toBe(1);expect(result.precision95).toBeNull();});
+it("resamples people reproducibly and includes abstained positives in recall",()=>{const rows=Array.from({length:6},(_,i)=>({subjectId:`s${i}`,tp:10,fp:0,fn:0,abstainedPositive:10}));const result=bootstrapFaceContactSubjects(rows,42,200);expect(result).toEqual(bootstrapFaceContactSubjects(rows,42,200));expect(result.precision95!.low).toBe(1);expect(result.recallIncludingAbstentions95!.high).toBe(.5);});

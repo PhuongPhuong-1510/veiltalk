@@ -76,6 +76,8 @@ export interface LoadedAvatarModel {
 }
 
 export interface ModelLoadOptions {
+  /** Exact material names explicitly reviewed as face skin for this loaded model. */
+  faceContactMaterials?: readonly string[];
   profile?: AvatarModelRigProfile;
   fileSizeBytes?: number | null;
   licenseStatus?: ModelCapabilityReport["licenseStatus"];

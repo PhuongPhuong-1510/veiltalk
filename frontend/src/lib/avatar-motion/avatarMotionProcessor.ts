@@ -578,6 +578,8 @@ export class AvatarMotionProcessor {
   setContactCorrectionEnabled(enabled:boolean):void{this.contactCorrectionEnabled=enabled;if(enabled)this.contactShadowEnabled=true;}
   isContactCorrectionEnabled():boolean{return this.contactCorrectionEnabled;}
   getContactDiagnostics(){return this.contactRuntime.snapshot();}
+  setFaceContactResearchOptions(options:Partial<import("./faceContactResearch").FaceContactResearchOptions>):void{this.contactRuntime.setResearchOptions(options);}
+  getFaceContactResearchOptions(){return this.contactRuntime.getResearchOptions();}
   getContinuousFingerDiagnostics(){return {left:{...this.continuousFingerDiagnostics.left},right:{...this.continuousFingerDiagnostics.right}};}
   getBimanualHandDiagnostics(){return this.bimanualRuntime.snapshot();}
   /** Rig ngón đến từ model đang tải; đổi model thì phải nhả pose cũ vì chuỗi xương có thể khác. */
@@ -1172,7 +1174,13 @@ export class AvatarMotionProcessor {
     } else this.diagnostics = null;
     // Phase 3B.3: chạy SAU nhánh arm và chỉ GHI THÊM khoá xương ngón. Không đọc, không sửa, không
     // ghi đè bất kỳ khoá arm nào ở trên — kể cả `leftHand`/`rightHand` (wrist thuộc Phase 3B).
-    if(this.contactShadowEnabled){const renderDt=this.lastContactRenderAtMs===null?0:Math.max(0,Math.min(100,processedTimestampMs-this.lastContactRenderAtMs));this.lastContactRenderAtMs=processedTimestampMs;const contactHeadRotation=upperBody?.deltas.head??headRotation;for(const side of ["left","right"] as const){const match=handContext.matchResult[side];const candidate=match.matched&&match.candidateArrayIndex!==null?handContext.candidatesBySide[side]:null;this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,contactHeadRotation,this.contactCorrectionEnabled,candidate?.worldLandmarks??null,side);}}
+    const indexFaceEnabled=this.contactRuntime.getResearchOptions().indexTip;
+    const updateContact=()=>{if(!this.contactShadowEnabled)return;const renderDt=this.lastContactRenderAtMs===null?0:Math.max(0,Math.min(100,processedTimestampMs-this.lastContactRenderAtMs));this.lastContactRenderAtMs=processedTimestampMs;const contactHeadRotation=upperBody?.deltas.head??headRotation;
+      for(const side of ["left","right"] as const){const match=handContext.matchResult[side],candidate=match.matched&&match.candidateArrayIndex!==null?handContext.candidatesBySide[side]:null,chain=this.fingerRig?.[side].chains.find(c=>c.finger==="index");
+        const indexObserved=!!chain&&chain.segments.length===3&&chain.segments.every(s=>{const d=this.continuousFingerDiagnostics[side][s.joint];return d?.source==="observed"&&d.measurementAccepted&&d.confidence>=.5;});
+        this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,contactHeadRotation,this.contactCorrectionEnabled,candidate?.worldLandmarks??null,side,indexObserved);
+      }};
+    if(!indexFaceEnabled)updateContact();
     if(this.continuousFingerEnabled){
       this.applyContinuousFinger(jointRotations,frame,handContext,processedTimestampMs);
       this.applyBimanualHand(jointRotations,frame,handContext,processedTimestampMs);
@@ -1180,6 +1188,8 @@ export class AvatarMotionProcessor {
       this.bimanualRuntime.reset();this.fingertipEvidence.reset();
       this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
     }
+    // The optional index probe needs the current continuous finger FK. Preserve rigid AR9 order.
+    if(indexFaceEnabled)updateContact();
     const contact = this.contactRuntime.correctionOwners();
     const motionOwnership = { version: 1 as const, bodyDepthBarrier:this.bodyDepthBarrierEnabled,bodyDepthEvidence:this.bodyDepthBarrierEnabled?"observed-pose" as const:undefined, armTemporal: this.processorArmTemporal ? "processor" as const : "legacy-renderer" as const, contactArms: { left: this.contactCorrectionEnabled && contact.left, right: this.contactCorrectionEnabled && contact.right } };
     const bimanual = this.bimanualPalmAssistEnabled ? this.bimanualRuntime.snapshot() : null;

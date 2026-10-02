@@ -6,7 +6,7 @@ import { poseAvatarCollisionProfile,type AvatarCollisionProfile } from "../avata
 import { queryAvatarArmBodyCollisions } from "../avatar-motion/avatarCollisionQuery";
 import { queryAvatarInterArmCollisions } from "../avatar-motion/avatarInterArmCollision";
 
-export type ContactBoneMap=Partial<Record<AvatarPoseJointNameV2,Object3D>>;
+export type ContactBoneMap=Partial<Record<AvatarPoseJointNameV2|"head",Object3D>>;
 export interface SemanticBoneFrame {bone:Object3D;restWorld:Quaternion;semanticRestWorld:Quaternion;restPosition:Vector3}
 export function captureSemanticBoneFrames(normalized:ContactBoneMap,raw:ContactBoneMap):Map<string,SemanticBoneFrame>{
   const frames=new Map<string,SemanticBoneFrame>();

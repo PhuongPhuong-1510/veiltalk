@@ -6,6 +6,17 @@ const lm=(x:number,y:number):RawNormalizedLandmarkV1=>({x,y,z:0,visibility:null}
 const face=[lm(.4,.35),lm(.5,.3),lm(.6,.35),lm(.62,.5),lm(.6,.65),lm(.5,.7),lm(.4,.65),lm(.38,.5)];
 
 describe("human body regions",()=>{
+  it("bounds research torso candidates below the shoulder plane without changing legacy selection",()=>{
+    const pose=Array.from({length:33},()=>lm(.5,.9));pose[11]=lm(.1,.75);pose[12]=lm(.9,.75);pose[23]=lm(.3,1.15);pose[24]=lm(.7,1.15);
+    const input={faceLandmarks:null,poseLandmarks:pose,videoWidth:1000,videoHeight:1000};
+    const above={x:.5,y:.45},chest={x:.5,y:.9};
+    expect(evaluateHumanBodyRegions(input,above).some(c=>c.surfaceFamily==="torso")).toBe(true);
+    expect(evaluateHumanBodyRegions({...input,strictFamilyBounds:true},above).some(c=>c.surfaceFamily==="torso")).toBe(false);
+    expect(evaluateHumanBodyRegions({...input,strictFamilyBounds:true},chest).some(c=>c.surfaceFamily==="torso")).toBe(true);
+    // Rotate the entire shoulder/hip frame 90 degrees; bounds follow the body axis.
+    const rotated=pose.map(p=>lm(p.y,p.x));
+    expect(evaluateHumanBodyRegions({...input,poseLandmarks:rotated,strictFamilyBounds:true},{x:above.y,y:above.x}).some(c=>c.surfaceFamily==="torso")).toBe(false);
+  });
   it("selects head top and cheek patches from robust face bounds",()=>{
     const input={faceLandmarks:face,videoWidth:1_000,videoHeight:1_000,imageMirrored:true};
     expect(selectHumanBodyRegion(evaluateHumanBodyRegions(input,{x:.5,y:.23}))?.region).toBe("headTop");

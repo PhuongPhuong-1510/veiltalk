@@ -1,5 +1,6 @@
 import type { RawHandCandidateV1, RawNormalizedLandmarkV1, RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
 import type { MotionRecordingV1, MotionScene } from "./motionReplay";
+import { CANONICAL_FACE_VERTICES } from "./faceContactTopology";
 
 const point = (x: number,y: number,z=0,visibility=1): RawNormalizedLandmarkV1 => ({x,y,z,visibility});
 const project = (p: RawNormalizedLandmarkV1): RawNormalizedLandmarkV1 => ({...p,x:.5+p.x*.5,y:.4+p.y*.5*1280/720});
@@ -20,6 +21,7 @@ export function createSyntheticMotionRecording(scene: MotionScene, metadata: Rec
   const frames: MotionRecordingV1["frames"]=[];
   for(let index=0;index<count;index++) {
     const at=1000+index*1000/30, phase=index/count*Math.PI*2;
+    const faceWorld=scene.startsWith("face-")?CANONICAL_FACE_VERTICES.map(p=>point(p[0]*.009,-.35-p[1]*.009,-p[2]*.009)):null;
     const pose=Array.from({length:33},()=>point(0,-.35));
     pose[7]=point(.08,-.35);pose[8]=point(-.08,-.35);pose[11]=point(.18,-.15);pose[12]=point(-.18,-.15);
     pose[23]=point(.13,.42);pose[24]=point(-.13,.42);
@@ -31,6 +33,12 @@ export function createSyntheticMotionRecording(scene: MotionScene, metadata: Rec
       if(scene==="crossing"||scene==="palms-together"){const cross=(1-Math.cos(phase))*.5;pose[e].x=sign*(.34-cross*.1);pose[w].x=sign*(.38-cross*(scene==="crossing"?.6:.36));pose[w].z=sign*.06;}
       if(scene==="depth"){pose[w].z=-.03-.18*(1-Math.cos(phase));pose[w].x=sign*(.38-.16*(1-Math.cos(phase))*.5);}
       if(scene==="near-face-no-contact"){pose[e]=point(sign*.28,-.12,-.1);pose[w]=point(sign*.08,-.32,-.22);}
+      if(faceWorld){
+        const target=faceWorld[scene==="face-forehead"?10:scene==="face-temple-edge"?(side==="left"?454:234):side==="left"?425:205];
+        pose[0]={...faceWorld[1]};pose[2]={...faceWorld[33]};pose[5]={...faceWorld[263]};
+        const slide=scene==="face-slide"?.018*Math.sin(phase):0,localY=scene==="face-index-tip"?-.12:-.04;
+        pose[e]=point(sign*.18,-.18,-.03);pose[w]=point(target.x,target.y-localY+slide,target.z+(scene==="face-near-no-contact"?-.20:0));
+      }
     }
     const image=pose.map(project),candidates=[hand("left",pose[15],at),hand("right",pose[16],at)];
     if(scene==="partial-arm"&&index>=60&&index<120)image[13].visibility=0;
@@ -39,7 +47,7 @@ export function createSyntheticMotionRecording(scene: MotionScene, metadata: Rec
     if(scene==="crossing"&&index%2)candidates.reverse();
     const sideSample=(side:"left"|"right")=>{const candidate=candidates.find(c=>c.handedness===side);return{state:candidate?"tracked" as const:"lost" as const,sampledAtMs:at,handedness:side,handednessScore:candidate?.handednessScore??null,landmarks:candidate?.landmarks??null,worldLandmarks:candidate?.worldLandmarks??null};};
     const raw:RawTrackingFrameV1={version:1,frameTimestampMs:at,overall:"partial",videoWidth:1280,videoHeight:720,
-      face:{state:"lost",sampledAtMs:at,landmarks:null,blendshapes:null,facialTransform:null},pose:{state:"tracked",sampledAtMs:at,landmarks:image,worldLandmarks:pose},
+      face:{state:faceWorld?"tracked":"lost",sampledAtMs:at,landmarks:faceWorld?.map(project)??null,blendshapes:null,facialTransform:null},pose:{state:"tracked",sampledAtMs:at,landmarks:image,worldLandmarks:pose},
       leftHand:sideSample("left"),rightHand:sideSample("right"),rawHands:candidates,handSampledThisFrame:true,handSampledAtMs:at};
     frames.push({atMs:at,raw});
   }

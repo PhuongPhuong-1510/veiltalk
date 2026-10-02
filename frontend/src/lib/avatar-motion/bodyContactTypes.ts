@@ -9,7 +9,9 @@ export type BodyContactRegion =
 export type HumanAnatomicalLabel = BodyContactRegion | "nose" | "leftTemple" | "rightTemple";
 export type HumanAnatomicalSource = "face-landmark" | "pose-landmark" | "derived" | "posterior-inference";
 export type BodyContactSurfaceFamily = "head" | "neck" | "shoulder" | "torso";
-export type HandContactProbe = "palmCenter" | "ulnarEdge" | "radialEdge";
+export type RigidHandContactProbe = "palmCenter" | "ulnarEdge" | "radialEdge";
+export type HandContactProbe = RigidHandContactProbe | "indexTip";
+export type ContactProbeMap<T> = Record<RigidHandContactProbe,T>&Partial<Record<"indexTip",T>>;
 export type ContactDepthRelation = "in-front-separated" | "surface-compatible" | "behind" | "unknown";
 export type ContactPhase = "idle" | "approach" | "near" | "touch" | "hold" | "slide" | "release";
 
@@ -42,6 +44,7 @@ export interface HumanBodyRegionCandidate {
   selectionBias?:number;
   /** Confidence of the normalized per-person body model from which this candidate was derived. */
   modelConfidence?:number;
+  faceLocation?:import("./humanFaceContactSurface").FaceSurfaceLocation;
 }
 
 export interface HandContactProbeObservation {
@@ -110,6 +113,9 @@ export interface HumanContactObservation {
   orientationCompatibility?:number|null;
   /** Candidate-only score. It locates a projected body region and never asserts contact. */
   candidateQuality?:number;
+  selectionMargin?:number|null;
+  ambiguous?:boolean;
+  faceLocation?:import("./humanFaceContactSurface").FaceSurfaceLocation;
   depth:ContactDepthEvidence;
   confidence:number;
   evidence:ContactEvidenceBreakdown;
@@ -117,6 +123,8 @@ export interface HumanContactObservation {
 }
 
 export interface HumanBodyRegionInput {
+  /** Research mode: torso is bounded by the shoulder plane, rather than a large capsule cap. */
+  strictFamilyBounds?:boolean;
   faceLandmarks:RawNormalizedLandmarkV1[]|null|undefined;
   poseLandmarks?:RawNormalizedLandmarkV1[]|null;
   videoWidth:number;
@@ -128,4 +136,5 @@ export interface HumanBodyRegionInput {
   posteriorContactHint?:number|null;
   /** True only when landmark X itself was mirrored before this module. CSS video mirroring does not count. */
   imageMirrored?:boolean;
+  faceSurface?:import("./humanFaceContactSurface").HumanFaceContactSurface|null;
 }

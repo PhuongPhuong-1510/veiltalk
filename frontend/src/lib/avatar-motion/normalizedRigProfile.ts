@@ -1,5 +1,6 @@
 import type { AvatarJointName, QuaternionData, Vector3Data } from "./avatarPoseTypes";
-import type { HandContactProbe } from "./bodyContactTypes";
+import type { HandContactProbe,ContactProbeMap } from "./bodyContactTypes";
+import { validateAvatarFaceSurface } from "./avatarFaceSurface";
 
 export type ControlledArmJoint = "leftUpperArm" | "leftLowerArm" | "rightUpperArm" | "rightLowerArm";
 export type ContactBodyJointName = "hips"|"spine"|"chest"|"upperChest"|"neck"|"head"|"leftShoulder"|"rightShoulder";
@@ -43,6 +44,7 @@ export interface RigContactSkeletonReference {joints:Partial<Record<ContactBodyJ
 
 export interface RigContactProbeReference {offsetLocal:Vector3Data;normalLocal:Vector3Data;tangentLocal:Vector3Data}
 export interface RigHandReference {
+  indexTip?:{segments:Array<{joint:import("./avatarPoseTypes").AvatarFingerJointName;positionLocal:Vector3Data;rotationLocal:QuaternionData}>;offsetLocal:Vector3Data;source:"end-node"|"estimated-distal"};
   restLocalRotation:QuaternionData;
   restWorldRotation:QuaternionData;
   restWorldPosition:Vector3Data;
@@ -55,7 +57,7 @@ export interface RigHandReference {
     palmWidth?:number;
     palmLength?:number;
     /** Resolved wrist-local rigid probes. New production profiles should always provide these. */
-    probes?:Record<HandContactProbe,RigContactProbeReference>;
+    probes?:ContactProbeMap<RigContactProbeReference>;
   };
 }
 
@@ -74,6 +76,8 @@ export interface ControlledJointProfile {
 }
 
 export interface NormalizedAvatarRigProfile {
+  faceSurface?:import("./avatarFaceSurface").AvatarFaceSurfaceProfile;
+  handSkinProbes?:Partial<Record<"left"|"right",Partial<Record<HandContactProbe,RigContactProbeReference>>>>;
   version: 1;
   modelGeneration: number;
   modelFingerprint: string;
@@ -104,6 +108,8 @@ const orthonormal = (a: Vector3Data, b: Vector3Data, c: Vector3Data) => unitVect
   && Math.abs(b.x * c.x + b.y * c.y + b.z * c.z) < 1e-4;
 
 export function validateRigProfile(profile: NormalizedAvatarRigProfile): boolean {
+  if(profile.handSkinProbes)for(const probes of Object.values(profile.handSkinProbes))for(const p of Object.values(probes))if(!p||!finiteVector(p.offsetLocal)||!unitVector(p.normalLocal)||!unitVector(p.tangentLocal)||Math.abs(p.normalLocal.x*p.tangentLocal.x+p.normalLocal.y*p.tangentLocal.y+p.normalLocal.z*p.tangentLocal.z)>.05)return false;
+  if(profile.faceSurface&&(!validateAvatarFaceSurface(profile.faceSurface)||profile.faceSurface.modelFingerprint!==profile.modelFingerprint))return false;
   if (profile.version !== 1 || !Number.isInteger(profile.modelGeneration) || !profile.modelFingerprint) return false;
   if (!orthonormal(profile.torsoReference.rightWorld, profile.torsoReference.upWorld, profile.torsoReference.forwardWorld) || !unitQuaternion(profile.torsoReference.worldRotation)) return false;
   const collision = profile.collisionReference;
@@ -120,6 +126,7 @@ export function validateRigProfile(profile: NormalizedAvatarRigProfile): boolean
     }
   }
   if(profile.hands)for(const hand of Object.values(profile.hands)){
+    if(hand.indexTip&&(hand.indexTip.segments.length!==3||!finiteVector(hand.indexTip.offsetLocal)||Math.hypot(hand.indexTip.offsetLocal.x,hand.indexTip.offsetLocal.y,hand.indexTip.offsetLocal.z)<1e-6||!hand.indexTip.segments.every(s=>finiteVector(s.positionLocal)&&unitQuaternion(s.rotationLocal))||!['end-node','estimated-distal'].includes(hand.indexTip.source)))return false;
     if(!finiteVector(hand.restWorldPosition)||!unitQuaternion(hand.restLocalRotation)||!unitQuaternion(hand.restWorldRotation)||!unitQuaternion(hand.parentRestWorldRotation))return false;
     const frame=hand.contactFrame;
     if(frame){
@@ -141,6 +148,8 @@ export function validateRigProfile(profile: NormalizedAvatarRigProfile): boolean
 }
 
 export function freezeRigProfile(profile: NormalizedAvatarRigProfile): NormalizedAvatarRigProfile {
+  if(profile.handSkinProbes){for(const probes of Object.values(profile.handSkinProbes)){for(const p of Object.values(probes)){Object.freeze(p.offsetLocal);Object.freeze(p.normalLocal);Object.freeze(p.tangentLocal);Object.freeze(p);}Object.freeze(probes);}Object.freeze(profile.handSkinProbes);}
+  if(profile.faceSurface){for(const v of profile.faceSurface.vertices){Object.freeze(v.pointLocal);Object.freeze(v.uv);Object.freeze(v);}for(const t of profile.faceSurface.triangles)Object.freeze(t);Object.freeze(profile.faceSurface.vertices);Object.freeze(profile.faceSurface.triangles);Object.freeze(profile.faceSurface.materials);Object.freeze(profile.faceSurface.rejected);Object.freeze(profile.faceSurface);}
   Object.values(profile.torsoReference).forEach(Object.freeze); Object.freeze(profile.torsoReference);
   if (profile.collisionReference) {
     Object.freeze(profile.collisionReference.head.centerWorld); Object.freeze(profile.collisionReference.head);
@@ -153,6 +162,7 @@ export function freezeRigProfile(profile: NormalizedAvatarRigProfile): Normalize
     Object.freeze(profile.contactSkeleton.joints);Object.freeze(profile.contactSkeleton);
   }
   if(profile.hands){for(const hand of Object.values(profile.hands)){
+    if(hand.indexTip){for(const s of hand.indexTip.segments){Object.freeze(s.positionLocal);Object.freeze(s.rotationLocal);Object.freeze(s);}Object.freeze(hand.indexTip.segments);Object.freeze(hand.indexTip.offsetLocal);Object.freeze(hand.indexTip);}
     Object.freeze(hand.restWorldPosition);Object.freeze(hand.restLocalRotation);Object.freeze(hand.restWorldRotation);Object.freeze(hand.parentRestWorldRotation);
     if(hand.contactFrame){
       Object.freeze(hand.contactFrame.acrossLocal);Object.freeze(hand.contactFrame.forwardLocal);Object.freeze(hand.contactFrame.normalLocal);

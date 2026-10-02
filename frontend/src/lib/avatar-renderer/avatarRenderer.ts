@@ -28,6 +28,11 @@ import type { AvatarCollisionCorrectionResult, AvatarCollisionPose } from "../av
 import { processorOwnsJointTemporal, rendererClearanceMask } from "../avatar-motion/motionOwnership";
 import { buildFingertipProbe,correctFingertipContacts,fingertipBodyScore,type FingertipProbe,type FingertipContactDiagnostic } from "../avatar-motion/fingertipContactIk";
 import { captureSemanticBoneFrames,semanticRenderedRotation,renderedArmPose,renderedBodyProfile,measureRenderedContacts,type SemanticBoneFrame,type ContactBoneMap } from "./renderedContactGeometry";
+import { FaceContactMesh, fitHandSkinProbe } from "./faceContactMesh";
+import { refineIndexFace } from "./indexFaceRefinement";
+import { FinalFaceContactRefiner, type FinalFaceContactDiagnostic } from "./finalFaceContactRefinement";
+import { constrainArmDof, ARM_DOF_LIMITS } from "../avatar-motion/armDofConstraints";
+import { freezeRigProfile, validateRigProfile } from "../avatar-motion/normalizedRigProfile";
 
 
 
@@ -45,6 +50,8 @@ export interface AppliedSelfCollisionDiagnostic {
   fingertip?:FingertipContactDiagnostic;
   /** Measured again after VRM transfer and raw shoulder translation. Collider proxies, not mesh SDF. */
   rendered?:ReturnType<typeof measureRenderedContacts>&{space:"raw-bone-fk";contactErrors:Partial<Record<"left"|"right",number>>;fingertipGaps:Array<{left:string;right:string;distance:number;leftProbe:string;rightProbe:string}>};
+  faceSkin?:{sequence:number;sourceFrameTimestampMs:number;materials:string[];status:string;contacts:Partial<Record<"left"|"right",{gap:number;gapFaceHeights:number;normalDegrees:number;localPenetration:number;surfaceSource:string;probeSource:string}>>};
+  faceRefinement?:Partial<Record<"left"|"right",FinalFaceContactDiagnostic>>;
 }
 
 export interface AppliedShoulderTranslationDiagnostic {
@@ -212,6 +219,8 @@ export class AvatarRenderer {
   private renderedBoneFrames=new Map<string,SemanticBoneFrame>();
   private normalizedBoneFrames=new Map<string,SemanticBoneFrame>();
   private fingertipProbes=new Map<string,FingertipProbe>();
+  private faceContactMesh:FaceContactMesh|null=null;
+  private readonly finalFaceRefiners={left:new FinalFaceContactRefiner(),right:new FinalFaceContactRefiner()};
 
   private appliedShoulderTranslation: AppliedShoulderTranslationDiagnostic = {
 
@@ -266,6 +275,7 @@ export class AvatarRenderer {
     // normalized rest pose cho tới khi motion processor phát packet mới theo rig profile mới.
 
     this.target = null; this.appliedSequence = null;
+    this.finalFaceRefiners.left.reset();this.finalFaceRefiners.right.reset();
 
     this.currentExpressions = {}; this.currentRotations = {}; this.currentRawMorphWeights.clear();
     for(const memory of Object.values(this.bodyDepthMemory)){memory.head.reset();memory.torso.reset();}
@@ -277,9 +287,25 @@ export class AvatarRenderer {
     const humanoid=loaded.vrm?.humanoid;
     if(humanoid)for(const name of Object.keys(loaded.bones)){const bone=humanoid.getRawBoneNode(name as Parameters<typeof humanoid.getRawBoneNode>[0]);if(bone)raw[name as AvatarPoseJointNameV2]=bone;}
     this.renderedBoneFrames=captureSemanticBoneFrames(loaded.bones,raw);
+    for(const refiner of Object.values(this.finalFaceRefiners))refiner.reset();
     this.normalizedBoneFrames=captureSemanticBoneFrames(loaded.bones,{});
+    this.faceContactMesh=loaded.rigProfile?new FaceContactMesh(loaded.root,loaded.rigProfile,this.renderedBoneFrames,options.faceContactMaterials):null;
+    if(loaded.rigProfile){
+      const handSkinProbes:NonNullable<import("../avatar-motion/normalizedRigProfile").NormalizedAvatarRigProfile["handSkinProbes"]>={};
+      for(const side of ["left","right"] as const){const frame=this.renderedBoneFrames.get(side+"Hand"),hand=loaded.rigProfile.hands?.[side];if(!frame||!hand?.contactFrame?.probes||!hand.contactFrame.palmWidth)continue;
+        for(const name of ["palmCenter","radialEdge","ulnarEdge"] as const){const probe=fitHandSkinProbe(loaded.root,frame,hand.contactFrame.probes[name],hand.contactFrame.palmWidth);if(probe){handSkinProbes[side]??={};handSkinProbes[side]![name]=probe;}}}
+      loaded.rigProfile={...loaded.rigProfile,...(this.faceContactMesh?.profile?{faceSurface:this.faceContactMesh.profile}:{}),handSkinProbes};
+    }
     this.fingertipProbes.clear();
     if(loaded.fingerRig)for(const side of ["left","right"] as const)for(const chain of loaded.fingerRig[side].chains){const probe=buildFingertipProbe(chain,loaded.bones,humanoid?raw:loaded.bones);if(probe)this.fingertipProbes.set(side+":"+chain.finger,probe);}
+    if(loaded.rigProfile?.hands&&loaded.fingerRig){const hands={...loaded.rigProfile.hands};
+      for(const side of ["left","right"] as const){const chain=loaded.fingerRig[side].chains.find(c=>c.finger==="index"),tip=this.fingertipProbes.get(side+":index"),hand=loaded.bones[`${side}Hand`];if(!chain||chain.segments.length!==3||chain.truncatedAtSegment!==null||!tip||!hand)continue;
+        let parent=hand;const segments:NonNullable<typeof hands.left.indexTip>["segments"]=[];
+        for(const segment of chain.segments){const bone=loaded.bones[segment.joint];if(!bone)break;const parentRotation=parent.getWorldQuaternion(new Quaternion()),position=bone.getWorldPosition(new Vector3()).sub(parent.getWorldPosition(new Vector3())).applyQuaternion(parentRotation.clone().invert()),rotation=parentRotation.invert().multiply(bone.getWorldQuaternion(new Quaternion()));segments.push({joint:segment.joint,positionLocal:{x:position.x,y:position.y,z:position.z},rotationLocal:{x:rotation.x,y:rotation.y,z:rotation.z,w:rotation.w}});parent=bone;}
+        if(segments.length===3)hands[side]={...hands[side],indexTip:{segments,offsetLocal:{x:tip.offsetLocal.x,y:tip.offsetLocal.y,z:tip.offsetLocal.z},source:tip.source}};
+      }loaded.rigProfile={...loaded.rigProfile,hands};
+    }
+    if(loaded.rigProfile){if(!validateRigProfile(loaded.rigProfile))throw new Error("Invalid face/hand contact rig profile");loaded.rigProfile=freezeRigProfile(loaded.rigProfile);}
     this.selfCollisionDiagnostic = { enabled: Boolean(this.collisionProfile), mode: "correction", left: null, right: null, interArm: [] };
 
     this.appliedShoulderTranslation = applyShoulderTranslation(loaded, null); return loaded.capability;
@@ -359,6 +385,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
   /** Phase 3B.3: chuỗi xương ngón + flex axis của model đang tải. null khi model không phải VRM. */
 
   getFingerRig() { return this.model?.fingerRig ?? null; }
+  getFaceContactMeshCapability(){return this.faceContactMesh?{...structuredClone(this.faceContactMesh.capability),indexTip:{left:this.model?.rigProfile?.hands?.left.indexTip?.source??"unavailable",right:this.model?.rigProfile?.hands?.right.indexTip?.source??"unavailable"}}:null;}
 
   /** DEV harness inspection only; callers must not mutate returned bones. */
 
@@ -465,7 +492,6 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
       this.applyFingertipContact(this.target,dt);
       this.model.vrm?.update(0);
       this.appliedShoulderTranslation = applyShoulderTranslation(this.model, this.target.version === 2 ? this.target.shoulderMotion : null);
-      this.measureFinalContact(this.target);
     }
 
     if (this.model) applyRawMorphWeights(this.model.morphTargets, this.currentRawMorphWeights);
@@ -478,6 +504,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
 
     }
 
+    if(this.model&&this.target){this.refineFinalFaceContact(this.target,dt);this.measureFinalContact(this.target);}
     this.webgl.render(this.scene, this.camera);
 
     const sampledAt = this.target ? Math.max(...Object.values(this.target.tracking).map((part) => part.sampledAtMs ?? -Infinity)) : null;
@@ -522,6 +549,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
         }
       }
     }
+
     return { sequence: this.appliedSequence, atMs: this.now(), space: "normalized-avatar-world", arms, skinnedArms,contacts:this.getSelfCollisionDiagnostics() };
   }
 
@@ -696,7 +724,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
     const contactErrors:Partial<Record<"left"|"right",number>>={};
     if(packet.localBodyContactGoals?.modelFingerprint===rig.modelFingerprint)for(const side of ["left","right"] as const){
       const goal=packet.localBodyContactGoals.goals[side],hand=this.renderedBoneFrames.get(side+"Hand"),parent=goal?this.renderedBoneFrames.get(goal.anchor.parentJoint):null;
-      const probe=goal?rig.hands?.[side]?.contactFrame?.probes?.[goal.probe]:null;
+      const probe=goal?.probeReference?{offsetLocal:goal.probeReference.frameOffset,normalLocal:goal.probeReference.contactNormal}:goal?rig.hands?.[side]?.contactFrame?.probes?.[goal.probe]:null;
       if(!goal||!parent||!hand||!probe)continue;
       const point=new Vector3(goal.anchor.pointLocal.x,goal.anchor.pointLocal.y,goal.anchor.pointLocal.z).applyQuaternion(semanticRenderedRotation(parent)).add(parent.bone.getWorldPosition(new Vector3()));
       const actual=new Vector3(probe.offsetLocal.x,probe.offsetLocal.y,probe.offsetLocal.z).applyQuaternion(semanticRenderedRotation(hand)).add(hand.bone.getWorldPosition(new Vector3()));
@@ -710,6 +738,47 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
     };
     for(const pair of packet.fingertipContact?.pairs??[]){const a=tip("left",pair.left),b=tip("right",pair.right);if(a&&b){const distance=a.point.distanceTo(b.point);if(Number.isFinite(distance))fingertipGaps.push({left:pair.left,right:pair.right,distance,leftProbe:a.source,rightProbe:b.source});}}
     this.selfCollisionDiagnostic.rendered={...measureRenderedContacts(posed,left,right),space:"raw-bone-fk",contactErrors,fingertipGaps};
+    const contacts:NonNullable<AppliedSelfCollisionDiagnostic["faceSkin"]>["contacts"]={};
+    if(packet.localBodyContactGoals?.modelFingerprint===rig.modelFingerprint)for(const side of ["left","right"] as const){
+      const goal=packet.localBodyContactGoals.goals[side],hand=this.renderedBoneFrames.get(side+"Hand"),skin=goal?.anchor.skinBinding?this.faceContactMesh?.sample(goal.anchor.skinBinding):null;
+      const probe=goal?.probeReference;
+      if(!goal||!skin||!hand||!probe||!goal.anchor.faceHeight)continue;
+      const actual=this.renderedFaceProbe(side,probe);if(!actual)continue;const {point,normal}=actual,gap=point.distanceTo(skin.point);
+      contacts[side]={gap,gapFaceHeights:gap/goal.anchor.faceHeight,normalDegrees:normal.angleTo(skin.normal.clone().negate())*180/Math.PI,localPenetration:Math.max(0,-point.clone().sub(skin.point).dot(skin.normal)),surfaceSource:goal.anchor.surfaceSource??"mesh-candidate",probeSource:goal.probe==="indexTip"?this.fingertipProbes.get(side+":index")?.source??"unavailable":rig.handSkinProbes?.[side]?.[goal.probe]?"skin-fit":"rig-proxy"};
+    }
+    this.selfCollisionDiagnostic.faceSkin={sequence:packet.sequence,sourceFrameTimestampMs:packet.sourceFrameTimestampMs,materials:this.faceContactMesh?.capability.materials??[],status:this.faceContactMesh?.capability.status??"proxy-fallback",contacts};
+  }
+
+  private renderedFaceProbe(side:"left"|"right",probe:import("../avatar-motion/avatarContactRig").AvatarProbeProfile):{point:Vector3;normal:Vector3}|null{
+    if(probe.probe==="indexTip"){
+      const tip=this.fingertipProbes.get(side+":index"),frame=this.renderedBoneFrames.get(side+"IndexDistal");if(!tip||!frame)return null;
+      const q=semanticRenderedRotation(frame),offset=tip.offsetLocal.clone().multiply(frame.bone.getWorldScale(new Vector3()));
+      return{point:offset.clone().applyQuaternion(q).add(frame.bone.getWorldPosition(new Vector3())),normal:offset.normalize().applyQuaternion(q)};
+    }
+    const hand=this.renderedBoneFrames.get(side+"Hand");if(!hand)return null;const q=semanticRenderedRotation(hand);
+    return{point:new Vector3(probe.frameOffset.x,probe.frameOffset.y,probe.frameOffset.z).applyQuaternion(q).add(hand.bone.getWorldPosition(new Vector3())),normal:new Vector3(probe.contactNormal.x,probe.contactNormal.y,probe.contactNormal.z).applyQuaternion(q).normalize()};
+  }
+
+  private refineFinalFaceContact(packet:AvatarPosePacket,dt:number):void{
+    const model=this.model,rig=model?.rigProfile,goals=packet.localBodyContactGoals;
+    const diagnostics:NonNullable<AppliedSelfCollisionDiagnostic["faceRefinement"]>={};
+    for(const side of ["left","right"] as const){
+      const goal=goals?.goals[side];
+      if(!model||!rig||!goals?.research?.finalRefinement||goals.modelFingerprint!==rig.modelFingerprint||!goal?.anchor.skinBinding||!goal.probeReference||!goal.anchor.faceHeight){this.finalFaceRefiners[side].reset();continue;}
+      const sync=()=>{model.root.updateMatrixWorld(true);model.vrm?.humanoid.update();this.appliedShoulderTranslation=applyShoulderTranslation(model,packet.version===2?packet.shoulderMotion:null);model.root.updateMatrixWorld(true);};
+      const clearance=()=>{const body=this.collisionProfile?renderedBodyProfile(this.renderedBoneFrames,this.collisionProfile):null,arm=renderedArmPose(this.renderedBoneFrames,rig,side);return body&&arm?measureRenderedContacts(body,side==="left"?arm:null,side==="right"?arm:null)[side].reduce((sum,c)=>sum+c.penetrationDepth*c.penetrationDepth,0):Infinity;};
+      const jointError=()=>{let error=0;for(const name of [side+"UpperArm",side+"LowerArm"] as const){const bone=model.bones[name as keyof typeof model.bones],ref=rig.joints[name as keyof typeof rig.joints];if(!bone||!ref)return Infinity;const delta=new Quaternion(ref.restLocalRotation.x,ref.restLocalRotation.y,ref.restLocalRotation.z,ref.restLocalRotation.w).invert().multiply(bone.quaternion),limited=constrainArmDof({x:delta.x,y:delta.y,z:delta.z,w:delta.w},ref.anatomicalRestBasis.primaryLocal,name.endsWith("UpperArm")?ARM_DOF_LIMITS.upper:ARM_DOF_LIMITS.lower);if(!limited)return Infinity;error+=delta.angleTo(new Quaternion(limited.x,limited.y,limited.z,limited.w));}return error;};
+      const sampledAtMs=goal.sampledAtMs??goals.sampledAtMs,beforeJointError=jointError(),age=sampledAtMs===undefined?Infinity:this.now()-sampledAtMs;
+      const owned=packet.motionOwnership?.contactArms[side]===true,fresh=age>=0&&age<=250;
+      diagnostics[side]=this.finalFaceRefiners[side].refine({side,owned,fresh,goalKey:rig.modelFingerprint+":"+goal.probe,dt,faceHeight:goal.anchor.faceHeight,influence:goal.influence??0,bones:model.bones,frames:this.renderedBoneFrames,probe:goal.probeReference,renderedProbe:()=>this.renderedFaceProbe(side,goal.probeReference!),target:()=>this.faceContactMesh?.sample(goal.anchor.skinBinding!)??null,sync,clearanceScore:clearance,acceptJointConstraints:()=>jointError()<=beforeJointError+1e-5});
+      const chain=model.fingerRig?.[side].chains.find(c=>c.finger==="index");
+      if(goal.probe==="indexTip"&&goals.research.indexTip&&chain){const baseline:Partial<Record<string,QuaternionData>>={};for(const s of chain.segments){const rest=model.restRotations[s.joint],delta=packet.jointRotations[s.joint];if(rest&&delta)baseline[s.joint]=absoluteLocalFromRestDelta(rest,delta);}
+        const changed=refineIndexFace({owned,fresh,dt,faceHeight:goal.anchor.faceHeight,influence:goal.influence??0,chain,bones:model.bones,baseline,rest:model.restRotations,probe:()=>this.renderedFaceProbe(side,goal.probeReference!),target:()=>this.faceContactMesh?.sample(goal.anchor.skinBinding!)??null,sync});
+        for(const name of changed){const q=model.bones[name as keyof typeof model.bones]?.quaternion;if(q)this.currentRotations[name as keyof typeof this.currentRotations]={x:q.x,y:q.y,z:q.z,w:q.w};}
+      }
+      for(const name of [side+"UpperArm",side+"LowerArm",side+"Hand"]){const q=model.bones[name as keyof typeof model.bones]?.quaternion;if(q)this.currentRotations[name as keyof typeof this.currentRotations]={x:q.x,y:q.y,z:q.z,w:q.w};}
+    }
+    this.selfCollisionDiagnostic.faceRefinement=diagnostics;
   }
 
   private rotateBoneDirectionWorld(bone:import("three").Object3D,from:Vector3,to:Vector3):void{

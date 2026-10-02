@@ -1,7 +1,7 @@
 import type { RawTrackingFrameV1, RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
 import type { AvatarPosePacket, QuaternionData } from "./avatarPoseTypes";
 
-export const MOTION_SCENES = ["static", "overhead", "behind-head", "near-face-no-contact", "crossing", "palms-together", "depth", "partial-arm", "fingers", "restart"] as const;
+export const MOTION_SCENES = ["static", "overhead", "behind-head", "near-face-no-contact", "crossing", "palms-together", "depth", "partial-arm", "fingers", "restart", "face-cheek", "face-forehead", "face-temple-edge", "face-index-tip", "face-slide", "face-near-no-contact"] as const;
 export type MotionScene = typeof MOTION_SCENES[number];
 export interface MotionRecordingV1 {
   version: 1;

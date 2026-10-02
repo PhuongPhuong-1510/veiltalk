@@ -9,7 +9,10 @@
     "lint": "oxlint src",
     "preview": "vite preview",
     "test": "vitest run",
-    "motion:audit": "node scripts/audit-motion-rigs.mjs"
+    "motion:audit": "node scripts/audit-motion-rigs.mjs",
+    "contact:audit": "node scripts/audit-face-contact.mjs",
+    "contact:evaluate": "node scripts/evaluate-face-contact.mjs",
+    "contact:manifest": "node scripts/manifest-face-contact.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
