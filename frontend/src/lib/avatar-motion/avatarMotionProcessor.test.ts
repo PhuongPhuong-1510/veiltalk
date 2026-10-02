@@ -43,6 +43,31 @@ it("wires relative depth to avatar reach without changing raw arm calibration or
   }finally{base.dispose();fusion.dispose();}
 });
 const zero = { x: 0, y: 0, z: 0 };
+it("keeps human reconstruction geometry independent of unequal avatar lengths and image endpoint corrections",()=>{
+  let clock=100;
+  const profile:NormalizedAvatarRigProfile={...rigProfile,collisionReference:{head:{centerWorld:{x:0,y:2,z:0},radius:.1},torso:{startWorld:{x:0,y:1,z:0},endWorld:{x:0,y:-1,z:0},radius:.1},arms:{left:{shoulderWorld:zero,upperLength:.5,lowerLength:.2,radius:.02},right:{shoulderWorld:zero,upperLength:.5,lowerLength:.2,radius:.02}}}};
+  const base=new AvatarMotionProcessor({filtered:false,now:()=>clock,handTwistEnabled:false});
+  const retarget=new AvatarMotionProcessor({filtered:false,now:()=>clock,handTwistEnabled:false,rigEndpointEnabled:true});
+  base.setRigProfile(profile);retarget.setRigProfile(profile);
+  const input=()=>{const raw=sampledFrame(clock);raw.pose.worldLandmarks![13]=landmark(-.5,.1,0);raw.pose.worldLandmarks![15]=landmark(-.8,.3,-.1);return raw;};
+  try{
+    for(let i=0;i<12;i++){clock=100+i*33;const raw=input();raw.rawHands=[handCandidate(0,LEFT_WRIST_IMAGE,"left",clock)];const original=JSON.stringify(raw);base.process(raw);retarget.process(raw);expect(JSON.stringify(raw)).toBe(original);}
+    const endpoint=retarget.getLastDiagnostics()!.arms.left.endpoint!;
+    expect(endpoint.imageSource).toBe("matched-hand-image");
+    expect(Number.isFinite(endpoint.imageErrorAfterConstraints)).toBe(true);
+    expect(Number.isFinite(endpoint.targetErrorAfterConstraintsRatio)).toBe(true);
+    expect(retarget.getLastDiagnostics()!.arms.left.confidenceFlags).toContain("weak-perspective-image-objective");
+    clock+=33;const lost=input();lost.rawHands=[handCandidate(0,LEFT_WRIST_IMAGE,"left",clock)];lost.pose.landmarks![15].visibility=0;lost.pose.worldLandmarks![15].visibility=0;
+    base.process(lost);retarget.process(lost);
+    const a=base.getLastDiagnostics()!.arms.left,b=retarget.getLastDiagnostics()!.arms.left;
+    expect(b.wristEvidence!.source).toBe("hand-image");
+    expect(b.wristEvidence!.reconstructionRejectionReason).toBeNull();
+    expect(b.endpoint).toBeUndefined();
+    expect(b.lowerSegmentLength).toBeCloseTo(a.lowerSegmentLength!,8);
+    expect(b.elbowBendDegrees).toBeCloseTo(a.elbowBendDegrees!,8);
+    expect(b.elbowInference.calibratedLowerLength).toBe(a.elbowInference.calibratedLowerLength);
+  }finally{base.dispose();retarget.dispose();}
+});
 const leftBasis = { primaryLocal: { x: 1, y: 0, z: 0 }, secondaryLocal: { x: 0, y: 1, z: 0 }, binormalLocal: { x: 0, y: 0, z: 1 }, primaryWorld: { x: 1, y: 0, z: 0 }, secondaryWorld: { x: 0, y: 1, z: 0 }, binormalWorld: { x: 0, y: 0, z: 1 }, worldRotation: identity };
 const rightBasis = { primaryLocal: { x: -1, y: 0, z: 0 }, secondaryLocal: { x: 0, y: 1, z: 0 }, binormalLocal: { x: 0, y: 0, z: -1 }, primaryWorld: { x: -1, y: 0, z: 0 }, secondaryWorld: { x: 0, y: 1, z: 0 }, binormalWorld: { x: 0, y: 0, z: -1 }, worldRotation: { x: 0, y: 1, z: 0, w: 0 } };
 const rigProfile: NormalizedAvatarRigProfile = { version: 1, modelGeneration: 1, modelFingerprint: "test", torsoReference: { rightWorld: { x: 1, y: 0, z: 0 }, upWorld: { x: 0, y: 1, z: 0 }, forwardWorld: { x: 0, y: 0, z: 1 }, worldRotation: identity }, joints: {

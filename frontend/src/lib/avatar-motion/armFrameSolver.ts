@@ -1,5 +1,5 @@
-import { retargetArmEndpoint } from "./rigAwareArmEndpoint";
-import { constrainArmDof,ARM_DOF_LIMITS } from "./armDofConstraints";
+import { retargetArmEndpoint,endpointImageError,type RigImageObjective,type RigAwareEndpointResult } from "./rigAwareArmEndpoint";
+import { constrainArmDof,constrainElbowFlexion,ARM_DOF_LIMITS } from "./armDofConstraints";
 import { Quaternion, Vector3 } from "three";
 
 import type { RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
@@ -60,6 +60,7 @@ export interface HandElbowBranchEvidence {
 export interface ArmSpatialEvidence {
   rigEndpointEnabled?: boolean;
   depthTargetOffset?: Vector3Data | null;
+  imageObjective?:RigImageObjective|null;
   dofConstraintsEnabled?: boolean;
 
   hand: HandElbowBranchEvidence | null;
@@ -86,6 +87,7 @@ export interface SideArmGeometryResult {
   segmentValidity: { upper: boolean; lower: boolean };
 
   primary: { upper: Vector3Data; lower: Vector3Data | null }; secondary: { upper: Vector3Data; lower: Vector3Data | null };
+  measurementPrimary:{upper:Vector3Data;lower:Vector3Data|null};
 
   elbowSource: ElbowSource; elbowPosition: Vector3Data; observedLengths: { upper: number; lower: number | null } | null;
 
@@ -1012,22 +1014,31 @@ function solveSide(
   if (segmentRatio !== null && (segmentRatio < config.minimumSegmentRatio || segmentRatio > config.maximumSegmentRatio)) { lowerDirectionValid = false; flags.push("extreme-segment-ratio"); }
 
   upper.normalize(); if (lowerDirectionValid) lower!.normalize(); armAxis.normalize();
+  const measurementPrimary={upper:vectorData(upper),lower:lowerDirectionValid?vectorData(lower!):null};
+  let endpoint:RigAwareEndpointResult|null=null;
 
   // An experimental retarget objective changes avatar segment directions only. It never changes
   // observed human lengths, elbow provenance, calibration or the partial-arm geometry policy.
   const avatarArm = profile.collisionReference?.arms[side];
   if ((spatialEvidence?.rigEndpointEnabled || spatialEvidence?.depthTargetOffset) && avatarArm && elbowObserved && wrist && lowerDirectionValid
     && spatialEvidence.wrist?.source !== "reconstructed") {
-    const endpoint = retargetArmEndpoint({ shoulder: vectorData(shoulder), elbow: vectorData(elbow), wrist: vectorData(wrist),
-      avatarUpperLength: avatarArm.upperLength, avatarLowerLength: avatarArm.lowerLength, targetOffset: spatialEvidence.depthTargetOffset });
+    endpoint = retargetArmEndpoint({ shoulder: vectorData(shoulder), elbow: vectorData(elbow), wrist: vectorData(wrist),
+      avatarUpperLength: avatarArm.upperLength, avatarLowerLength: avatarArm.lowerLength, targetOffset: spatialEvidence.depthTargetOffset,imageObjective:spatialEvidence.imageObjective });
     if (endpoint) {
       upper = vector(endpoint.upperDirection); lower = vector(endpoint.lowerDirection);
       flags.push(endpoint.projected ? "rig-endpoint-projected" : "rig-endpoint-retargeted");
       if (spatialEvidence.depthTargetOffset) flags.push("relative-depth-objective");
+      if(endpoint.imageObjective)flags.push("weak-perspective-image-objective");
+      if(endpoint.quality<.999)flags.push("rig-endpoint-reach-degraded");
     }
   }
 
   if (directionFilter) { upper = vector(directionFilter(i.upper, vectorData(upper))).normalize(); if (lowerDirectionValid) lower = vector(directionFilter(i.lower, vectorData(lower!))).normalize(); }
+  if(constraintsEnabled&&spatialEvidence?.dofConstraintsEnabled&&lowerDirectionValid&&lower){
+    const hinge=constrainElbowFlexion(vectorData(upper),vectorData(lower));
+    if(hinge?.limited){lower=vector(hinge.lower);flags.push("elbow-flexion-limited");}
+    else if(!hinge)flags.push("elbow-hinge-axis-unobservable");
+  }
 
   const shoulderToElbow = elbow.clone().sub(shoulder); const elbowOffset = shoulderToElbow.clone().addScaledVector(armAxis, -shoulderToElbow.dot(armAxis));
 
@@ -1242,7 +1253,18 @@ function solveSide(
 
   const plane = lowerDirectionValid && lower ? upper.clone().cross(lower) : new Vector3(), planeNormal = plane.lengthSq() > 1e-8 ? vectorData(plane.normalize()) : null;
 
-  const diagnostic: GeometryDiagnostic = { ...emptyDiagnostic(side, image, null, flags), armValidity: "accepted", pole: projectedPole, poleSource,
+  let endpointDiagnostic:ArmFrameDiagnostic["endpoint"]=undefined;
+  if(endpoint&&avatarArm&&targetWorldRotations[i.upper]&&targetWorldRotations[i.lower]){
+    const upperFk=vector(rotateVector(targetWorldRotations[i.upper]!,profile.joints[i.upper].anatomicalRestBasis.primaryLocal)).normalize();
+    const lowerFk=vector(rotateVector(targetWorldRotations[i.lower]!,profile.joints[i.lower].anatomicalRestBasis.primaryLocal)).normalize();
+    const fk=upperFk.multiplyScalar(avatarArm.upperLength).addScaledVector(lowerFk,avatarArm.lowerLength);
+    const avatarLength=avatarArm.upperLength+avatarArm.lowerLength;
+    endpointDiagnostic={quality:endpoint.quality,projected:endpoint.projected,reachErrorRatio:endpoint.projectionErrorRatio,
+      imageSource:endpoint.imageObjective?.source??null,imageErrorBefore:endpoint.imageErrorBefore,imageErrorIk:endpoint.imageErrorIk,
+      imageErrorAfterConstraints:endpoint.imageObjective?endpointImageError(vectorData(fk),upperLength+lowerLength!,avatarLength,endpoint.imageObjective):null,
+      targetErrorAfterConstraintsRatio:fk.distanceTo(vector(endpoint.requestedAvatarOffset))/avatarLength};
+  }
+  const diagnostic: GeometryDiagnostic = { ...emptyDiagnostic(side, image, null, flags),endpoint:endpointDiagnostic, armValidity: "accepted", pole: projectedPole, poleSource,
 
     elbowOffsetMagnitude, normalizedElbowOffset, planeNormal, upperTargetWorld: targetWorldRotations[i.upper] ?? null, lowerTargetWorld: targetWorldRotations[i.lower] ?? null,
 
@@ -1276,7 +1298,7 @@ function solveSide(
 
   return { result: { deltas, targetWorldRotations, acceptedPole: projectedPole, poleSource, acceptedFreshPole: poleSource === "fresh", depthDegenerate, diagnostic, elbowDirection,
 
-    segmentValidity: { upper: true, lower: lowerDirectionValid }, primary: { upper: vectorData(upper), lower: lowerDirectionValid ? vectorData(lower!) : null },
+    segmentValidity: { upper: true, lower: lowerDirectionValid },measurementPrimary, primary: { upper: vectorData(upper), lower: lowerDirectionValid ? vectorData(lower!) : null },
 
     secondary: { upper: upperSecondary, lower: lowerDirectionValid ? lowerSecondary : null }, elbowSource, elbowPosition: vectorData(elbow),
 

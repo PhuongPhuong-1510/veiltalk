@@ -57,4 +57,11 @@ describe("relative arm depth fusion",()=>{
     const g=calibrated();g.solve({...input(300),projectedLowerLength:.08,calibratedLowerLength:.2,wrist:{x:.35,y:0,z:.04}});
     expect(g.snapshot().geometryWeight).toBe(0);
   });
+  it("keeps fresh geometric depth useful after palm-shape evidence expires",()=>{
+    const f=calibrated();for(let at=300;at<1400;at+=100)f.solve({...input(at),hand:hand(at,1,true),projectedLowerLength:.08,calibratedLowerLength:.2});
+    expect(f.snapshot().palmWeight).toBe(0);expect(f.snapshot().geometryWeight).toBeGreaterThan(0);
+    expect(f.snapshot().reason).toBe("geometry-fused");
+    f.solve({...input(1500),hand:hand(100,1,true),projectedLowerLength:.08,calibratedLowerLength:.2});
+    expect(f.snapshot().geometryWeight).toBe(0);
+  });
 });

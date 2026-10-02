@@ -1,7 +1,13 @@
 import { describe,it,expect } from "vitest";
 import { Quaternion,Vector3 } from "three";
-import { constrainArmDof } from "./armDofConstraints";
+import { constrainArmDof,constrainElbowFlexion } from "./armDofConstraints";
 describe("independent rig-local arm DOF limits",()=>{
+  it("bounds elbow flexion in the measured plane without guessing a singular hinge",()=>{
+    const angle=170*Math.PI/180,result=constrainElbowFlexion({x:1,y:0,z:0},{x:Math.cos(angle),y:Math.sin(angle),z:0})!;
+    expect(result.limited).toBe(true);expect(result.bendAfter*180/Math.PI).toBeCloseTo(150);
+    expect(result.lower.y).toBeGreaterThan(0);expect(result.lower.z).toBe(0);
+    expect(constrainElbowFlexion({x:1,y:0,z:0},{x:-1,y:0,z:0})).toBeNull();
+  });
   it("caps axial twist without reducing trusted shoulder swing",()=>{
     const swing=new Quaternion().setFromAxisAngle(new Vector3(0,0,1),1.2),twist=new Quaternion().setFromAxisAngle(new Vector3(1,0,0),2);
     const q=swing.clone().multiply(twist),out=constrainArmDof(q,{x:1,y:0,z:0},{swingRadians:1.5,twistRadians:.6})!;

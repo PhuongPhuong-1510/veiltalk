@@ -80,35 +80,32 @@ export class ArmDepthFusion {
     if(this.reference.length<8){d.reason="calibrating";return null;}
     const referenceRatio=median(this.reference.map(r=>r.ratio)),referenceDepth=median(this.reference.map(r=>r.depth));
     d.referenceRatio=referenceRatio;
-    const cue=this.cue;if(!cue){d.reason="no-palm-cue";return null;}
-    const age=input.nowMs-cue.at;d.palmAgeMs=age;d.palmRatio=cue.ratio;d.palmQuality=cue.quality;
-    // Following XR's finite decay: full freshness to 200 ms, zero by 1 second.
-    const freshness=age<0?0:1-clamp((age-200)/800,0,1);
-    if(!freshness){d.reason="expired-palm-cue";return null;}
-    const logScale=Math.log(cue.ratio/referenceRatio);
-    // Semantic +Z is camera-facing. This is a bounded relative prior, not metric range.
-    const palmDepth=referenceDepth+clamp(logScale,-1,1)*length*.45;
-    d.palmDepth=palmDepth;
+    const cue=this.cue,age=cue?input.nowMs-cue.at:null;
+    const freshness=age===null||age<0?0:1-clamp((age-200)/800,0,1);
+    d.palmAgeMs=age;d.palmRatio=cue?.ratio??null;d.palmQuality=cue?.quality??0;
+    const palmDepth=cue?referenceDepth+clamp(Math.log(cue.ratio/referenceRatio),-1,1)*length*.45:offset.z;
+    d.palmDepth=freshness?palmDepth:null;
     const planar=Math.hypot(offset.x,offset.y),maxDepth=Math.sqrt(Math.max(0,length*length-planar*planar));
     const calibratedLower=input.calibratedLowerLength;
     const expectedLower=calibratedLower!==undefined&&calibratedLower!==null&&Number.isFinite(calibratedLower)&&calibratedLower>0?calibratedLower:median(this.reference.map(r=>r.lower));
     const planarLower=input.projectedLowerLength;
     const currentLowerZ=w.z-e.z;
     const sign=Math.abs(currentLowerZ)>.05*expectedLower?(currentLowerZ>0?1:-1):input.preferredLowerDepthSign??null;
-    if(planarLower!==undefined&&planarLower!==null&&Number.isFinite(planarLower)&&planarLower>=0&&planarLower<expectedLower&&sign!==null){
+    const freshGeometry=hand&&input.nowMs-hand.sampledAtMs>=0&&input.nowMs-hand.sampledAtMs<=150&&Math.abs(hand.sampledAtMs-input.poseAtMs)<=100;
+    if(freshGeometry&&input.matchQuality>=.6&&planarLower!==undefined&&planarLower!==null&&Number.isFinite(planarLower)&&planarLower>=0&&planarLower<expectedLower&&sign!==null){
       d.foreshorteningMagnitude=Math.sqrt(Math.max(0,expectedLower*expectedLower-planarLower*planarLower));
       d.geometryDepth=e.z-s.z+sign*d.foreshorteningMagnitude;
-      d.geometryWeight=.2*cue.quality*freshness;
+      d.geometryWeight=.2*clamp(input.matchQuality,0,1);
     }
-    // Geometry supplies magnitude, not a front/back sign. Conflicting strong signs are unknown.
-    const contradiction=Math.abs(offset.z)>.2*length&&Math.abs(palmDepth)>.2*length&&Math.sign(offset.z)!==Math.sign(palmDepth);
-    const weight=contradiction?0:.35*cue.quality*freshness;
+    // Apparent size and geometric magnitude have independent quality/freshness gates.
+    const contradiction=freshness>0&&Math.abs(offset.z)>.2*length&&Math.abs(palmDepth)>.2*length&&Math.sign(offset.z)!==Math.sign(palmDepth);
+    const weight=contradiction?0:.35*(cue?.quality??0)*freshness;
     d.palmWeight=weight;if(contradiction)d.geometryWeight=0;
     d.uncertainty=1-weight-d.geometryWeight;
-    if(weight<=0||maxDepth<=1e-6){d.reason=contradiction?"conflicting-depth-sign":"planar-reach-limit";return null;}
+    if(weight+d.geometryWeight<=0||maxDepth<=1e-6){d.reason=contradiction?"conflicting-depth-sign":maxDepth<=1e-6?"planar-reach-limit":!freshness?"expired-palm-cue":"insufficient-depth-cues";return null;}
     const delta=clamp((palmDepth-offset.z)*weight+((d.geometryDepth??offset.z)-offset.z)*d.geometryWeight,-.12*length,.12*length);
     const fused=clamp(offset.z+delta,-maxDepth,maxDepth);
-    d.fusedDepth=fused;d.applied=Math.abs(fused-offset.z)>1e-6;d.reason=d.applied?"fused":"pose-preserved";
+    d.fusedDepth=fused;d.applied=Math.abs(fused-offset.z)>1e-6;d.reason=d.applied?(weight>0?"fused":"geometry-fused"):"pose-preserved";
     return d.applied?{x:offset.x,y:offset.y,z:fused}:null;
   }
 }

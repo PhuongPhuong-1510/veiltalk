@@ -1,0 +1,88 @@
+{
+  "generatedAt": "2026-10-02T07:22:52.607Z",
+  "baselineHead": "82cd5356f4a859b1cbf4a7372084d0ff9828c1dd",
+  "sourceHash": "282fcd13e8be336a34e13378086dbe0c62a3522bc644bca27284410a7ea24eb4",
+  "files": [
+    {
+      "file": "frontend/src/lib/avatar-motion/armDepthFusion.test.ts",
+      "sha256": "f200e4c28f915fd59609179f94b9c83a92fb9567f6fc93ad5d8464d219983918"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armDepthFusion.ts",
+      "sha256": "4edee328a21b08d01d08727fa5be31b51dbab2ac4c9fd848f9763619354d1a0c"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armDofConstraints.test.ts",
+      "sha256": "690e5f3fb281e96c2169945a72ad1a7fe2b4fa2228d2c17c72860a4d85b52fc9"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armDofConstraints.ts",
+      "sha256": "8c8f3c4d18e3c848a817847c42a9285527096c4eae9a4d56ca9c389d997218fd"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armFrameSolver.ts",
+      "sha256": "743913a00745ef1e8b8a36a6d7a5eb06aa13e6619ec588459a11f41ac99a87fb"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armTemporalState.ts",
+      "sha256": "666a00e20ebc9fb32c8133ee00e50c972d1284a68584e72dc0c9d827145a029f"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionDiagnostics.ts",
+      "sha256": "bf675df9a0ae47193471de890ee60e5f3a71583c37f3574564c9efc76daa5921"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionProcessor.test.ts",
+      "sha256": "ed112d9ceae4e9dbefdd41af347e78c23207b62b229ba593e344742fe42b976c"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionProcessor.ts",
+      "sha256": "aae493b3a72e5046c8f89b579404173aa5d904dd6927e537eabf0ab9385f39d1"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/rigAwareArmEndpoint.test.ts",
+      "sha256": "db1b12dc2d994cb96146ce44b726534abe78e0946238b62d41eae986658210e7"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/rigAwareArmEndpoint.ts",
+      "sha256": "616951178beb4c2dd8a24b1f0de2aaa7984959b4c3e3531002f90a82c3b331dc"
+    }
+  ],
+  "checks": {
+    "tests": {
+      "passed": 967,
+      "files": 116,
+      "exitCode": 0
+    },
+    "build": {
+      "exitCode": 0,
+      "warning": "existing large bundle"
+    },
+    "lint": {
+      "exitCode": 0,
+      "warning": "existing irregular whitespace"
+    },
+    "rigAudit": {
+      "models": 3,
+      "scenesPerModel": 6,
+      "variantsPerScene": 5,
+      "nonFiniteRotations": 0,
+      "sha256": "6a759f693f72b760ff18cee7dc69e3a4c7d8bdb0aa9608145ee7772ce8a08b23"
+    }
+  },
+  "scope": "Round 1 foundation: relative depth, weak-perspective wrist target, rig endpoint confidence, target elbow flexion and measurement history isolation",
+  "limitations": [
+    "No webcam or visual browser acceptance",
+    "No full camera calibration or metric depth",
+    "No calibrated anatomical hinge or asymmetric shoulder cone",
+    "Endpoint FK is solver normalized-chain proxy before temporal/renderer/collision/skin",
+    "No measured XR comparison"
+  ],
+  "preservedUserEdit": "docs/MOTION_DEPTH_CONTINUATION.vi.md",
+  "devUrl": "http://127.0.0.1:5175/dev/avatar-renderer",
+  "httpChecks": {
+    "harness": 200,
+    "preview": 200,
+    "latestProcessorServed": true
+  }
+}

@@ -1,4 +1,4 @@
-import type { QuaternionData } from "./avatarPoseTypes";
+import type { QuaternionData,Vector3Data } from "./avatarPoseTypes";
 import type { ArmSide, ElbowSource, PoleSource } from "./avatarMotionDiagnostics";
 import type { ControlledArmJoint } from "./normalizedRigProfile";
 import { IDENTITY_QUATERNION } from "./avatarPoseTypes";
@@ -135,6 +135,7 @@ export interface ArmTemporalState {
   validCandidateStartedAtMs: number | null;
   segments: { upper: SegmentTemporalState; lower: SegmentTemporalState };
   previousPrimary: { upper: { x: number; y: number; z: number } | null; lower: { x: number; y: number; z: number } | null };
+  previousMeasurementPrimary: {upper:Vector3Data|null;lower:Vector3Data|null};
   previousSecondary: { upper: { x: number; y: number; z: number } | null; lower: { x: number; y: number; z: number } | null };
   lengthSamples: { upper: number[]; lower: number[] };
   calibratedLength: { upper: number | null; lower: number | null };
@@ -155,7 +156,7 @@ export const createArmTemporalState = (): ArmTemporalState => ({
   lastValidPoseAtMs: null, lastConsumedPoseSampledAtMs: null, lossState: "idle", recoveryOrigin: null, recoveryStartedAtMs: null,
   invalidCandidateStartedAtMs: null, validCandidateStartedAtMs: null,
   segments: { upper: createSegmentTemporalState(), lower: createSegmentTemporalState() },
-  previousPrimary: { upper: null, lower: null }, previousSecondary: { upper: null, lower: null },
+  previousPrimary: { upper: null, lower: null }, previousMeasurementPrimary:{upper:null,lower:null}, previousSecondary: { upper: null, lower: null },
   lengthSamples: { upper: [], lower: [] }, calibratedLength: { upper: null, lower: null }, previousObservedElbow: null, previousElbowDirection: null, inferenceStartedAtMs: null,
   lengthProfile: { upper: createRobustMeasurementState(), lower: createRobustMeasurementState() },
   elbowSource: "unavailable", elbowWasVisible: false, wristWasVisible: false,

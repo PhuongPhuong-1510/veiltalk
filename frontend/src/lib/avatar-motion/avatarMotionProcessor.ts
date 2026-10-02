@@ -65,6 +65,7 @@ import { computeWristSwing, createWristSwingTemporalState, handWorldVectorToAvat
 import { Quaternion, Vector3 } from "three";
 
 import { HandLandmarkConditioner } from "./handLandmarkConditioning";
+import type { RigImageObjective } from "./rigAwareArmEndpoint";
 import { ArmDepthFusion } from "./armDepthFusion";
 import { WristDepthMemory } from "./wristDepthMemory";
 
@@ -836,7 +837,7 @@ export class AvatarMotionProcessor {
         const reconstructed = preparedEvidence.reconstruction[side];
         const base = handElbowEvidence[side] ?? { hand: null, face: null, imageToWorldScale: null, imageAspectRatio: 1 };
         handElbowEvidence[side] = {
-          ...base, dofConstraintsEnabled:this.dofConstraintsEnabled, rigEndpointEnabled: this.rigEndpointEnabled, depthTargetOffset: this.depthFusionEnabled ? this.depthObjective(frame, handContext, side, preparedEvidence, processedTimestampMs) : null,
+          ...base, imageObjective:this.rigEndpointEnabled?this.rigImageObjective(frame,handContext,side,preparedEvidence,processedTimestampMs):null, dofConstraintsEnabled:this.dofConstraintsEnabled, rigEndpointEnabled: this.rigEndpointEnabled, depthTargetOffset: this.depthFusionEnabled ? this.depthObjective(frame, handContext, side, preparedEvidence, processedTimestampMs) : null,
           wrist: reconstructed?.accepted
             ? { source: "reconstructed", confidence: reconstructed.confidence, depthAmbiguity: reconstructed.depthAmbiguity }
             : { source: "pose-world", confidence: 1, depthAmbiguity: 0 },
@@ -959,6 +960,10 @@ export class AvatarMotionProcessor {
             }
           }
           state.elbowSource = acceptedGeometry.elbowSource;
+          if(acceptedGeometry.elbowSource==="observed"){
+            state.previousMeasurementPrimary.upper=acceptedGeometry.measurementPrimary.upper;
+            if(wristEvidence.source==="pose-world"&&acceptedGeometry.measurementPrimary.lower)state.previousMeasurementPrimary.lower=acceptedGeometry.measurementPrimary.lower;
+          }
           state.previousPrimary = acceptedGeometry.primary; state.previousSecondary = acceptedGeometry.secondary;
           // Phase 3B partial-arm: mỏ neo phía gập chỉ được cập nhật khi frame này còn xác định được mặt
           // phẳng gập (solver trả null khi tay gần duỗi thẳng). Giữ mỏ neo cũ trong các frame
@@ -1409,17 +1414,19 @@ export class AvatarMotionProcessor {
       const observedLowerLength = this.armState[side].calibratedLength.lower ?? this.armState[side].lengthProfile.lower.value ?? shoulderWidthWorld * 0.65;
       const observedUpperLength = this.armState[side].calibratedLength.upper ?? this.armState[side].lengthProfile.upper.value ?? shoulderWidthWorld * 0.65;
       const elbowValid = Boolean(elbowWorldRaw && elbowImage && visible(elbowImage, this.armState[side].elbowWasVisible) && inBounds(elbowImage, this.config.armFrame.elbowOuterBoundsMargin));
+      const measurementUpper=this.armState[side].previousMeasurementPrimary.upper??this.armState[side].previousPrimary.upper;
+      const measurementLower=this.armState[side].previousMeasurementPrimary.lower??this.armState[side].previousPrimary.lower;
       let result: WristReconstructionResult | null = null;
-      if (elbowValid && this.armState[side].previousPrimary.lower) {
+      if (elbowValid && measurementLower) {
         result = reconstructPointOnSphereFromImage({
           anchorWorld: semantic(elbowWorldRaw!), anchorImage: elbowImage!, targetImage: selected.handImage as RawNormalizedLandmarkV1,
           targetDistance: observedLowerLength, imageToWorldScale: scale,
-          previousDirection: this.armState[side].previousPrimary.lower,
+          previousDirection: measurementLower,
           preferredDepthSign: this.wristDepth[side].preferred(nowMs, "elbow"), depthSwitchHysteresisRatio: 0.08,
           videoWidth, videoHeight, reachSlackRatio: this.config.armFrame.elbowInferenceReachSlackRatio,
         });
-      } else if (this.armState[side].previousPrimary.upper && this.armState[side].previousPrimary.lower) {
-        const upper = this.armState[side].previousPrimary.upper, lower = this.armState[side].previousPrimary.lower;
+      } else if (measurementUpper && measurementLower) {
+        const upper = measurementUpper, lower = measurementLower;
         const offset = {
           x: upper.x * observedUpperLength + lower.x * observedLowerLength,
           y: upper.y * observedUpperLength + lower.y * observedLowerLength,
@@ -1442,6 +1449,28 @@ export class AvatarMotionProcessor {
       imageLandmarks[indices.wrist] = { x: projectedImage.x, y: projectedImage.y, z: projectedImage.z, visibility: 1 };
     }
     return { worldLandmarks, imageLandmarks, wrist, reconstruction };
+  }
+
+  private rigImageObjective(frame:RawTrackingFrameV1,hand:HandMotionContext,side:ArmSide,prepared:PreparedArmPoseEvidence,nowMs:number):RigImageObjective|null {
+    if(prepared.wrist[side].source!=="pose-world"||frame.pose.sampledAtMs===null)return null;
+    const image=frame.pose.landmarks!,world=frame.pose.worldLandmarks!,ids=side==="left"?[11,13,15]:[12,14,16];
+    const width=frame.videoWidth??0,height=frame.videoHeight??0;
+    if(!(width>0&&height>0)||[11,12,...ids].some(i=>!world[i]||!image[i]||(image[i].visibility??0)<this.config.armFrame.visibilityEnter||image[i].x<-.1||image[i].x>1.1||image[i].y<-.1||image[i].y>1.1))return null;
+    const dx=world[11].x-world[12].x,dy=world[11].y-world[12].y,dz=world[11].z-world[12].z;
+    const shoulderWidth=Math.hypot(dx,dy,dz),projection=Math.hypot(dx,dy)/shoulderWidth;
+    const scale=estimateShoulderImageToWorldScale({leftShoulderWorld:world[11],rightShoulderWorld:world[12],leftShoulderImage:image[11],rightShoulderImage:image[12],videoWidth:width,videoHeight:height});
+    if(scale===null||!Number.isFinite(projection)||projection<.6)return null;
+    const match=hand.matchResult[side],candidate=match.matched&&match.candidateArrayIndex!==null?frame.rawHands[match.candidateArrayIndex]:null;
+    const posePoint=image[ids[2]],handPoint=candidate?.landmarks[0];
+    const shoulderImageWidth=Math.hypot(image[11].x-image[12].x,(image[11].y-image[12].y)*height/width);
+    const handConsistent=handPoint&&candidate&&nowMs-candidate.sampledAtMs>=0&&nowMs-candidate.sampledAtMs<=150&&Math.abs(frame.pose.sampledAtMs-candidate.sampledAtMs)<=100&&(match.matchQuality??0)>=.6
+      &&Math.hypot(handPoint.x-posePoint.x,(handPoint.y-posePoint.y)*height/width)<shoulderImageWidth*.15;
+    const handWeight=handConsistent?.4*Math.min(1,match.matchQuality??0):0;
+    const wristX=posePoint.x+(handPoint?handPoint.x-posePoint.x:0)*handWeight;
+    const wristY=posePoint.y+(handPoint?handPoint.y-posePoint.y:0)*handWeight;
+    const xyScale=scale*projection;
+    return {x:(wristX-image[ids[0]].x)*xyScale,y:-(wristY-image[ids[0]].y)*height/width*xyScale,
+      quality:Math.min(...ids.map(i=>image[i].visibility??0)),shoulderWidth,source:handWeight>0?"matched-hand-image":"pose-image"};
   }
 
   private depthObjective(frame:RawTrackingFrameV1, hand:HandMotionContext, side:ArmSide, prepared:PreparedArmPoseEvidence, nowMs:number):Vector3Data|null {

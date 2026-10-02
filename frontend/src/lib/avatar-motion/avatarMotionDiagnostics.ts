@@ -99,6 +99,8 @@ export interface ArmStabilityDiagnostic {
 }
 
 export interface ArmFrameDiagnostic {
+  endpoint?:{quality:number;projected:boolean;reachErrorRatio:number;imageSource:"pose-image"|"matched-hand-image"|null;
+    imageErrorBefore:number|null;imageErrorIk:number|null;imageErrorAfterConstraints:number|null;targetErrorAfterConstraintsRatio:number};
   depthFusion?: import("./armDepthFusion").ArmDepthDiagnostic;
   side: ArmSide;
   pole: Vector3Data | null;

@@ -4,6 +4,17 @@ import type { QuaternionData,Vector3Data } from "./avatarPoseTypes";
 export interface ArmDofLimits {swingRadians:number;twistRadians:number}
 export const ARM_DOF_LIMITS={upper:{swingRadians:160*Math.PI/180,twistRadians:60*Math.PI/180},lower:{swingRadians:150*Math.PI/180,twistRadians:165*Math.PI/180}} satisfies Record<string,ArmDofLimits>;
 
+/** Bound elbow flexion in its observed bend plane; never guess a fixed hinge axis at singularity. */
+export function constrainElbowFlexion(upper:Vector3Data,lower:Vector3Data,maximumRadians=150*Math.PI/180):{lower:Vector3Data;bendBefore:number;bendAfter:number;limited:boolean}|null {
+  const a=new Vector3(upper.x,upper.y,upper.z),b=new Vector3(lower.x,lower.y,lower.z);
+  if(![...a.toArray(),...b.toArray(),maximumRadians].every(Number.isFinite)||a.length()<1e-6||b.length()<1e-6||maximumRadians<0||maximumRadians>Math.PI)return null;
+  a.normalize();b.normalize();const before=a.angleTo(b);
+  if(before<=maximumRadians)return {lower:{x:b.x,y:b.y,z:b.z},bendBefore:before,bendAfter:before,limited:false};
+  const axis=a.clone().cross(b);if(axis.length()<1e-6)return null;
+  const result=a.applyAxisAngle(axis.normalize(),maximumRadians);
+  return {lower:{x:result.x,y:result.y,z:result.z},bendBefore:before,bendAfter:maximumRadians,limited:true};
+}
+
 /** Rest-relative rig-local swing and axial rotation are constrained independently. */
 export function constrainArmDof(value:QuaternionData,axis:Vector3Data,limits:ArmDofLimits,previous?:QuaternionData|null):QuaternionData|null {
   const q=new Quaternion(value.x,value.y,value.z,value.w),a=new Vector3(axis.x,axis.y,axis.z);

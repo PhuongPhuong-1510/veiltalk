@@ -49,8 +49,6 @@ Các regression kiểm calibration timestamp, raw invariance, calibration length
 
 Kết quả cuối và SHA source được lưu ở `docs/motion-review/depth-phase-manifest.json`; logs `depth-phase-tests.log`, `depth-phase-build.log`, `depth-phase-lint.log`. Rig audit đọc rest graph ba VRM, sáu synthetic scenes/model và năm processor variants. Nó không nghiệm thu normalized/raw skin render hoặc camera.
 
-Lượt chốt: **962 test đạt / 116 file**, TypeScript + Vite build đạt, lint exit 0 (warnings cũ vẫn còn). Sáu HTTP route/module/bundle đều 200; source hash DEV khớp source trên đĩa. DEV chạy tại `http://127.0.0.1:5173/dev/avatar-renderer`, production preview local tại `http://127.0.0.1:5174/avatar/motion`. Reload trang để nhận class processor mới nếu tab đã mở từ đợt trước.
-
 Chưa có webcam recording, benchmark XR cùng video hay số đo độ trễ đầu–cuối của đợt này. Chưa bật mặc định các thử nghiệm. Fingertip IK/interlace vật lý, projection objective có camera alignment đầy đủ, collider fit thực tế, full anatomical hinge/cone, remote integration và gates D2/N2/Y vẫn chưa hoàn tất. W vẫn phụ thuộc profiling; không thêm worker chỉ vì có trong danh sách.
 
 ## Đối chiếu nguồn XR đã đọc lại
