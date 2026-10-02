@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "createdAt": "2026-10-02T11:51:16.615Z",
+  "createdAt": "2026-10-02T12:05:33.973Z",
   "stage": "actual-glb-skin-cpu",
   "limitations": [
     "Loads actual GLB geometry, skin weights, bind matrices and morphs without textures/WebGL or normalized VRM animation.",
@@ -145,7 +145,7 @@
           ]
         }
       ],
-      "fitMs": 77.37919999999986,
+      "fitMs": 65.18820000000005,
       "samples": [
         {
           "region": "leftCheek",
@@ -267,8 +267,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 7.9103000000000065,
-              "contactSideP95Ms": 1.3409999999998945,
+              "processorP95Ms": 8.103499999999713,
+              "contactSideP95Ms": 1.404399999999896,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -326,8 +326,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 10.164800000000014,
-              "contactSideP95Ms": 3.1346000000003187,
+              "processorP95Ms": 10.086999999999989,
+              "contactSideP95Ms": 3.682499999999891,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -385,8 +385,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.5043000000000575,
-              "contactSideP95Ms": 0.9380999999998494,
+              "processorP95Ms": 4.107199999999921,
+              "contactSideP95Ms": 1.1115999999997257,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -444,8 +444,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.377100000000155,
-              "contactSideP95Ms": 1.0353000000000065,
+              "processorP95Ms": 5.306599999999889,
+              "contactSideP95Ms": 1.7244999999998072,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -503,8 +503,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.8040000000000873,
-              "contactSideP95Ms": 0.9846999999999753,
+              "processorP95Ms": 5.329999999999927,
+              "contactSideP95Ms": 1.56670000000031,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -562,8 +562,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.64659999999958,
-              "contactSideP95Ms": 0.9564999999997781,
+              "processorP95Ms": 4.391299999999774,
+              "contactSideP95Ms": 1.392699999999877,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -621,8 +621,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 6.504899999999907,
-              "contactSideP95Ms": 2.663000000000011,
+              "processorP95Ms": 8.486599999999726,
+              "contactSideP95Ms": 3.3241000000002714,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -680,8 +680,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.961199999999735,
-              "contactSideP95Ms": 1.216399999999794,
+              "processorP95Ms": 4.303100000000086,
+              "contactSideP95Ms": 1.3510000000001128,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -739,8 +739,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.716599999999744,
-              "contactSideP95Ms": 2.2888999999995576,
+              "processorP95Ms": 7.538300000000163,
+              "contactSideP95Ms": 2.5942000000000007,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -798,8 +798,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 6.154400000000351,
-              "contactSideP95Ms": 2.232100000000173,
+              "processorP95Ms": 6.480099999999766,
+              "contactSideP95Ms": 2.644999999999982,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -857,8 +857,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.716500000000451,
-              "contactSideP95Ms": 2.3041000000002896,
+              "processorP95Ms": 6.076699999999619,
+              "contactSideP95Ms": 2.4156000000002678,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -916,8 +916,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 6.133499999999913,
-              "contactSideP95Ms": 2.050000000000182,
+              "processorP95Ms": 8.448300000000017,
+              "contactSideP95Ms": 3.0307999999995445,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -975,8 +975,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 5.9012000000002445,
-              "contactSideP95Ms": 2.5057999999999083,
+              "processorP95Ms": 6.602499999999964,
+              "contactSideP95Ms": 2.7844999999997526,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1039,8 +1039,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.0869000000002416,
-              "contactSideP95Ms": 0.819300000000112,
+              "processorP95Ms": 3.531500000000051,
+              "contactSideP95Ms": 0.9403000000002066,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1098,8 +1098,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.9494000000004235,
-              "contactSideP95Ms": 1.3332000000000335,
+              "processorP95Ms": 5.1104999999997744,
+              "contactSideP95Ms": 1.8488999999999578,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1157,8 +1157,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.12880000000041,
-              "contactSideP95Ms": 0.8744999999998981,
+              "processorP95Ms": 4.880699999999706,
+              "contactSideP95Ms": 1.2307000000000698,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1216,8 +1216,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.6297999999997046,
-              "contactSideP95Ms": 1.1446999999998297,
+              "processorP95Ms": 4.1468000000004395,
+              "contactSideP95Ms": 1.3033999999997832,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1275,8 +1275,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.9528000000000247,
-              "contactSideP95Ms": 1.2362999999995736,
+              "processorP95Ms": 4.848599999999351,
+              "contactSideP95Ms": 1.2676000000001295,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1334,8 +1334,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.124499999999898,
-              "contactSideP95Ms": 0.913300000000163,
+              "processorP95Ms": 4.035399999999754,
+              "contactSideP95Ms": 1.272200000000339,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1393,8 +1393,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.690200000000004,
-              "contactSideP95Ms": 1.608299999999872,
+              "processorP95Ms": 4.9135000000005675,
+              "contactSideP95Ms": 1.5013999999991938,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1452,8 +1452,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.6248999999997977,
-              "contactSideP95Ms": 1.0824000000002343,
+              "processorP95Ms": 5.061899999999696,
+              "contactSideP95Ms": 1.576100000000224,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1511,8 +1511,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.787199999999757,
-              "contactSideP95Ms": 1.541599999999562,
+              "processorP95Ms": 6.581900000000132,
+              "contactSideP95Ms": 2.211500000000342,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1570,8 +1570,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.983900000000176,
-              "contactSideP95Ms": 1.8643999999994776,
+              "processorP95Ms": 5.467899999999645,
+              "contactSideP95Ms": 1.8141999999998006,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1629,8 +1629,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.798700000000281,
-              "contactSideP95Ms": 1.7503999999998996,
+              "processorP95Ms": 6.41780000000017,
+              "contactSideP95Ms": 2.091599999999744,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1688,8 +1688,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.753999999999905,
-              "contactSideP95Ms": 1.5293999999994412,
+              "processorP95Ms": 6.591599999999744,
+              "contactSideP95Ms": 2.236499999999978,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1747,8 +1747,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 3.99369999999999,
-              "contactSideP95Ms": 1.4637999999995372,
+              "processorP95Ms": 5.990499999999884,
+              "contactSideP95Ms": 2.066200000000208,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1811,8 +1811,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.8374000000003434,
-              "contactSideP95Ms": 1.2319000000006781,
+              "processorP95Ms": 3.881899999999405,
+              "contactSideP95Ms": 1.2357999999994718,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1870,8 +1870,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.567000000000007,
-              "contactSideP95Ms": 1.6766999999999825,
+              "processorP95Ms": 5.6358000000000175,
+              "contactSideP95Ms": 1.7602999999999156,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1929,8 +1929,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.087000000000444,
-              "contactSideP95Ms": 0.9713000000001557,
+              "processorP95Ms": 4.3796000000002095,
+              "contactSideP95Ms": 1.178299999999581,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -1988,8 +1988,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.4880000000002838,
-              "contactSideP95Ms": 1.110000000000582,
+              "processorP95Ms": 3.4627000000000407,
+              "contactSideP95Ms": 1.033499999999549,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2047,8 +2047,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.6482999999998356,
-              "contactSideP95Ms": 1.2099000000007436,
+              "processorP95Ms": 5.4526999999998225,
+              "contactSideP95Ms": 1.9099999999998545,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2106,8 +2106,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.9554000000007363,
-              "contactSideP95Ms": 1.2402000000001863,
+              "processorP95Ms": 4.064199999999801,
+              "contactSideP95Ms": 1.2224999999998545,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2165,8 +2165,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.722399999999652,
-              "contactSideP95Ms": 1.7558000000008178,
+              "processorP95Ms": 6.828099999999722,
+              "contactSideP95Ms": 2.4130999999997584,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2224,8 +2224,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.791900000000169,
-              "contactSideP95Ms": 1.4720000000006621,
+              "processorP95Ms": 3.474199999999655,
+              "contactSideP95Ms": 1.1346999999996115,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2283,8 +2283,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 6.643200000000434,
-              "contactSideP95Ms": 2.5300999999999476,
+              "processorP95Ms": 6.70089999999982,
+              "contactSideP95Ms": 2.615099999999984,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2342,8 +2342,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 6.261099999999715,
-              "contactSideP95Ms": 2.3957000000000335,
+              "processorP95Ms": 6.957100000000537,
+              "contactSideP95Ms": 2.5119999999997162,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2401,8 +2401,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.517900000000736,
-              "contactSideP95Ms": 1.5387999999993554,
+              "processorP95Ms": 6.104500000000371,
+              "contactSideP95Ms": 2.2637000000004264,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2460,8 +2460,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.909600000000864,
-              "contactSideP95Ms": 1.6076999999995678,
+              "processorP95Ms": 5.476699999999255,
+              "contactSideP95Ms": 2.2367999999996755,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2519,8 +2519,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 4.802000000000589,
-              "contactSideP95Ms": 1.5442000000002736,
+              "processorP95Ms": 4.843399999999747,
+              "contactSideP95Ms": 1.7761000000000422,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2583,8 +2583,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.9081999999998516,
-              "contactSideP95Ms": 0.774199999999837,
+              "processorP95Ms": 2.8559000000004744,
+              "contactSideP95Ms": 0.7463999999999942,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2642,8 +2642,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.431200000000899,
-              "contactSideP95Ms": 1.6799000000009983,
+              "processorP95Ms": 5.947799999999916,
+              "contactSideP95Ms": 1.6496999999999389,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2701,8 +2701,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.5455999999994674,
-              "contactSideP95Ms": 0.6962000000003172,
+              "processorP95Ms": 2.786000000000058,
+              "contactSideP95Ms": 0.7507999999997992,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2760,8 +2760,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.827400000000125,
-              "contactSideP95Ms": 1.2263000000002648,
+              "processorP95Ms": 3.928200000000288,
+              "contactSideP95Ms": 1.275499999999738,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2819,8 +2819,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.6952000000001135,
-              "contactSideP95Ms": 1.1192000000010012,
+              "processorP95Ms": 4.687200000000303,
+              "contactSideP95Ms": 1.4151999999994587,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2878,8 +2878,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.4287999999996828,
-              "contactSideP95Ms": 1.0884000000005472,
+              "processorP95Ms": 4.862299999998868,
+              "contactSideP95Ms": 1.3143999999992957,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2937,8 +2937,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.678000000001703,
-              "contactSideP95Ms": 1.6903999999994994,
+              "processorP95Ms": 5.109699999999066,
+              "contactSideP95Ms": 2.015900000000329,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -2996,8 +2996,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.737199999999575,
-              "contactSideP95Ms": 1.1406999999999243,
+              "processorP95Ms": 5.226800000000367,
+              "contactSideP95Ms": 1.7414000000007945,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3055,8 +3055,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.895499999998719,
-              "contactSideP95Ms": 1.5995999999995547,
+              "processorP95Ms": 5.0988000000015745,
+              "contactSideP95Ms": 1.7664000000004307,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3114,8 +3114,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.145000000000437,
-              "contactSideP95Ms": 1.9223999999994703,
+              "processorP95Ms": 6.13130000000092,
+              "contactSideP95Ms": 2.388699999999517,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3173,8 +3173,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.6238999999986845,
-              "contactSideP95Ms": 2.3501000000014756,
+              "processorP95Ms": 4.954499999999825,
+              "contactSideP95Ms": 1.89390000000094,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3232,8 +3232,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.649600000000646,
-              "contactSideP95Ms": 1.7543000000005122,
+              "processorP95Ms": 5.139100000000326,
+              "contactSideP95Ms": 1.8131000000012136,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3291,8 +3291,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 4.941100000000006,
-              "contactSideP95Ms": 1.6515999999992346,
+              "processorP95Ms": 6.913399999999456,
+              "contactSideP95Ms": 2.6713999999992666,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3455,7 +3455,7 @@
           ]
         }
       ],
-      "fitMs": 20.52850000000035,
+      "fitMs": 30.061799999999494,
       "samples": [
         {
           "region": "leftCheek",
@@ -3523,8 +3523,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.3280999999988126,
-              "contactSideP95Ms": 0.9612999999990279,
+              "processorP95Ms": 3.941100000000006,
+              "contactSideP95Ms": 1.1050000000013824,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3582,8 +3582,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 6.121399999999994,
-              "contactSideP95Ms": 1.6015999999999622,
+              "processorP95Ms": 6.846100000000661,
+              "contactSideP95Ms": 2.550999999999476,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3641,8 +3641,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.086199999999735,
-              "contactSideP95Ms": 0.9650000000001455,
+              "processorP95Ms": 2.7704999999987194,
+              "contactSideP95Ms": 0.6886000000013155,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3700,8 +3700,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.757900000000518,
-              "contactSideP95Ms": 0.8711999999995896,
+              "processorP95Ms": 5.42489999999998,
+              "contactSideP95Ms": 1.7930000000014843,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3759,8 +3759,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.8171000000002095,
-              "contactSideP95Ms": 0.8400999999994383,
+              "processorP95Ms": 4.422900000001391,
+              "contactSideP95Ms": 1.382900000000518,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3818,8 +3818,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.716499999998632,
-              "contactSideP95Ms": 0.8506999999990512,
+              "processorP95Ms": 3.2620999999999185,
+              "contactSideP95Ms": 1.0028000000002066,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3877,8 +3877,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.2281999999995605,
-              "contactSideP95Ms": 2.014900000000125,
+              "processorP95Ms": 7.497700000001714,
+              "contactSideP95Ms": 2.916900000000169,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3936,8 +3936,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.407199999999648,
-              "contactSideP95Ms": 1.0874999999996362,
+              "processorP95Ms": 6.322500000000218,
+              "contactSideP95Ms": 1.8932000000004336,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -3995,8 +3995,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.688500000000204,
-              "contactSideP95Ms": 2.3228999999992084,
+              "processorP95Ms": 6.877800000000207,
+              "contactSideP95Ms": 2.594600000000355,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4054,8 +4054,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 6.138999999999214,
-              "contactSideP95Ms": 2.189699999998993,
+              "processorP95Ms": 7.602899999999863,
+              "contactSideP95Ms": 2.9670999999998457,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4113,8 +4113,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.181000000000495,
-              "contactSideP95Ms": 2.2110000000011496,
+              "processorP95Ms": 7.695399999998699,
+              "contactSideP95Ms": 2.9470000000001164,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4172,8 +4172,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.025499999999738,
-              "contactSideP95Ms": 1.8701000000000931,
+              "processorP95Ms": 7.708900000001449,
+              "contactSideP95Ms": 3.0131000000001222,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4231,8 +4231,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 5.449899999999616,
-              "contactSideP95Ms": 2.050100000000384,
+              "processorP95Ms": 6.916199999999662,
+              "contactSideP95Ms": 2.629000000000815,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4295,8 +4295,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.5745000000006257,
-              "contactSideP95Ms": 0.7160000000003492,
+              "processorP95Ms": 4.130000000001019,
+              "contactSideP95Ms": 1.1768000000010943,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4354,8 +4354,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.9601999999995314,
-              "contactSideP95Ms": 1.3269000000000233,
+              "processorP95Ms": 6.365799999999581,
+              "contactSideP95Ms": 2.292699999999968,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4413,8 +4413,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.389600000000428,
-              "contactSideP95Ms": 0.6775000000016007,
+              "processorP95Ms": 3.9440000000013242,
+              "contactSideP95Ms": 1.106999999999971,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4472,8 +4472,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.825699999999415,
-              "contactSideP95Ms": 0.8539000000000669,
+              "processorP95Ms": 4.512700000001132,
+              "contactSideP95Ms": 1.414199999999255,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4531,8 +4531,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.576500000001033,
-              "contactSideP95Ms": 0.7708000000002357,
+              "processorP95Ms": 4.450999999999112,
+              "contactSideP95Ms": 1.311600000000908,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4590,8 +4590,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.8914000000004307,
-              "contactSideP95Ms": 0.8351000000002387,
+              "processorP95Ms": 4.528000000000247,
+              "contactSideP95Ms": 1.364900000000489,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4649,8 +4649,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.8854000000010274,
-              "contactSideP95Ms": 1.3333000000002357,
+              "processorP95Ms": 5.75840000000062,
+              "contactSideP95Ms": 2.17739999999867,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4708,8 +4708,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.89429999999993,
-              "contactSideP95Ms": 0.9579999999987194,
+              "processorP95Ms": 4.966400000001158,
+              "contactSideP95Ms": 1.574400000001333,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4767,8 +4767,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.487199999999575,
-              "contactSideP95Ms": 1.6038000000007742,
+              "processorP95Ms": 5.543700000000172,
+              "contactSideP95Ms": 1.9725999999991473,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4826,8 +4826,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.6579000000001543,
-              "contactSideP95Ms": 1.3063999999994849,
+              "processorP95Ms": 4.867899999999281,
+              "contactSideP95Ms": 1.7860000000000582,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4885,8 +4885,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.8817999999992026,
-              "contactSideP95Ms": 1.4601999999995314,
+              "processorP95Ms": 6.0627000000004045,
+              "contactSideP95Ms": 2.097200000000157,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -4944,8 +4944,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.770300000000134,
-              "contactSideP95Ms": 1.3604000000013912,
+              "processorP95Ms": 5.975499999998647,
+              "contactSideP95Ms": 2.1502999999993335,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5003,8 +5003,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 3.6416000000008353,
-              "contactSideP95Ms": 1.3253999999997177,
+              "processorP95Ms": 6.16479999999865,
+              "contactSideP95Ms": 2.1982000000007247,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5067,8 +5067,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.6066999999984546,
-              "contactSideP95Ms": 0.797099999999773,
+              "processorP95Ms": 5.298600000000079,
+              "contactSideP95Ms": 1.433100000000195,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5126,8 +5126,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.030400000001464,
-              "contactSideP95Ms": 1.4387000000006083,
+              "processorP95Ms": 6.895099999999729,
+              "contactSideP95Ms": 2.569499999999607,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5185,8 +5185,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.9974999999994907,
-              "contactSideP95Ms": 0.8865999999998166,
+              "processorP95Ms": 3.92699999999968,
+              "contactSideP95Ms": 0.8819000000003143,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5244,8 +5244,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.087599999998929,
-              "contactSideP95Ms": 0.9880000000011933,
+              "processorP95Ms": 5.525200000000041,
+              "contactSideP95Ms": 1.3351999999995314,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5303,8 +5303,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.14220000000023,
-              "contactSideP95Ms": 0.9114000000008673,
+              "processorP95Ms": 4.82090000000062,
+              "contactSideP95Ms": 1.482399999998961,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5362,8 +5362,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.1252999999996973,
-              "contactSideP95Ms": 0.9719999999997526,
+              "processorP95Ms": 4.680200000000696,
+              "contactSideP95Ms": 1.5393000000003667,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5421,8 +5421,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.943699999999808,
-              "contactSideP95Ms": 1.461699999999837,
+              "processorP95Ms": 4.986300000000483,
+              "contactSideP95Ms": 1.5560000000004948,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5480,8 +5480,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.0296000000016647,
-              "contactSideP95Ms": 1.059900000000198,
+              "processorP95Ms": 3.43920000000071,
+              "contactSideP95Ms": 1.1193999999995867,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5539,8 +5539,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.02770000000055,
-              "contactSideP95Ms": 1.4979000000002998,
+              "processorP95Ms": 5.302400000000489,
+              "contactSideP95Ms": 2.040500000000975,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5598,8 +5598,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.902199999998629,
-              "contactSideP95Ms": 1.4165000000011787,
+              "processorP95Ms": 6.369699999999284,
+              "contactSideP95Ms": 2.2224999999998545,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5657,8 +5657,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.0715000000000146,
-              "contactSideP95Ms": 1.528599999999642,
+              "processorP95Ms": 5.0635999999994965,
+              "contactSideP95Ms": 1.8073999999996886,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5716,8 +5716,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.984200000000783,
-              "contactSideP95Ms": 1.4375,
+              "processorP95Ms": 6.4746999999988475,
+              "contactSideP95Ms": 2.3817999999992026,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5775,8 +5775,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 3.9642000000003463,
-              "contactSideP95Ms": 1.4390000000003056,
+              "processorP95Ms": 5.68369999999959,
+              "contactSideP95Ms": 2.067800000000716,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5839,8 +5839,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.3783000000003085,
-              "contactSideP95Ms": 0.6394999999993161,
+              "processorP95Ms": 3.887399999999616,
+              "contactSideP95Ms": 1.091500000000451,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5898,8 +5898,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.928299999999581,
-              "contactSideP95Ms": 1.727600000000166,
+              "processorP95Ms": 6.69629999999961,
+              "contactSideP95Ms": 2.5209999999988213,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -5957,8 +5957,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.3255000000008295,
-              "contactSideP95Ms": 0.6719999999986612,
+              "processorP95Ms": 2.79320000000007,
+              "contactSideP95Ms": 0.7821999999996478,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6016,8 +6016,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.815100000001621,
-              "contactSideP95Ms": 0.8850999999995111,
+              "processorP95Ms": 3.760099999999511,
+              "contactSideP95Ms": 1.1503000000011525,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6075,8 +6075,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.2570999999989,
-              "contactSideP95Ms": 0.9591000000000349,
+              "processorP95Ms": 4.490900000000693,
+              "contactSideP95Ms": 1.3958999999995285,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6134,8 +6134,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.654999999998836,
-              "contactSideP95Ms": 0.820000000001528,
+              "processorP95Ms": 3.2551000000003114,
+              "contactSideP95Ms": 0.8633000000008906,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6193,8 +6193,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.7031000000006316,
-              "contactSideP95Ms": 1.6210999999984779,
+              "processorP95Ms": 4.561999999999898,
+              "contactSideP95Ms": 1.6771000000007916,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6252,8 +6252,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.0859999999993306,
-              "contactSideP95Ms": 1.009700000000521,
+              "processorP95Ms": 4.007900000000518,
+              "contactSideP95Ms": 1.442799999998897,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6311,8 +6311,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.300600000000486,
-              "contactSideP95Ms": 1.5982999999996537,
+              "processorP95Ms": 5.2982000000010885,
+              "contactSideP95Ms": 1.7281999999977415,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6370,8 +6370,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.786399999999048,
-              "contactSideP95Ms": 1.7419999999983702,
+              "processorP95Ms": 5.3054000000011,
+              "contactSideP95Ms": 2.1625999999996566,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6429,8 +6429,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.655900000001566,
-              "contactSideP95Ms": 1.6350000000002183,
+              "processorP95Ms": 6.8421999999991385,
+              "contactSideP95Ms": 2.550999999999476,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6488,8 +6488,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.939000000000306,
-              "contactSideP95Ms": 1.6772000000000844,
+              "processorP95Ms": 5.018599999999424,
+              "contactSideP95Ms": 1.6837000000014086,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -6547,8 +6547,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 5.189000000000306,
-              "contactSideP95Ms": 1.993800000000192,
+              "processorP95Ms": 4.7479999999995925,
+              "contactSideP95Ms": 1.6814000000013039,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7001,7 +7001,7 @@
           ]
         }
       ],
-      "fitMs": 18.81460000000152,
+      "fitMs": 26.588700000000244,
       "samples": [
         {
           "region": "leftCheek",
@@ -7123,8 +7123,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.505400000001828,
-              "contactSideP95Ms": 1.1860000000015134,
+              "processorP95Ms": 7.915100000001985,
+              "contactSideP95Ms": 1.3008999999983644,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7182,8 +7182,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.2982000000010885,
-              "contactSideP95Ms": 2.0527000000001863,
+              "processorP95Ms": 7.0658000000003085,
+              "contactSideP95Ms": 2.4781000000002678,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7241,8 +7241,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.577000000001135,
-              "contactSideP95Ms": 0.6337000000021362,
+              "processorP95Ms": 3.1627000000007683,
+              "contactSideP95Ms": 0.8793000000005122,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7300,8 +7300,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.355100000000675,
-              "contactSideP95Ms": 0.8709000000017113,
+              "processorP95Ms": 4.608700000000681,
+              "contactSideP95Ms": 1.300599999998667,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7359,8 +7359,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.569499999997788,
-              "contactSideP95Ms": 0.9962000000014086,
+              "processorP95Ms": 4.309600000000501,
+              "contactSideP95Ms": 1.1801999999988766,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7418,8 +7418,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.904099999999744,
-              "contactSideP95Ms": 0.8404000000009546,
+              "processorP95Ms": 4.318100000000413,
+              "contactSideP95Ms": 1.2547000000013213,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7477,8 +7477,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.333800000000338,
-              "contactSideP95Ms": 2.105100000000675,
+              "processorP95Ms": 5.675699999999779,
+              "contactSideP95Ms": 2.085799999997107,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7536,8 +7536,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.6633999999976368,
-              "contactSideP95Ms": 1.0476999999991676,
+              "processorP95Ms": 4.30739999999787,
+              "contactSideP95Ms": 1.2151000000012573,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7595,8 +7595,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.6326999999982945,
-              "contactSideP95Ms": 2.0625,
+              "processorP95Ms": 6.917599999997037,
+              "contactSideP95Ms": 2.4926999999988766,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7654,8 +7654,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.292399999998452,
-              "contactSideP95Ms": 1.9091000000007625,
+              "processorP95Ms": 6.1908000000003085,
+              "contactSideP95Ms": 2.5842000000011467,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7713,8 +7713,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.983799999998155,
-              "contactSideP95Ms": 1.9510000000009313,
+              "processorP95Ms": 4.764899999998306,
+              "contactSideP95Ms": 1.837999999999738,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7772,8 +7772,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.255400000001828,
-              "contactSideP95Ms": 2.0018999999992957,
+              "processorP95Ms": 6.359500000002299,
+              "contactSideP95Ms": 2.470000000001164,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7831,8 +7831,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 5.11449999999968,
-              "contactSideP95Ms": 2.002700000000914,
+              "processorP95Ms": 6.137599999998201,
+              "contactSideP95Ms": 2.528699999998935,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7895,8 +7895,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.5518000000010943,
-              "contactSideP95Ms": 0.6886000000013155,
+              "processorP95Ms": 2.371900000001915,
+              "contactSideP95Ms": 0.6496000000006461,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -7954,8 +7954,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.9347000000016124,
-              "contactSideP95Ms": 1.4972999999990861,
+              "processorP95Ms": 3.6462999999966996,
+              "contactSideP95Ms": 1.2606999999989057,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8013,8 +8013,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.537799999998242,
-              "contactSideP95Ms": 0.6874000000025262,
+              "processorP95Ms": 2.75789999999688,
+              "contactSideP95Ms": 0.7776999999987311,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8072,8 +8072,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.7057999999997264,
-              "contactSideP95Ms": 0.8175000000010186,
+              "processorP95Ms": 3.408399999996618,
+              "contactSideP95Ms": 0.8244999999988067,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8131,8 +8131,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.7444999999970605,
-              "contactSideP95Ms": 0.8004999999975553,
+              "processorP95Ms": 3.5231999999996333,
+              "contactSideP95Ms": 0.8153000000020256,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8190,8 +8190,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.8039999999964493,
-              "contactSideP95Ms": 0.9135999999998603,
+              "processorP95Ms": 4.524900000000343,
+              "contactSideP95Ms": 1.2822999999989406,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8249,8 +8249,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.3171000000002095,
-              "contactSideP95Ms": 1.5766999999977998,
+              "processorP95Ms": 5.998100000000704,
+              "contactSideP95Ms": 2.0895000000018626,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8308,8 +8308,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.067299999998795,
-              "contactSideP95Ms": 0.9628000000011525,
+              "processorP95Ms": 3.1614000000008673,
+              "contactSideP95Ms": 0.9627000000000407,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8367,8 +8367,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.106700000000274,
-              "contactSideP95Ms": 1.4651000000012573,
+              "processorP95Ms": 3.739000000001397,
+              "contactSideP95Ms": 1.3087999999988824,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8426,8 +8426,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.754399999997986,
-              "contactSideP95Ms": 1.7263000000020838,
+              "processorP95Ms": 4.290899999999965,
+              "contactSideP95Ms": 1.5073999999985972,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8485,8 +8485,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.727699999999459,
-              "contactSideP95Ms": 1.6101000000016938,
+              "processorP95Ms": 4.564399999999296,
+              "contactSideP95Ms": 1.6844999999993888,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8544,8 +8544,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.270599999999831,
-              "contactSideP95Ms": 1.5463999999992666,
+              "processorP95Ms": 3.7708999999995285,
+              "contactSideP95Ms": 1.3804000000018277,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8603,8 +8603,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 4.0658000000003085,
-              "contactSideP95Ms": 1.4099000000023807,
+              "processorP95Ms": 4.822100000001228,
+              "contactSideP95Ms": 1.9894999999996799,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8667,8 +8667,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.6723000000019965,
-              "contactSideP95Ms": 0.7585999999973865,
+              "processorP95Ms": 2.7828000000008615,
+              "contactSideP95Ms": 0.910200000002078,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8726,8 +8726,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.112199999999575,
-              "contactSideP95Ms": 1.4788000000007742,
+              "processorP95Ms": 3.7391999999999825,
+              "contactSideP95Ms": 1.3813000000009197,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8785,8 +8785,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.515800000001036,
-              "contactSideP95Ms": 0.7469999999993888,
+              "processorP95Ms": 3.633400000002439,
+              "contactSideP95Ms": 1.0227999999988242,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8844,8 +8844,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.0311000000001513,
-              "contactSideP95Ms": 0.9351999999998952,
+              "processorP95Ms": 4.574300000000221,
+              "contactSideP95Ms": 1.4056000000018685,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8903,8 +8903,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.1340999999993073,
-              "contactSideP95Ms": 0.9537000000018452,
+              "processorP95Ms": 4.637600000001839,
+              "contactSideP95Ms": 1.399199999999837,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -8962,8 +8962,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.140800000001036,
-              "contactSideP95Ms": 0.9367000000020198,
+              "processorP95Ms": 3.112199999999575,
+              "contactSideP95Ms": 0.9755999999979394,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9021,8 +9021,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.237999999997555,
-              "contactSideP95Ms": 1.514500000001135,
+              "processorP95Ms": 5.956600000001345,
+              "contactSideP95Ms": 2.1510999999991327,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9080,8 +9080,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.2204000000019732,
-              "contactSideP95Ms": 1.0758999999998196,
+              "processorP95Ms": 3.3163000000022294,
+              "contactSideP95Ms": 1.1484999999993306,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9139,8 +9139,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.208000000002357,
-              "contactSideP95Ms": 1.596399999998539,
+              "processorP95Ms": 4.318500000001222,
+              "contactSideP95Ms": 1.6176000000014028,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9198,8 +9198,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.27219999999943,
-              "contactSideP95Ms": 1.603399999999965,
+              "processorP95Ms": 4.495100000000093,
+              "contactSideP95Ms": 1.6111999999993714,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9257,8 +9257,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.060199999999895,
-              "contactSideP95Ms": 1.5190999999977066,
+              "processorP95Ms": 6.062399999998888,
+              "contactSideP95Ms": 2.158799999997427,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9316,8 +9316,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.217000000000553,
-              "contactSideP95Ms": 1.6162999999978638,
+              "processorP95Ms": 3.75170000000071,
+              "contactSideP95Ms": 1.380300000000716,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9375,8 +9375,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 3.999500000001717,
-              "contactSideP95Ms": 1.5309999999990396,
+              "processorP95Ms": 4.18409999999858,
+              "contactSideP95Ms": 1.507900000000518,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9439,8 +9439,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 2.3153999999994994,
-              "contactSideP95Ms": 0.6507000000019616,
+              "processorP95Ms": 2.404499999996915,
+              "contactSideP95Ms": 0.6583000000027823,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9498,8 +9498,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.703700000001845,
-              "contactSideP95Ms": 1.7503000000033353,
+              "processorP95Ms": 6.293600000000879,
+              "contactSideP95Ms": 1.644400000001042,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9557,8 +9557,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 6.441600000001927,
-              "contactSideP95Ms": 1.7795999999980268,
+              "processorP95Ms": 6.365399999998772,
+              "contactSideP95Ms": 1.7397999999993772,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9616,8 +9616,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.694499999997788,
-              "contactSideP95Ms": 1.037000000000262,
+              "processorP95Ms": 3.647499999999127,
+              "contactSideP95Ms": 1.1785999999992782,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9675,8 +9675,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.5429000000003725,
-              "contactSideP95Ms": 0.9203000000015891,
+              "processorP95Ms": 3.6247999999977765,
+              "contactSideP95Ms": 1.0763000000006286,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9734,8 +9734,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.2727000000013504,
-              "contactSideP95Ms": 0.9137000000009721,
+              "processorP95Ms": 3.2644000000000233,
+              "contactSideP95Ms": 0.8456999999980326,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9793,8 +9793,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.092400000001362,
-              "contactSideP95Ms": 1.9351000000024214,
+              "processorP95Ms": 4.800699999999779,
+              "contactSideP95Ms": 1.760099999999511,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9852,8 +9852,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 3.7622000000010303,
-              "contactSideP95Ms": 1.1409999999996217,
+              "processorP95Ms": 4.255000000001019,
+              "contactSideP95Ms": 1.4826000000030035,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9911,8 +9911,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.349500000000262,
-              "contactSideP95Ms": 1.947599999999511,
+              "processorP95Ms": 6.878799999998591,
+              "contactSideP95Ms": 2.519000000000233,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -9970,8 +9970,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.878499999998894,
-              "contactSideP95Ms": 1.9735000000000582,
+              "processorP95Ms": 5.441800000000512,
+              "contactSideP95Ms": 1.7607000000025437,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -10029,8 +10029,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 4.676800000001094,
-              "contactSideP95Ms": 1.9108000000014727,
+              "processorP95Ms": 5.13839999999982,
+              "contactSideP95Ms": 2.0236000000004424,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -10088,8 +10088,8 @@
                 "indexTip": false
               },
               "frames": 30,
-              "processorP95Ms": 5.344900000000052,
-              "contactSideP95Ms": 1.8060999999979686,
+              "processorP95Ms": 4.496800000000803,
+              "contactSideP95Ms": 1.6510999999991327,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {
@@ -10147,8 +10147,8 @@
                 "indexTip": true
               },
               "frames": 30,
-              "processorP95Ms": 5.215199999998731,
-              "contactSideP95Ms": 1.9812999999994645,
+              "processorP95Ms": 5.137500000000728,
+              "contactSideP95Ms": 1.8900999999968917,
               "correctionFrames": 0,
               "nonFiniteRotations": 0,
               "metrics": {

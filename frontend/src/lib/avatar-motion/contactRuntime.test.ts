@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { RawNormalizedLandmarkV1, RawTrackingFrameV1 } from "../tracking/rawTrackingTypes";
 import type { NormalizedAvatarRigProfile } from "./normalizedRigProfile";
 import { ContactRuntime } from "./contactRuntime";
+import { buildAvatarContactRig } from "./avatarContactRig";
+import { mapContactAnchor } from "./contactAnchorMapping";
+import { contactDepthOrderConflicts } from "./contactDepthOrdering";
 
 const q={x:0,y:0,z:0,w:1};
 const v=(x:number,y:number,z:number)=>({x,y,z});
@@ -13,9 +16,42 @@ const profile:NormalizedAvatarRigProfile={version:1,modelGeneration:1,modelFinge
 const lm=(x:number,y:number,z=0):RawNormalizedLandmarkV1=>({x,y,z,visibility:1});
 const face=[lm(.4,.35),lm(.5,.3),lm(.6,.35),lm(.62,.5),lm(.6,.65),lm(.5,.7),lm(.4,.65),lm(.38,.5)];
 const hand=()=>{const points=Array.from({length:21},()=>lm(.5,.28));points[0]=lm(.5,.32);points[5]=lm(.45,.25);points[9]=lm(.5,.22);points[17]=lm(.55,.25);return points;};
+const cheekHand=()=>{const points=Array.from({length:21},()=>lm(.44,.54));points[0]=lm(.44,.62);points[5]=lm(.39,.52);points[9]=lm(.44,.50);points[13]=lm(.46,.52);points[17]=lm(.49,.54);return points;};
 const frame=(at:number):RawTrackingFrameV1=>{const pose=Array.from({length:33},()=>lm(.5,.5,0));pose[0]=lm(.5,.4,0);pose[15]=lm(.5,.3,.02);return{version:1,frameTimestampMs:at,overall:"full",face:{state:"tracked",sampledAtMs:at,landmarks:face,blendshapes:{},facialTransform:null},leftHand:{state:"tracked",sampledAtMs:at,handedness:"left",handednessScore:1,landmarks:hand(),worldLandmarks:null},rightHand:{state:"lost",sampledAtMs:at,handedness:"right",handednessScore:0,landmarks:null,worldLandmarks:null},rawHands:[],handSampledThisFrame:true,handSampledAtMs:at,pose:{state:"tracked",sampledAtMs:at,landmarks:pose,worldLandmarks:pose},videoWidth:1_000,videoHeight:1_000};};
 
 describe("AR9 contact runtime",()=>{
+  it("checks the posed contact hemisphere, including a turned head and torso, against observed depth",()=>{
+    const rig=buildAvatarContactRig(profile)!,front=mapContactAnchor(rig.surfaces.forehead),back=mapContactAnchor(rig.surfaces.backHead);
+    expect(contactDepthOrderConflicts(profile,front,{},null,{head:-1,torso:null})).toBe(true);
+    expect(contactDepthOrderConflicts(profile,front,{},null,{head:1,torso:null})).toBe(false);
+    expect(contactDepthOrderConflicts(profile,back,{},null,{head:-1,torso:null})).toBe(false);
+    expect(contactDepthOrderConflicts(profile,back,{},null,{head:1,torso:null})).toBe(true);
+    expect(contactDepthOrderConflicts(profile,front,{},null,{head:null,torso:null})).toBe(false);
+    expect(contactDepthOrderConflicts(profile,front,{},null,undefined)).toBe(false);
+    expect(contactDepthOrderConflicts(profile,front,{}, {x:0,y:1,z:0,w:0},{head:-1,torso:null})).toBe(false);
+    expect(contactDepthOrderConflicts(profile,front,{upperChest:{x:0,y:Math.SQRT1_2,z:0,w:Math.SQRT1_2}},null,{head:-1,torso:null})).toBe(true);
+  });
+  it("drops a held anterior contact immediately when fresh depth puts the hand behind the head",()=>{
+    const runtime=new ContactRuntime();runtime.setProfile(profile);
+    for(const at of [0,60,130,200,290,380,480])runtime.update("left",frame(at),cheekHand(),at,at,60,{},null,true);
+    expect(runtime.snapshot().left.phase).toMatch(/touch|hold/);
+    expect(runtime.snapshot().left.correctionRequested).toBe(true);
+    const unchanged={};runtime.update("left",frame(520),cheekHand(),520,520,40,unchanged,null,true,null,"left",true,{head:-1,torso:null});
+    const diag=runtime.snapshot().left;
+    expect(diag.correctionReason).toBe("body-depth-order-conflict");
+    expect(diag.evidence?.hardRejections).toContain("body-depth-order-conflict");
+    expect(diag.influence).toBe(0);expect(diag.correctionRequested).toBe(false);expect(diag.correctionApplied).toBe(false);expect(unchanged).toEqual({});
+    expect(runtime.rendererGoals()).toBeUndefined();
+  });
+  it("fresh opposite ordering releases held contact even without a new Hand detection",()=>{
+    const runtime=new ContactRuntime();runtime.setProfile(profile);
+    for(const at of [0,60,130,200,290,380,480])runtime.update("left",frame(at),cheekHand(),at,at,60,{},null,true);
+    expect(runtime.snapshot().left.phase).toMatch(/touch|hold/);
+    expect(runtime.snapshot().left.correctionRequested).toBe(true);
+    const rotations={};runtime.update("left",frame(520),null,480,520,40,rotations,null,true,null,"left",true,{head:-1,torso:null});
+    expect(runtime.snapshot().left.correctionReason).toBe("body-depth-order-conflict");
+    expect(runtime.snapshot().left.correctionApplied).toBe(false);expect(rotations).toEqual({});
+  });
   it("passes world geometry support through the research runtime for an edge-on palm",()=>{
     const runtime=new ContactRuntime();runtime.setProfile(profile);runtime.setResearchOptions({jointProbeSelection:true});
     const points=hand();points[5]=lm(.5,.25);points[9]=lm(.5,.22);points[13]=lm(.5,.24);points[17]=lm(.5,.26);

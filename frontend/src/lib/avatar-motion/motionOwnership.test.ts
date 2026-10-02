@@ -16,4 +16,10 @@ describe("final arm correction policy", () => {
     expect(processorOwnsJointTemporal(undefined, "leftHand")).toBe(false);
     expect(rendererClearanceMask("SEW", { ...ownership, contactArms: { left: false, right: false } }, "left")).toBe("SEW");
   });
+  it("retains observed clearance for contact arms when depth barrier or research safety is enabled",()=>{
+    expect(rendererClearanceMask("SEW",{...ownership,bodyDepthBarrier:true},"left")).toBe("SEW");
+    expect(rendererClearanceMask("S-W",{...ownership,contactSafetyClearance:true},"left")).toBe("S-W");
+    expect(rendererClearanceMask("---",{...ownership,contactSafetyClearance:true},"left")).toBe("---");
+    expect(processorOwnsJointTemporal({...ownership,contactSafetyClearance:true},"leftUpperArm")).toBe(true);
+  });
 });

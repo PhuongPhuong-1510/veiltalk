@@ -10,8 +10,26 @@ import type {FingerRigProfile} from "./fingerRig";
 import {fingerJointName} from "./avatarPoseTypes";
 import { FACE_CONTACT_BASELINE, FACE_CONTACT_COMBINED } from "./faceContactResearch";
 import { ContactRuntime } from "./contactRuntime";
+import { observeBodyDepth } from "./observedBodyDepth";
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
+it("shares fresh pre-retarget depth with contact and retains renderer safety in Combined",()=>{
+  let clock=100;const seen:unknown[]=[];
+  const spy=vi.spyOn(ContactRuntime.prototype,"update").mockImplementation((...args)=>{seen.push(args[12]);});
+  const processor=new AvatarMotionProcessor({now:()=>clock,bodyDepthBarrierEnabled:true});
+  try{
+    processor.setContactShadowEnabled(true);processor.setFaceContactResearchOptions(FACE_CONTACT_COMBINED);
+    const raw=sampledFrame(clock);raw.pose.worldLandmarks![15].z=.5;raw.pose.worldLandmarks![16].z=-.5;
+    const expected=observeBodyDepth(raw,clock)!;expect(expected.left.head).not.toBeNull();expect(expected.right.head).not.toBeNull();
+    const packet=processor.process(raw);
+    expect(packet.observedBodyDepth).toEqual(expected);expect(seen).toEqual([expected.left,expected.right]);
+    expect(packet.motionOwnership?.contactSafetyClearance).toBe(true);
+    seen.length=0;clock=700;const stale=sampledFrame(clock);stale.pose.sampledAtMs=100;processor.process(stale);
+    expect(seen).toEqual([undefined,undefined]);
+    processor.setFaceContactResearchOptions(FACE_CONTACT_BASELINE);
+    expect(processor.process(sampledFrame(clock)).motionOwnership?.contactSafetyClearance).toBe(false);
+  }finally{processor.dispose();spy.mockRestore();}
+});
 it("passes current-frame continuous finger rotations into optional index-face contact",()=>{
   let clock=100;const seen:Array<Record<string,unknown>>=[];
   const spy=vi.spyOn(ContactRuntime.prototype,"update").mockImplementation((_side,_frame,_hand,_at,_now,_dt,rotations)=>{seen.push(structuredClone(rotations));});

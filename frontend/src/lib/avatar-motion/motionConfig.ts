@@ -595,6 +595,11 @@ export interface AvatarMotionConfig {
 
 
     elbowInferenceCandidateCount: number;
+    elbowBranchMinimumRadiusRatio: number;
+    elbowBranchHandToleranceRadians: number;
+    elbowBranchMinimumDiscriminationRadians: number;
+    elbowBranchMinimumScoreMargin: number;
+    elbowBranchConfirmSamples: number;
 
 
 
@@ -1473,6 +1478,11 @@ export const DEFAULT_AVATAR_MOTION_CONFIG: AvatarMotionConfig = {
 
 
     elbowInferenceCandidateCount: 24,
+    elbowBranchMinimumRadiusRatio: 0.12,
+    elbowBranchHandToleranceRadians: Math.PI / 3,
+    elbowBranchMinimumDiscriminationRadians: Math.PI / 6,
+    elbowBranchMinimumScoreMargin: 0.25,
+    elbowBranchConfirmSamples: 3,
 
 
 

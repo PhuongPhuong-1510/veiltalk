@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "createdAt": "2026-10-02T11:52:06.777Z",
+  "createdAt": "2026-10-02T12:08:17.456Z",
   "experimentVersion": "face-contact-v1-2026-10-02",
-  "gitBase": "be9c634c768bdf4ebfbc81b984c3b7eda9a56a10",
-  "sourceSha256": "20993e7d098e3df3b25069e346d60efc50165332dac3ab31fb62378de6b46636",
+  "gitBase": "6668ba0b69c47af00995e9533897a229a9ad30b1",
+  "sourceSha256": "b33c39f50190becbb47b9f8cc4fd37103df179edf803c6fa61b0213d6603b85f",
   "hashScope": "all src ts/tsx/css/json files, same algorithm as VITE_MOTION_SOURCE_HASH; hashes identify a dirty working tree, not a commit",
   "packageLockSha256": "41e3a9ab9820f7fcd4a4304e84452d8b2b2bed2d8f9f166a32608474bf09582a",
   "node": "v24.18.0",

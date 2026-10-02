@@ -106,6 +106,8 @@ export interface AvatarPartTrackingInfo {
 export interface AvatarMotionOwnershipV1 {
   bodyDepthBarrier?:boolean;
   bodyDepthEvidence?:"observed-pose";
+  /** Contact may own motion while renderer still enforces body collision clearance. */
+  contactSafetyClearance?:boolean;
   version: 1;
   armTemporal: "legacy-renderer" | "processor";
   /** Only true while an enabled contact correction actually changes that chain. */

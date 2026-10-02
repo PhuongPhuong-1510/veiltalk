@@ -660,7 +660,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
       const total=posedProfile.arms[side].upperLength+posedProfile.arms[side].lowerLength;
       const depthEnabled=packet.motionOwnership?.bodyDepthBarrier===true;
       const depthMemory=this.bodyDepthMemory[side],forward=posedProfile.body.frontNormal;
-      const observed=packet.armObservability?.[side]==="SEW"&&packet.tracking.pose.outputState==="active"&&!packet.motionOwnership?.contactArms[side];
+      const observed=packet.armObservability?.[side]==="SEW"&&packet.tracking.pose.outputState==="active"&&rendererClearanceMask("SEW",packet.motionOwnership,side)==="SEW";
       if(!depthEnabled){depthMemory.head.reset();depthMemory.torso.reset();}
       const depthObservation=packet.observedBodyDepth,sourceAge=this.now()-packet.processedTimestampMs;
       const freshDepth=depthObservation&&sourceAge>=0&&sourceAge<=150&&packet.processedTimestampMs-depthObservation.sampledAtMs<=150?depthObservation:null;
@@ -678,7 +678,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
         if(assist.applied){this.applyCorrectedArm("left",poses.left,assist.left);model.root.updateMatrixWorld(true);this.applyCorrectedArm("right",poses.right,assist.right);model.root.updateMatrixWorld(true);poses.left=assist.left;poses.right=assist.right;}
       }
       const depthForward=posedProfile.body.frontNormal??{x:0,y:0,z:1},depthThreshold=Math.max(posedProfile.arms.left.handRadius,posedProfile.arms.right.handRadius);
-      const observed=packet.armObservability?.left==="SEW"&&packet.armObservability?.right==="SEW"&&packet.tracking.pose.outputState==="active"&&!packet.motionOwnership?.contactArms.left&&!packet.motionOwnership?.contactArms.right;
+      const observed=packet.armObservability?.left==="SEW"&&packet.armObservability?.right==="SEW"&&packet.tracking.pose.outputState==="active"&&rendererClearanceMask("SEW",packet.motionOwnership,"left")==="SEW"&&rendererClearanceMask("SEW",packet.motionOwnership,"right")==="SEW";
       const depthObservation=packet.observedBodyDepth,sourceAge=this.now()-packet.processedTimestampMs;
       const freshDepth=depthObservation&&sourceAge>=0&&sourceAge<=150?depthObservation:null;
       const depthSide=packet.motionOwnership?.bodyDepthEvidence==="observed-pose"?this.interArmDepthMemory.observeSide(freshDepth?.interArm??null,this.now(),freshDepth?.sampledAtMs??null):this.interArmDepthMemory.update(poses.left.wrist,poses.right.wrist,depthForward,depthThreshold,this.now(),observed,packet.tracking.pose.sampledAtMs);

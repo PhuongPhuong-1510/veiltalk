@@ -26,6 +26,12 @@ import type { FaceArmSpatialEvidence } from "./faceArmSpatialEvidence";
 
 export type GeometryDiagnostic = Omit<ArmFrameDiagnostic, "lossState" | "transitionProgress" | "invalidDurationMs" | "validRecoveryDurationMs" | "sampleDisposition" | "segmentLossState" | "upperArmAngularDeltaDeg" | "lowerArmAngularDeltaDeg" | "poleAngularDeltaDeg" | "poleSourceChanged" | "trackingReacquired">;
 
+export interface InferredElbowBranchState {
+  trackedPole: Vector3Data | null;
+  pendingPole: Vector3Data | null;
+  pendingHandSamples: number;
+  lastDecisionHandSampledAtMs: number | null;
+}
 export interface ArmGeometryHistory { previousPole: Vector3Data | null; previousPoleWasFresh: boolean; previousDepthDegenerate: boolean; lastValidPoleAtMs: number | null; previousPrimary?: { upper: Vector3Data | null; lower: Vector3Data | null }; previousSecondary?: { upper: Vector3Data | null; lower: Vector3Data | null }; calibratedLength?: { upper: number | null; lower: number | null }; previousObservedElbow?: Vector3Data | null; inferenceStartedAtMs?: number | null;
 
   /** P0-4/5: trạng thái hysteresis theo landmark, để quyết định "quan sát được" không dao động quanh một ngưỡng duy nhất. */
@@ -41,6 +47,7 @@ export interface ArmGeometryHistory { previousPole: Vector3Data | null; previous
    */
 
   previousElbowDirection?: Vector3Data | null;
+  inferredBranch?: InferredElbowBranchState;
   /** Provisional measurements from genuine observations; never grants unbounded inference. */
   observedLength?: { upper: number | null; lower: number | null };
   previousDeltas?: ArmDeltaOutput }
@@ -54,10 +61,12 @@ export interface HandElbowBranchEvidence {
   /** Chất lượng hình học palm-basis trong [0, 1]. */
 
   geometryQuality: number;
+  sampledAtMs?: number;
 
 }
 
 export interface ArmSpatialEvidence {
+  elbowBranchSwitchEnabled?: boolean;
   rigEndpointEnabled?: boolean;
   depthTargetOffset?: Vector3Data | null;
   imageObjective?:RigImageObjective|null;
@@ -94,6 +103,7 @@ export interface SideArmGeometryResult {
   /** Phase 3B partial-arm: hướng khuỷu lệch trục vai–cổ tay của frame này, để frame sau khóa phía gập. */
 
   elbowDirection: Vector3Data | null;
+  inferredBranch?: InferredElbowBranchState;
 
 }
 
@@ -463,7 +473,7 @@ function inferElbowLegacy(
 
 type ElbowSpatialDiagnostic = NonNullable<GeometryDiagnostic["spatial"]>;
 
-type ScoredPole = { pole: Vector3; angle: number; total: number; face: number; head: number; torso: number };
+type ScoredPole = { pole: Vector3; angle: number; total: number; history: number; hand: number; anatomy: number; face: number; head: number; torso: number; forearmImage: Vector3 | null; hardInvalid: boolean };
 
 
 
@@ -601,9 +611,9 @@ function inferElbow(
 
   profile: NormalizedAvatarRigProfile, shoulderImage: RawNormalizedLandmarkV1, wristImage: RawNormalizedLandmarkV1,
 
-  scoring: AvatarMotionConfig["armFrame"],
+  scoring: AvatarMotionConfig["armFrame"], branchState?: InferredElbowBranchState,
 
-): { elbow: Vector3; reachRatio: number; confidence: number; elbowDirection: Vector3Data; sideFlipPrevented: boolean; anatomyFlipApplied: boolean; palmBranchApplied: boolean; faceBranchApplied: boolean; collisionBranchApplied: boolean; spatial: ElbowSpatialDiagnostic } | null {
+): { elbow: Vector3; reachRatio: number; confidence: number; elbowDirection: Vector3Data; sideFlipPrevented: boolean; anatomyFlipApplied: boolean; palmBranchApplied: boolean; faceBranchApplied: boolean; collisionBranchApplied: boolean; spatial: ElbowSpatialDiagnostic; inferredBranch?: InferredElbowBranchState } | null {
 
   if (scoring.elbowInferenceCandidateCount < 3) {
 
@@ -664,13 +674,15 @@ function inferElbow(
 
   const evaluate = (candidate: { pole: Vector3; angle: number }, includePalm: boolean, includeAnatomy: boolean, includeFace: boolean, includeCollision: boolean): ScoredPole => {
 
-    let total = scoring.elbowInferencePriorWeight * (1 - candidate.pole.dot(priorPole));
-
-    if (previousUsable) total += scoring.elbowInferenceHistoryWeight * (1 - candidate.pole.dot(previous!));
+    const history = scoring.elbowInferencePriorWeight * (1 - candidate.pole.dot(priorPole))
+      + (previousUsable ? scoring.elbowInferenceHistoryWeight * (1 - candidate.pole.dot(previous!)) : 0);
+    let total = history;
 
     const elbow = center.clone().addScaledVector(candidate.pole, radius);
 
-    if (includePalm && palmUsable) {
+    let handPenalty = 0;
+    let forearmImage: Vector3 | null = null;
+    if (palmUsable) {
       // Candidate elbow is solved in semantic Pose-world, but Hand palm-forward is image-space.
       // Project candidate elbow into the same aspect-corrected image chart before scoring.
       const elbowImage = projectSemanticWorldToImageAspect(elbow, shoulder, shoulderImage, spatial);
@@ -678,18 +690,26 @@ function inferElbow(
       if (elbowImage && wristPoint) {
         const lowerImage = wristPoint.sub(elbowImage);
         if (lowerImage.lengthSq() > 1e-8) {
-          total += scoring.elbowInferencePalmWeight * hand!.geometryQuality * (1 - lowerImage.normalize().dot(palm!));
+          forearmImage = lowerImage.normalize();
+          if (includePalm) {
+            const angle = Math.acos(Math.max(-1, Math.min(1, forearmImage.dot(palm!))));
+            const excess = Math.max(0, angle - scoring.elbowBranchHandToleranceRadians);
+            handPenalty = scoring.elbowInferencePalmWeight * hand!.geometryQuality * excess * excess;
+            total += handPenalty;
+          }
         }
       }
     }
 
+    let anatomyPenalty = 0;
     if (includeAnatomy && outwardUsable) {
 
       const lateral = candidate.pole.dot(outward!);
 
-      total += scoring.elbowInferenceOutsideWeight * Math.max(0, minimumLateralBias - lateral);
+      anatomyPenalty += scoring.elbowInferenceOutsideWeight * Math.max(0, minimumLateralBias - lateral);
 
-      total += scoring.elbowInferenceDeepInsideWeight * Math.max(0, -lateral - scoring.elbowInferenceDeepInsideThreshold);
+      anatomyPenalty += scoring.elbowInferenceDeepInsideWeight * Math.max(0, -lateral - scoring.elbowInferenceDeepInsideThreshold);
+      total += anatomyPenalty;
 
     }
 
@@ -729,17 +749,68 @@ function inferElbow(
 
     }
 
-    return { ...candidate, total, face: facePenalty, head: headPenalty, torso: torsoPenalty };
+    const hardInvalid = Boolean(penetration && !face?.allowContact && penetration.head > 0.9);
+    return { ...candidate, total, history, hand: handPenalty, anatomy: anatomyPenalty, face: facePenalty, head: headPenalty, torso: torsoPenalty, forearmImage, hardInvalid };
 
   };
 
-  // Missing observation must not create a new motion intent. Plausibility scores are
-  // diagnostic/validation signals only: continue the last trusted bend branch by
-  // projecting it onto this frame's exact solution circle. When history is not yet
-  // available, the rig prior seeds the branch once; subsequent frames carry it forward.
-  const continuationPole = (previousUsable ? previous! : priorPole).clone().normalize();
+  const tracked = branchState?.trackedPole ? vector(branchState.trackedPole).addScaledVector(axis, -vector(branchState.trackedPole).dot(axis)) : null;
+  const continuationPole = (tracked && tracked.lengthSq() > 1e-8 ? tracked : previousUsable ? previous! : priorPole).clone().normalize();
   const continuationAngle = Math.atan2(continuationPole.dot(perpendicular), continuationPole.dot(priorPole));
-  const chosen = evaluate({ pole: continuationPole, angle: continuationAngle }, true, true, true, true);
+  const current = evaluate({ pole: continuationPole, angle: continuationAngle }, true, true, true, true);
+  const candidates: ScoredPole[] = [current];
+  for (let index = 0; index < count; index++) {
+    const angle = 2 * Math.PI * index / count;
+    const pole = priorPole.clone().multiplyScalar(Math.cos(angle)).addScaledVector(perpendicular, Math.sin(angle));
+    candidates.push(evaluate({ pole, angle }, true, true, true, true));
+  }
+  let challenger = candidates.filter(candidate => !candidate.hardInvalid && candidate.pole.angleTo(continuationPole) >= Math.PI / 6)
+    .sort((a, b) => a.total - b.total)[0] ?? null;
+  // Refine locally so the selected angle is not quantized to the coarse scan spacing.
+  if (challenger) {
+    for (const offset of [-0.5, -0.25, 0.25, 0.5]) {
+      const angle = challenger.angle + offset * 2 * Math.PI / count;
+      const pole = priorPole.clone().multiplyScalar(Math.cos(angle)).addScaledVector(perpendicular, Math.sin(angle));
+      const refined = evaluate({ pole, angle }, true, true, true, true);
+      candidates.push(refined);
+      if (!refined.hardInvalid && refined.pole.angleTo(continuationPole) >= Math.PI / 6 && refined.total < challenger.total) challenger = refined;
+    }
+  }
+  const handDiscriminability = challenger?.forearmImage && current.forearmImage
+    ? challenger.forearmImage.angleTo(current.forearmImage) : null;
+  const margin = challenger ? current.total - challenger.total : null;
+  const handSampledAtMs = hand?.sampledAtMs ?? null;
+  const freshHand = handSampledAtMs !== null && handSampledAtMs !== branchState?.lastDecisionHandSampledAtMs;
+  const observable = radius / Math.min(upperLength, lowerLength) >= scoring.elbowBranchMinimumRadiusRatio
+    && palmUsable && handDiscriminability !== null
+    && handDiscriminability >= scoring.elbowBranchMinimumDiscriminationRadians;
+  const qualified = observable && challenger !== null && margin !== null
+    && margin >= scoring.elbowBranchMinimumScoreMargin && challenger.hand < current.hand;
+  const nextBranch: InferredElbowBranchState = { trackedPole: vectorData(continuationPole),
+    pendingPole: branchState?.pendingPole ?? null, pendingHandSamples: branchState?.pendingHandSamples ?? 0,
+    lastDecisionHandSampledAtMs: branchState?.lastDecisionHandSampledAtMs ?? null };
+  let branchDecision: ElbowSpatialDiagnostic["branchDecision"] = !palmUsable ? "no-hand" : !observable ? "unobservable" : "current";
+  if (handSampledAtMs !== null && freshHand) nextBranch.lastDecisionHandSampledAtMs = handSampledAtMs;
+  if (freshHand) {
+    if (qualified && challenger) {
+      const pendingAligned = nextBranch.pendingPole && vector(nextBranch.pendingPole).dot(challenger.pole) >= Math.cos(Math.PI / 4);
+      nextBranch.pendingHandSamples = pendingAligned ? nextBranch.pendingHandSamples + 1 : 1;
+      nextBranch.pendingPole = vectorData(challenger.pole);
+      branchDecision = "pending";
+    } else {
+      nextBranch.pendingPole = null;
+      nextBranch.pendingHandSamples = 0;
+    }
+  }
+  let chosen = current;
+  if (spatial?.elbowBranchSwitchEnabled && freshHand && qualified && challenger
+    && nextBranch.pendingHandSamples >= scoring.elbowBranchConfirmSamples) {
+    chosen = challenger;
+    nextBranch.pendingPole = null;
+    nextBranch.pendingHandSamples = 0;
+    branchDecision = "switched";
+  }
+  nextBranch.trackedPole = vectorData(chosen.pole);
 
   const elbow = center.clone().addScaledVector(chosen.pole, radius);
 
@@ -753,11 +824,16 @@ function inferElbow(
 
     anatomyFlipApplied: false,
 
-    palmBranchApplied: false,
+    palmBranchApplied: branchDecision === "switched",
 
     faceBranchApplied: false, collisionBranchApplied: false,
 
-    spatial: { candidateCount: count, selectedAngleRadians: chosen.angle, faceEvidenceUsed: faceUsable, intentionalFaceContact: face?.allowContact ?? false, facePenalty: chosen.face, headCollisionPenalty: chosen.head, torsoCollisionPenalty: chosen.torso },
+    spatial: { candidateCount: candidates.length, selectedAngleRadians: chosen.angle, currentBranchScore: current.total,
+      bestCandidateScore: challenger?.total ?? null, scoreMargin: margin, handQuality: hand?.geometryQuality ?? 0,
+      handDiscriminabilityRadians: handDiscriminability, branchDecision, pendingHandSamples: nextBranch.pendingHandSamples,
+      handPenalty: chosen.hand, historyPenalty: chosen.history, anatomyPenalty: chosen.anatomy,
+      faceEvidenceUsed: faceUsable, intentionalFaceContact: face?.allowContact ?? false, facePenalty: chosen.face, headCollisionPenalty: chosen.head, torsoCollisionPenalty: chosen.torso },
+    inferredBranch: nextBranch,
 
   };
 
@@ -879,6 +955,7 @@ function solveSide(
   }
 
   let elbowSource: ElbowSource = elbowObserved ? "observed" : "unavailable", inferenceConfidence = 0, reachRatio: number | null = null, inferredPosition: Vector3Data | null = null;
+  let inferredBranch: InferredElbowBranchState | undefined;
 
   let spatialDiagnostic: GeometryDiagnostic["spatial"] = {
 
@@ -968,7 +1045,7 @@ function solveSide(
 
     const lateralOutward = torso ? vector(torso.right).multiplyScalar(side === "left" ? 1 : -1) : null;
 
-    const inferred = inferElbow(shoulder, wrist, upperCalibration, lowerCalibration, prior, config.elbowInferenceReachSlackRatio, history.previousElbowDirection ?? null, lateralOutward, config.elbowInferenceMinimumLateralBias, spatialEvidence, side, profile, is, iw!, config);
+    const inferred = inferElbow(shoulder, wrist, upperCalibration, lowerCalibration, prior, config.elbowInferenceReachSlackRatio, history.previousElbowDirection ?? null, lateralOutward, config.elbowInferenceMinimumLateralBias, spatialEvidence, side, profile, is, iw!, config, history.inferredBranch);
 
     if (!inferred) return reject("elbow-inference-unreachable", flags);
 
@@ -985,6 +1062,7 @@ function solveSide(
     if (inferred.collisionBranchApplied) flags.push("elbow-rig-collision-branch");
 
     spatialDiagnostic = inferred.spatial;
+    inferredBranch = inferred.inferredBranch;
 
     // Confidence chỉ suy giảm theo thời gian khi suy đoán đang phải dựa vào dữ liệu cũ. Ở chế
 
@@ -1298,7 +1376,7 @@ function solveSide(
 
   return { result: { deltas, targetWorldRotations, acceptedPole: projectedPole, poleSource, acceptedFreshPole: poleSource === "fresh", depthDegenerate, diagnostic, elbowDirection,
 
-    segmentValidity: { upper: true, lower: lowerDirectionValid },measurementPrimary, primary: { upper: vectorData(upper), lower: lowerDirectionValid ? vectorData(lower!) : null },
+    segmentValidity: { upper: true, lower: lowerDirectionValid },measurementPrimary, inferredBranch, primary: { upper: vectorData(upper), lower: lowerDirectionValid ? vectorData(lower!) : null },
 
     secondary: { upper: upperSecondary, lower: lowerDirectionValid ? lowerSecondary : null }, elbowSource, elbowPosition: vectorData(elbow),
 

@@ -7,6 +7,7 @@ import { poseAvatarCollisionProfile } from "./avatarCollisionProfile";
 import { correctAvatarInterArmCollision, queryAvatarInterArmCollisions } from "./avatarInterArmCollision";
 import type { AvatarCollisionCorrectionBudget, AvatarCollisionPose } from "./avatarCollisionTypes";
 import {Vector3,Quaternion} from "three";
+import { rendererClearanceMask } from "./motionOwnership";
 
 const profile: AvatarCollisionProfile = {
   body: {
@@ -53,6 +54,16 @@ describe("avatar self collision", () => {
     const p={...profile,body:{...profile.body,frontNormal:{x:0,y:0,z:1}}};
     const result=correctAvatarArmCollision(p,{side:"left",baseline:clear,deltaSeconds:1/60,observability:"SEW",bendPole:{x:0,y:1,z:0},budget,bodyDepthSides:{head:-1,torso:-1}});
     expect(result.pose).toBe(clear);expect(result.reason).toBe("no-collision");
+  });
+  it("research contact ownership keeps bounded collision correction on the observed back side",()=>{
+    const p={...profile,body:{...profile.body,frontNormal:{x:0,y:0,z:1}}};
+    const pose={shoulder:{x:-.4,y:1.2,z:0},elbow:{x:-.1,y:1.45,z:0},wrist:{x:.05,y:1.45,z:0}};
+    const mask=rendererClearanceMask("SEW",{version:1,armTemporal:"processor",contactSafetyClearance:true,bodyDepthBarrier:true,contactArms:{left:true,right:false}},"left");
+    const result=correctAvatarArmCollision(p,{side:"left",baseline:pose,deltaSeconds:1/60,observability:mask,bendPole:{x:0,y:1,z:0},budget,bodyDepthSides:{head:-1,torso:null}});
+    expect(result.reason).not.toBe("insufficient-evidence");
+    const directed=result.contactsBefore.filter(c=>c.bodyPart==="head"&&c.armPart!=="upperArm");
+    expect(directed.length).toBeGreaterThan(0);expect(directed.every(c=>c.surfaceNormal.z<0)).toBe(true);
+    expect(result.baselinePreserved).toBe(false);expect(result.pose.wrist.z).toBeLessThan(0);
   });
   it("does not modify a contact-owned arm during inter-arm correction", () => {
     const left: AvatarCollisionPose = { shoulder:{x:-.4,y:.7,z:0},elbow:{x:-.05,y:.4,z:0},wrist:{x:.2,y:.2,z:0},hand:{x:.24,y:.2,z:0} };

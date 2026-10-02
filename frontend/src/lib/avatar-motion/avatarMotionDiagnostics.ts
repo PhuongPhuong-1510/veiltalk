@@ -179,6 +179,16 @@ export interface ArmFrameDiagnostic {
   spatial?: {
     candidateCount: number;
     selectedAngleRadians: number | null;
+    currentBranchScore?: number | null;
+    bestCandidateScore?: number | null;
+    scoreMargin?: number | null;
+    handQuality?: number;
+    handDiscriminabilityRadians?: number | null;
+    branchDecision?: "no-hand" | "unobservable" | "current" | "pending" | "switched";
+    pendingHandSamples?: number;
+    handPenalty?: number;
+    historyPenalty?: number;
+    anatomyPenalty?: number;
     faceEvidenceUsed: boolean;
     intentionalFaceContact: boolean;
     facePenalty: number;

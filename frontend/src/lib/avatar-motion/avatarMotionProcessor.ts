@@ -71,7 +71,7 @@ import type { RigImageObjective } from "./rigAwareArmEndpoint";
 import { ArmDepthFusion } from "./armDepthFusion";
 import { WristDepthMemory } from "./wristDepthMemory";
 
-export interface AvatarMotionProcessorOptions { fingertipContactEnabled?:boolean; dofConstraintsEnabled?:boolean; bodyDepthBarrierEnabled?:boolean; depthFusionEnabled?: boolean; handConditioningEnabled?: boolean; processorArmTemporal?: boolean; rigEndpointEnabled?: boolean; bimanualPalmAssistEnabled?: boolean; filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; wristSwingEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
+export interface AvatarMotionProcessorOptions { fingertipContactEnabled?:boolean; dofConstraintsEnabled?:boolean; bodyDepthBarrierEnabled?:boolean; depthFusionEnabled?: boolean; handConditioningEnabled?: boolean; processorArmTemporal?: boolean; rigEndpointEnabled?: boolean; elbowBranchSwitchEnabled?: boolean; bimanualPalmAssistEnabled?: boolean; filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; wristSwingEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
 
 export interface ShoulderVerticalDiagnosticSnapshot {
   raw: { left: number; right: number };
@@ -300,6 +300,7 @@ export class AvatarMotionProcessor {
   private handConditioningEnabled: boolean;
   private processorArmTemporal: boolean;
   private rigEndpointEnabled: boolean;
+  private elbowBranchSwitchEnabled: boolean;
   private depthFusionEnabled: boolean;
   private bodyDepthBarrierEnabled:boolean;
   private dofConstraintsEnabled:boolean;
@@ -411,6 +412,7 @@ export class AvatarMotionProcessor {
     this.bimanualPalmAssistEnabled = options.bimanualPalmAssistEnabled ?? false;
     this.fingertipContactEnabled=options.fingertipContactEnabled??false;
     this.rigEndpointEnabled = options.rigEndpointEnabled ?? false;
+    this.elbowBranchSwitchEnabled = options.elbowBranchSwitchEnabled ?? true;
     this.dofConstraintsEnabled=options.dofConstraintsEnabled??false;
     this.bodyDepthBarrierEnabled = options.bodyDepthBarrierEnabled??false;
     this.depthFusionEnabled = options.depthFusionEnabled ?? false;
@@ -466,6 +468,11 @@ export class AvatarMotionProcessor {
   setDepthFusionEnabled(enabled:boolean):void {if(enabled!==this.depthFusionEnabled){this.depthFusion.left.reset();this.depthFusion.right.reset();}this.depthFusionEnabled=enabled;}
 
   setRigEndpointEnabled(enabled: boolean): void { this.rigEndpointEnabled = enabled; }
+  setElbowBranchSwitchEnabled(enabled: boolean): void {
+    if (enabled === this.elbowBranchSwitchEnabled) return;
+    this.elbowBranchSwitchEnabled = enabled;
+    for (const side of ["left", "right"] as const) this.armState[side].inferredBranch = createArmTemporalState().inferredBranch;
+  }
 
   setProcessorArmTemporal(enabled: boolean): void { this.processorArmTemporal = enabled; }
 
@@ -845,15 +852,15 @@ export class AvatarMotionProcessor {
         const reconstructed = preparedEvidence.reconstruction[side];
         const base = handElbowEvidence[side] ?? { hand: null, face: null, imageToWorldScale: null, imageAspectRatio: 1 };
         handElbowEvidence[side] = {
-          ...base, imageObjective:this.rigEndpointEnabled?this.rigImageObjective(frame,handContext,side,preparedEvidence,processedTimestampMs):null, dofConstraintsEnabled:this.dofConstraintsEnabled, rigEndpointEnabled: this.rigEndpointEnabled, depthTargetOffset: this.depthFusionEnabled ? this.depthObjective(frame, handContext, side, preparedEvidence, processedTimestampMs) : null,
+          ...base, elbowBranchSwitchEnabled: this.elbowBranchSwitchEnabled, imageObjective:this.rigEndpointEnabled?this.rigImageObjective(frame,handContext,side,preparedEvidence,processedTimestampMs):null, dofConstraintsEnabled:this.dofConstraintsEnabled, rigEndpointEnabled: this.rigEndpointEnabled, depthTargetOffset: this.depthFusionEnabled ? this.depthObjective(frame, handContext, side, preparedEvidence, processedTimestampMs) : null,
           wrist: reconstructed?.accepted
             ? { source: "reconstructed", confidence: reconstructed.confidence, depthAmbiguity: reconstructed.depthAmbiguity }
             : { source: "pose-world", confidence: 1, depthAmbiguity: 0 },
         };
       }
       const solved = isNewSample && preparedEvidence ? solveAnatomicalArmFrames(preparedEvidence.worldLandmarks, preparedEvidence.imageLandmarks, this.rigProfile, {
-        left: { previousPole: this.armState.left.previousPole, previousPoleWasFresh: this.armState.left.poleSource === "fresh", previousDepthDegenerate: this.armState.left.depthDegenerate, lastValidPoleAtMs: this.armState.left.lastValidPoleAtMs, previousPrimary: this.armState.left.previousPrimary, previousSecondary: this.armState.left.previousSecondary, calibratedLength: this.armState.left.calibratedLength, previousDeltas: { leftUpperArm: this.armState.left.segments.upper.previousTargetDelta ?? undefined, leftLowerArm: this.armState.left.segments.lower.previousTargetDelta ?? undefined }, observedLength: { upper: this.armState.left.lengthProfile.upper.value, lower: this.armState.left.lengthProfile.lower.value }, previousObservedElbow: this.armState.left.previousObservedElbow, inferenceStartedAtMs: this.armState.left.inferenceStartedAtMs, elbowWasVisible: this.armState.left.elbowWasVisible, wristWasVisible: this.armState.left.wristWasVisible, previousElbowDirection: this.armState.left.previousElbowDirection },
-        right: { previousPole: this.armState.right.previousPole, previousPoleWasFresh: this.armState.right.poleSource === "fresh", previousDepthDegenerate: this.armState.right.depthDegenerate, lastValidPoleAtMs: this.armState.right.lastValidPoleAtMs, previousPrimary: this.armState.right.previousPrimary, previousSecondary: this.armState.right.previousSecondary, calibratedLength: this.armState.right.calibratedLength, previousDeltas: { rightUpperArm: this.armState.right.segments.upper.previousTargetDelta ?? undefined, rightLowerArm: this.armState.right.segments.lower.previousTargetDelta ?? undefined }, observedLength: { upper: this.armState.right.lengthProfile.upper.value, lower: this.armState.right.lengthProfile.lower.value }, previousObservedElbow: this.armState.right.previousObservedElbow, inferenceStartedAtMs: this.armState.right.inferenceStartedAtMs, elbowWasVisible: this.armState.right.elbowWasVisible, wristWasVisible: this.armState.right.wristWasVisible, previousElbowDirection: this.armState.right.previousElbowDirection },
+        left: { previousPole: this.armState.left.previousPole, previousPoleWasFresh: this.armState.left.poleSource === "fresh", previousDepthDegenerate: this.armState.left.depthDegenerate, lastValidPoleAtMs: this.armState.left.lastValidPoleAtMs, previousPrimary: this.armState.left.previousPrimary, previousSecondary: this.armState.left.previousSecondary, calibratedLength: this.armState.left.calibratedLength, previousDeltas: { leftUpperArm: this.armState.left.segments.upper.previousTargetDelta ?? undefined, leftLowerArm: this.armState.left.segments.lower.previousTargetDelta ?? undefined }, observedLength: { upper: this.armState.left.lengthProfile.upper.value, lower: this.armState.left.lengthProfile.lower.value }, previousObservedElbow: this.armState.left.previousObservedElbow, inferenceStartedAtMs: this.armState.left.inferenceStartedAtMs, elbowWasVisible: this.armState.left.elbowWasVisible, wristWasVisible: this.armState.left.wristWasVisible, previousElbowDirection: this.armState.left.previousElbowDirection, inferredBranch: this.armState.left.inferredBranch },
+        right: { previousPole: this.armState.right.previousPole, previousPoleWasFresh: this.armState.right.poleSource === "fresh", previousDepthDegenerate: this.armState.right.depthDegenerate, lastValidPoleAtMs: this.armState.right.lastValidPoleAtMs, previousPrimary: this.armState.right.previousPrimary, previousSecondary: this.armState.right.previousSecondary, calibratedLength: this.armState.right.calibratedLength, previousDeltas: { rightUpperArm: this.armState.right.segments.upper.previousTargetDelta ?? undefined, rightLowerArm: this.armState.right.segments.lower.previousTargetDelta ?? undefined }, observedLength: { upper: this.armState.right.lengthProfile.upper.value, lower: this.armState.right.lengthProfile.lower.value }, previousObservedElbow: this.armState.right.previousObservedElbow, inferenceStartedAtMs: this.armState.right.inferenceStartedAtMs, elbowWasVisible: this.armState.right.elbowWasVisible, wristWasVisible: this.armState.right.wristWasVisible, previousElbowDirection: this.armState.right.previousElbowDirection, inferredBranch: this.armState.right.inferredBranch },
       }, processedTimestampMs, this.config.armFrame, this.constraints, this.filtered
         ? (name, direction) => this.directionFilter(name).filter(direction, sampledAtMs!) : undefined,
       this.filtered ? (side, pole) => this.poleFilter(side).filter(pole, sampledAtMs!) : undefined,
@@ -953,8 +960,12 @@ export class AvatarMotionProcessor {
         if (acceptedGeometry?.acceptedFreshPole) { state.previousPole = acceptedGeometry.acceptedPole; state.lastValidPoleAtMs = processedTimestampMs; }
         if (acceptedGeometry) state.poleSource = acceptedGeometry.poleSource;
         if (acceptedGeometry) {
+          if (acceptedGeometry.elbowSource === "observed") state.inferredBranch = createArmTemporalState().inferredBranch;
+          else if (acceptedGeometry.inferredBranch) state.inferredBranch = acceptedGeometry.inferredBranch;
           const elbowSourceChanged = state.elbowSource !== "unavailable" && state.elbowSource !== acceptedGeometry.elbowSource;
-          const chainSourceChanged = elbowSourceChanged || poleSourceUpgraded || chainTrackingReacquired;
+          const chainSourceChanged = elbowSourceChanged || poleSourceUpgraded || chainTrackingReacquired
+            || acceptedGeometry.diagnostic.spatial?.branchDecision === "switched";
+          if (acceptedGeometry.diagnostic.spatial?.branchDecision === "switched") state.branchRecoveryUntilAtMs = processedTimestampMs + 350;
           if (chainSourceChanged) { segmentReacquired.upper = true; segmentReacquired.lower = true; }
           for (const segment of ["upper", "lower"] as const) {
             if (!segmentReacquired[segment]) continue;
@@ -981,10 +992,6 @@ export class AvatarMotionProcessor {
           // và bị khóa bởi continuity/side-flip dù người dùng vẫn giữ nguyên tư thế.
           if (acceptedGeometry.elbowDirection && acceptedGeometry.elbowSource === "observed" && wristEvidence.source === "pose-world") {
             state.previousElbowDirection = acceptedGeometry.elbowDirection;
-          } else if (acceptedGeometry.elbowDirection && state.previousElbowDirection === null) {
-            // Cold start chưa từng thấy elbow: cho phép một prior hữu hạn, nhưng không để các
-            // frame inferred tiếp theo tự tích lũy và xoay anchor.
-            state.previousElbowDirection = acceptedGeometry.elbowDirection;
           }
           if (acceptedGeometry.elbowSource === "observed") { state.previousObservedElbow = acceptedGeometry.elbowPosition; state.inferenceStartedAtMs = null; if (acceptedGeometry.observedLengths) this.updateLengthCalibration(state, acceptedGeometry.observedLengths); }
           else state.inferenceStartedAtMs ??= processedTimestampMs;
@@ -1008,7 +1015,10 @@ export class AvatarMotionProcessor {
             : this.config.loss.holdMs;
           segmentTemporal[segment] = isTrackedDuplicate
             ? { output: state.segments[segment].currentOutputDelta, state: state.segments[segment].lossState, progress: this.diagnostics?.arms[side].transitionProgress ?? 1 }
-            : updateSegmentTemporalOutput(state.segments[segment], solvedDelta, Boolean(solvedDelta && isNewSample), processedTimestampMs, holdMs, this.config.loss.returnMs, this.config.loss.recoveryMs, wristEvidence.effectiveGraceMs, this.idlePose?.[side][segment], segmentReacquired[segment]);
+            : updateSegmentTemporalOutput(state.segments[segment], solvedDelta, Boolean(solvedDelta && isNewSample), processedTimestampMs, holdMs, this.config.loss.returnMs,
+              state.branchRecoveryUntilAtMs !== null && processedTimestampMs <= state.branchRecoveryUntilAtMs
+                ? Math.max(350, this.config.loss.recoveryMs) : this.config.loss.recoveryMs,
+              wristEvidence.effectiveGraceMs, this.idlePose?.[side][segment], segmentReacquired[segment]);
           jointRotations[name] = segmentTemporal[segment].output;
         }
         const lowerName = names.lower;
@@ -1174,11 +1184,13 @@ export class AvatarMotionProcessor {
     } else this.diagnostics = null;
     // Phase 3B.3: chạy SAU nhánh arm và chỉ GHI THÊM khoá xương ngón. Không đọc, không sửa, không
     // ghi đè bất kỳ khoá arm nào ở trên — kể cả `leftHand`/`rightHand` (wrist thuộc Phase 3B).
-    const indexFaceEnabled=this.contactRuntime.getResearchOptions().indexTip;
+    const contactResearch=this.contactRuntime.getResearchOptions();
+    const indexFaceEnabled=contactResearch.indexTip;
+    const observedBodyDepth=this.bodyDepthBarrierEnabled?observeBodyDepth(frame,processedTimestampMs):undefined;
     const updateContact=()=>{if(!this.contactShadowEnabled)return;const renderDt=this.lastContactRenderAtMs===null?0:Math.max(0,Math.min(100,processedTimestampMs-this.lastContactRenderAtMs));this.lastContactRenderAtMs=processedTimestampMs;const contactHeadRotation=upperBody?.deltas.head??headRotation;
       for(const side of ["left","right"] as const){const match=handContext.matchResult[side],candidate=match.matched&&match.candidateArrayIndex!==null?handContext.candidatesBySide[side]:null,chain=this.fingerRig?.[side].chains.find(c=>c.finger==="index");
         const indexObserved=!!chain&&chain.segments.length===3&&chain.segments.every(s=>{const d=this.continuousFingerDiagnostics[side][s.joint];return d?.source==="observed"&&d.measurementAccepted&&d.confidence>=.5;});
-        this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,contactHeadRotation,this.contactCorrectionEnabled,candidate?.worldLandmarks??null,side,indexObserved);
+        this.contactRuntime.update(side,frame,candidate?.landmarks??null,frame.handSampledAtMs,processedTimestampMs,renderDt,jointRotations,contactHeadRotation,this.contactCorrectionEnabled,candidate?.worldLandmarks??null,side,indexObserved,observedBodyDepth?.[side]);
       }};
     if(!indexFaceEnabled)updateContact();
     if(this.continuousFingerEnabled){
@@ -1191,14 +1203,13 @@ export class AvatarMotionProcessor {
     // The optional index probe needs the current continuous finger FK. Preserve rigid AR9 order.
     if(indexFaceEnabled)updateContact();
     const contact = this.contactRuntime.correctionOwners();
-    const motionOwnership = { version: 1 as const, bodyDepthBarrier:this.bodyDepthBarrierEnabled,bodyDepthEvidence:this.bodyDepthBarrierEnabled?"observed-pose" as const:undefined, armTemporal: this.processorArmTemporal ? "processor" as const : "legacy-renderer" as const, contactArms: { left: this.contactCorrectionEnabled && contact.left, right: this.contactCorrectionEnabled && contact.right } };
+    const motionOwnership = { version: 1 as const, bodyDepthBarrier:this.bodyDepthBarrierEnabled,bodyDepthEvidence:this.bodyDepthBarrierEnabled?"observed-pose" as const:undefined,contactSafetyClearance:Object.values(contactResearch).some(Boolean), armTemporal: this.processorArmTemporal ? "processor" as const : "legacy-renderer" as const, contactArms: { left: this.contactCorrectionEnabled && contact.left, right: this.contactCorrectionEnabled && contact.right } };
     const bimanual = this.bimanualPalmAssistEnabled ? this.bimanualRuntime.snapshot() : null;
     const freshBimanual = bimanual && bimanual.lastObservedAtMs !== null && processedTimestampMs - bimanual.lastObservedAtMs >= 0 && processedTimestampMs - bimanual.lastObservedAtMs <= 100;
     const bimanualPalmContact = this.bimanualPalmAssistEnabled && bimanual && bimanual.mode === "palmsTogether" && !bimanual.occluded && freshBimanual && bimanual.confidence >= 0.62
       ? { version: 1 as const, influence: Math.min(0.35, bimanual.confidence * 0.35) } : undefined;
     const fingertipContact=this.fingertipContactIntent(frame,handContext,processedTimestampMs);
     const localBodyContactGoals=this.contactCorrectionEnabled?this.contactRuntime.rendererGoals():undefined;
-    const observedBodyDepth=this.bodyDepthBarrierEnabled?observeBodyDepth(frame,processedTimestampMs):undefined;
     const common = { motionOwnership, bimanualPalmContact, fingertipContact,localBodyContactGoals,observedBodyDepth,sequence: ++this.sequence, sourceFrameTimestampMs: frame.frameTimestampMs, processedTimestampMs, tracking, expressions, gaze: this.currentGaze, jointRotations, handMotion: handContext.diagnostics, armObservability };
     return upperBody
       ? { ...common, version: 2, headRotation: upperBody.deltas.head ?? null, shoulderMotion: upperBody.shoulderMotion }
@@ -1298,7 +1309,7 @@ export class AvatarMotionProcessor {
       palmBasisBySide[side] = palm;
       if (palm.imageBasis && frame.handSampledAtMs !== null) {
         this.handElbowBranchEvidence[side] = {
-          evidence: { forwardImage: palm.imageBasis.forward, geometryQuality: palm.imageGeometryQuality },
+            evidence: { forwardImage: palm.imageBasis.forward, geometryQuality: palm.imageGeometryQuality, sampledAtMs: frame.handSampledAtMs },
           imageLandmarks: candidate.landmarks.map((point) => ({ ...point })),
           sampledAtMs: frame.handSampledAtMs,
         };

@@ -65,6 +65,7 @@ export default function AvatarRendererDevHarness() {
   const [bodyDepthBarrierEnabled,setBodyDepthBarrierEnabled] = useState(false);
   const [depthFusionEnabled,setDepthFusionEnabled] = useState(false);
   const [rigEndpointEnabled,setRigEndpointEnabled] = useState(false);
+  const [elbowBranchSwitchEnabled,setElbowBranchSwitchEnabled] = useState(true);
   const [handConditioningEnabled,setHandConditioningEnabled] = useState(false);
   const [processorArmTemporal,setProcessorArmTemporal] = useState(false);
   const [contactShadowEnabled,setContactShadowEnabled]=useState(true);
@@ -155,7 +156,7 @@ export default function AvatarRendererDevHarness() {
     if(!latestContactInput.current||!latestPacket.current)return;
     const renderer=rendererRef.current;
     const payload={version:1,kind:"face-contact-evidence-snapshot",createdAt:new Date().toISOString(),capturedAtMs:performance.now(),
-      metadata:{avatarModelId,poseModel,simulatedLoss,fingertipContactEnabled,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactShadowEnabled,contactCorrectionEnabled,faceContactResearch},
+      metadata:{avatarModelId,poseModel,simulatedLoss,fingertipContactEnabled,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,elbowBranchSwitchEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactShadowEnabled,contactCorrectionEnabled,faceContactResearch},
       raw:latestContactInput.current,packet:latestPacket.current,contact:processorRef.current.getContactDiagnostics(),
       finalPose:renderer?.getFinalArmSnapshot()??null,rigProfile:renderer?.getRigProfile()??null,faceMeshCapability:renderer?.getFaceContactMeshCapability()??null};
     const url=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:"application/json"}));
@@ -175,6 +176,7 @@ export default function AvatarRendererDevHarness() {
   useEffect(()=>{processorRef.current.setBimanualPalmAssistEnabled(bimanualPalmAssistEnabled);},[bimanualPalmAssistEnabled]);
   useEffect(()=>{processorRef.current.setFingertipContactEnabled(fingertipContactEnabled);},[fingertipContactEnabled]);
   useEffect(()=>{processorRef.current.setRigEndpointEnabled(rigEndpointEnabled);},[rigEndpointEnabled]);
+  useEffect(()=>{processorRef.current.setElbowBranchSwitchEnabled(elbowBranchSwitchEnabled);},[elbowBranchSwitchEnabled]);
   useEffect(()=>{processorRef.current.setHandConditioningEnabled(handConditioningEnabled);},[handConditioningEnabled]);
   useEffect(()=>{processorRef.current.setProcessorArmTemporal(processorArmTemporal);},[processorArmTemporal]);
   const stopMotionReplay = useCallback(()=>{replayActiveRef.current=false;if(replayRequestRef.current!==null)cancelAnimationFrame(replayRequestRef.current);replayRequestRef.current=null;processorRef.current.reset();},[]);
@@ -468,6 +470,7 @@ export default function AvatarRendererDevHarness() {
       <label><input type="checkbox" checked={bodyDepthBarrierEnabled} onChange={e=>setBodyDepthBarrierEnabled(e.target.checked)} /> Body-local depth barrier (A/B)</label>
       <label><input type="checkbox" checked={depthFusionEnabled} onChange={e=>setDepthFusionEnabled(e.target.checked)} /> Relative arm depth fusion (A/B)</label>
       <label><input type="checkbox" checked={rigEndpointEnabled} onChange={(e)=>setRigEndpointEnabled(e.target.checked)} /> Rig-aware wrist reach (A/B)</label>
+      <label><input type="checkbox" checked={elbowBranchSwitchEnabled} onChange={(e)=>setElbowBranchSwitchEnabled(e.target.checked)} /> Hand elbow branch switch (A/B)</label>
       <label><input type="checkbox" checked={handConditioningEnabled} onChange={(e)=>setHandConditioningEnabled(e.target.checked)} /> Wrist-relative hand filter (A/B)</label>
       <label><input type="checkbox" checked={processorArmTemporal} onChange={(e)=>setProcessorArmTemporal(e.target.checked)} /> Arm temporal at processor (A/B)</label>
       <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Dynamics/filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={handTwistEnabled} onChange={(e) => setHandTwistEnabled(e.target.checked)} /> Hand twist (2B-5)</label><label><input type="checkbox" checked={continuousFingerEnabled} onChange={(e)=>setContinuousFingerEnabled(e.target.checked)} /> Continuous fingers (AR6)</label><label><input type="checkbox" checked={contactShadowEnabled} onChange={(e)=>{const enabled=e.target.checked;setContactShadowEnabled(enabled);if(!enabled)setContactCorrectionEnabled(false);}} /> Hand-body contact (AR9 shadow)</label><label><input type="checkbox" checked={contactCorrectionEnabled} onChange={(e)=>{const enabled=e.target.checked;setContactCorrectionEnabled(enabled);if(enabled)setContactShadowEnabled(true);}} /> Apply AR9 correction</label><label><input type="checkbox" checked={gestureEnabled} disabled={continuousFingerEnabled} onChange={(e) => setGestureEnabled(e.target.checked)} /> Finger gesture (legacy)</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Bone smoothing</label><label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
@@ -662,7 +665,7 @@ export default function AvatarRendererDevHarness() {
           if (!arm) return <p key={side}>{side}: —</p>;
           const flag = (name: string) => arm.confidenceFlags.includes(name);
           return <p key={side}>
-            {arm.spatial && <><small>search {arm.spatial.candidateCount} · face {arm.spatial.faceEvidenceUsed ? (arm.spatial.intentionalFaceContact ? "contact" : "clearance") : "n/a"} · penalty F/H/T {arm.spatial.facePenalty.toFixed(2)}/{arm.spatial.headCollisionPenalty.toFixed(2)}/{arm.spatial.torsoCollisionPenalty.toFixed(2)} · palm {motionDiagnostics?.handTwist[side]?.alignmentMode ?? "legacy"}</small><br /></>}
+            {arm.spatial && <><small>search {arm.spatial.candidateCount} · branch {arm.spatial.branchDecision ?? "legacy"} ({arm.spatial.pendingHandSamples ?? 0} mẫu) · margin {arm.spatial.scoreMargin?.toFixed(2) ?? "n/a"} · phân biệt ảnh {arm.spatial.handDiscriminabilityRadians === null || arm.spatial.handDiscriminabilityRadians === undefined ? "n/a" : (arm.spatial.handDiscriminabilityRadians * 180 / Math.PI).toFixed(0) + "°"} · face {arm.spatial.faceEvidenceUsed ? (arm.spatial.intentionalFaceContact ? "contact" : "clearance") : "n/a"} · penalty F/H/T {arm.spatial.facePenalty.toFixed(2)}/{arm.spatial.headCollisionPenalty.toFixed(2)}/{arm.spatial.torsoCollisionPenalty.toFixed(2)}</small><br /></>}
             <strong>{side}</strong>: upper <em>{arm.segmentLossState.upper}</em> · lower <em>{arm.segmentLossState.lower}</em><br />
             elbow {arm.elbowInference.source} · pole {arm.poleSource}<br />
             stability U/L {motionDiagnostics.armStability[side].upperStaticMode ? "STATIC" : "moving"}/{motionDiagnostics.armStability[side].lowerStaticMode ? "STATIC" : "moving"}
@@ -696,6 +699,6 @@ export default function AvatarRendererDevHarness() {
       </article>
       <article><h2>Phase 3A arm-frame</h2><p>Head: legacy/unverified, excluded from arm acceptance.</p><pre>{JSON.stringify(motionDiagnostics, null, 2)}</pre></article>
     </section>
-  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,fingertipContactEnabled,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,faceContactResearch,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
+  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,fingertipContactEnabled,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,elbowBranchSwitchEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,faceContactResearch,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
     </main>;
 }

@@ -7,7 +7,7 @@ export function contactOwnsArm(ownership: AvatarMotionOwnershipV1 | undefined, s
 }
 
 export function rendererClearanceMask(mask: ArmObservability, ownership: AvatarMotionOwnershipV1 | undefined, side: "left" | "right"): ArmObservability {
-  return contactOwnsArm(ownership, side) ? "---" : mask;
+  return contactOwnsArm(ownership, side)&&!ownership?.bodyDepthBarrier&&!ownership?.contactSafetyClearance ? "---" : mask;
 }
 
 export function processorOwnsJointTemporal(ownership: AvatarMotionOwnershipV1 | undefined, name: string): boolean {

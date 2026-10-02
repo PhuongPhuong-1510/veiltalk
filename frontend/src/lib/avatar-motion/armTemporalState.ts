@@ -1,6 +1,7 @@
 import type { QuaternionData,Vector3Data } from "./avatarPoseTypes";
 import type { ArmSide, ElbowSource, PoleSource } from "./avatarMotionDiagnostics";
 import type { ControlledArmJoint } from "./normalizedRigProfile";
+import type { InferredElbowBranchState } from "./armFrameSolver";
 import { IDENTITY_QUATERNION } from "./avatarPoseTypes";
 import { slerpQuaternionData } from "./motionMath";
 import { createRobustMeasurementState, type RobustMeasurementState } from "./adaptiveBodyProfile";
@@ -144,6 +145,8 @@ export interface ArmTemporalState {
   previousObservedElbow: { x: number; y: number; z: number } | null;
   /** Phase 3B partial-arm: mỏ neo phía gập khuỷu, giữ qua các frame để elbow inference không lật phía. */
   previousElbowDirection: { x: number; y: number; z: number } | null;
+  inferredBranch: InferredElbowBranchState;
+  branchRecoveryUntilAtMs: number | null;
   inferenceStartedAtMs: number | null;
   elbowSource: ElbowSource;
   /** P0-4/5: trạng thái hysteresis visibility, mang theo giữa các frame. */
@@ -157,7 +160,8 @@ export const createArmTemporalState = (): ArmTemporalState => ({
   invalidCandidateStartedAtMs: null, validCandidateStartedAtMs: null,
   segments: { upper: createSegmentTemporalState(), lower: createSegmentTemporalState() },
   previousPrimary: { upper: null, lower: null }, previousMeasurementPrimary:{upper:null,lower:null}, previousSecondary: { upper: null, lower: null },
-  lengthSamples: { upper: [], lower: [] }, calibratedLength: { upper: null, lower: null }, previousObservedElbow: null, previousElbowDirection: null, inferenceStartedAtMs: null,
+  lengthSamples: { upper: [], lower: [] }, calibratedLength: { upper: null, lower: null }, previousObservedElbow: null, previousElbowDirection: null,
+  inferredBranch: { trackedPole: null, pendingPole: null, pendingHandSamples: 0, lastDecisionHandSampledAtMs: null }, branchRecoveryUntilAtMs: null, inferenceStartedAtMs: null,
   lengthProfile: { upper: createRobustMeasurementState(), lower: createRobustMeasurementState() },
   elbowSource: "unavailable", elbowWasVisible: false, wristWasVisible: false,
 });

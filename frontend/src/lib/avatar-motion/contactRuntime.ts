@@ -18,6 +18,8 @@ import { FACE_CONTACT_BASELINE, type FaceContactResearchOptions } from "./faceCo
 import { buildHumanFaceContactSurface, locateHumanFaceSurface } from "./humanFaceContactSurface";
 import { ContactDepthRegistration, registeredContactDepth, type ContactRegistrationDiagnostic } from "./contactDepthRegistration";
 import { buildPosedIndexContactProbe } from "./indexFaceContactProbe";
+import { contactDepthOrderConflicts } from "./contactDepthOrdering";
+import type { ObservedBodyDepth } from "./observedBodyDepth";
 
 export interface ContactRuntimeDiagnostic {
   research?:{options:FaceContactResearchOptions;registration:ContactRegistrationDiagnostic|null;headYawRadians:number|null;selectionMargin:number|null;ambiguous:boolean;faceTriangle:number|null;sampleAgeMs:number|null;processorMs:number;observationTrace:ContactObservationTrace|null;inputs:Record<string,number|string|boolean|null>|null;regionSource:"locked"|"observed"|"temporal-history"|"none"};
@@ -55,7 +57,7 @@ export interface ContactRuntimeDiagnostic {
   correctionEnabled:boolean;
   correctionRequested:boolean;
   correctionApplied:boolean;
-  correctionReason:ContactPoseCorrection["reason"]|"inactive";
+  correctionReason:ContactPoseCorrection["reason"]|"inactive"|"body-depth-order-conflict";
   /** Solver quality multiplier after reach/collision fail-soft handling. */
   solverInfluenceScale:number;
   /** influence * solverInfluenceScale * evidenceQuality. */
@@ -291,11 +293,12 @@ export class ContactRuntime {
   update(
     side:ArmSide,frame:RawTrackingFrameV1,handLandmarks:RawNormalizedLandmarkV1[]|null,sampledAtMs:number|null,
     renderNowMs:number,renderDtMs:number,jointRotations:Partial<Record<string,QuaternionData>>,headRotation:QuaternionData|null,enabled:boolean,
-    handWorldLandmarks:RawNormalizedLandmarkV1[]|null=null,handedness:"left"|"right"|"unknown"=side,indexObserved=true,
+    handWorldLandmarks:RawNormalizedLandmarkV1[]|null=null,handedness:"left"|"right"|"unknown"=side,indexObserved=true,observedBodyDepth?:ObservedBodyDepth["left"],
   ){
     const started=performance.now();
     if(this.research.indexTip&&this.profile&&this.rig){const tip=indexObserved?buildPosedIndexContactProbe(this.profile,side,jointRotations):null;if(tip)this.rig.probes[side].indexTip=tip;else delete this.rig.probes[side].indexTip;}
     const state=this.sides[side],wasActive=activePhase(state.temporal.phase);
+    let depthOrderConflict=false;
     const isNew=sampledAtMs!==null&&(state.temporal.lastDetectorTimestampMs===null||sampledAtMs>state.temporal.lastDetectorTimestampMs);
     if(isNew&&sampledAtMs!==null){
       state.lastDetectorArrivalRenderMs=renderNowMs;
@@ -377,6 +380,12 @@ export class ContactRuntime {
         if(faceAge<0||faceAge>100||handAge<0||handAge>150||observation.ambiguous){observation.correctionEligible=false;observation.evidence.hardRejections.push(observation.ambiguous?"ambiguous-probe":"stale-observation");observation.confidence=0;}
       }
       if(observation&&this.research.meshSurface&&faceSurface)observation.faceLocation??=locateHumanFaceSurface(faceSurface,observation.imagePoint)??undefined;
+      if(observation&&this.profile&&observedBodyDepth){
+        const local=mapLockedAnchor(this.rig,observation.region,observation.surfaceFamily??regionFamily(observation.region),this.mappingUv(observation),observation.regionUv,observation.tangentAngleRadians??0);
+        if(local&&contactDepthOrderConflicts(this.profile,local,jointRotations,headRotation,observedBodyDepth)){
+          depthOrderConflict=true;observation.correctionEligible=false;observation.confidence=0;observation.evidence.hardRejections.push("body-depth-order-conflict");
+        }
+      }
       state.observationTrace=trace;
       state.observation=observation;
       const observationGap=state.temporal.lastObservedAtMs===null?Infinity:sampledAtMs-state.temporal.lastObservedAtMs;
@@ -429,6 +438,10 @@ export class ContactRuntime {
     if(!enabled){state.lastCorrection=null;state.lastCorrectionAtMs=null;state.appliedRotations={};}
 
     let correction:ContactPoseCorrection|null=null;
+    // Fresh opposite-side evidence overrides contact hold, release blending and cached solves.
+    // Otherwise a hand moving behind the head can retain a front-face target for another 140 ms.
+    if(this.profile&&state.locked?.localAnchor&&contactDepthOrderConflicts(this.profile,state.locked.localAnchor,jointRotations,headRotation,observedBodyDepth))depthOrderConflict=true;
+    if(depthOrderConflict){state.temporal=forceContactRelease(state.temporal,renderNowMs);state.temporal.visualInfluence=0;state.locked=null;state.lastCorrection=null;state.lastCorrectionAtMs=null;state.appliedRotations={};}
     if(enabled&&this.profile&&this.rig&&state.locked?.localAnchor&&state.temporal.visualInfluence>0&&(nowActive||state.temporal.phase==="release")){
       const anchor=poseContactAnchor(state.locked.localAnchor,this.profile,jointRotations,headRotation);
       if(anchor)correction=solveContactPoseCorrection(this.profile,this.rig,side,anchor,state.locked.probe,jointRotations,headRotation);
@@ -481,7 +494,7 @@ export class ContactRuntime {
       stableIdentitySamples:state.stableIdentitySamples,normalVelocity:state.observation?.normalVelocity??null,tangentVelocity:state.observation?.tangentVelocity??null,
       influence:state.temporal.visualInfluence,correctionEnabled:enabled,
       correctionRequested:Boolean(enabled&&state.locked&&state.temporal.visualInfluence>0),correctionApplied:applied,
-      correctionReason:correction?.reason??(usable?.reason??"inactive"),solverInfluenceScale,effectiveInfluence,evidenceQuality,
+      correctionReason:depthOrderConflict?"body-depth-order-conflict":correction?.reason??(usable?.reason??"inactive"),solverInfluenceScale,effectiveInfluence,evidenceQuality,
       anchorError:shown?.anchorError??null,normalErrorDegrees:shown?shown.normalErrorRadians*180/Math.PI:null,
       targetDistance:shown?.targetDistance??null,minReach:shown?.minReach??null,maxReach:shown?.maxReach??null,
       reachErrorRatio:shown?.reachErrorRatio??null,reachQuality:shown?.reachQuality??null,reachProjection:shown?.projection??null,

@@ -437,6 +437,93 @@ describe("three-point anatomical arm-frame solver", () => {
     expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-hand-palm-branch");
   });
 
+  it("switches a hidden elbow only after three distinct, discriminating Hand observations", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.45, .433); world[15] = lm(.7, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    let history: ArmGeometryHistory = { ...emptyHistory(), calibratedLength: { upper: .5, lower: .5 },
+      previousPole: { x: 0, y: 1, z: 0 }, lastValidPoleAtMs: 0, previousElbowDirection: { x: 0, y: 1, z: 0 } };
+    const solve = (sampledAtMs: number) => {
+      const result = solveAnatomicalArmFrames(world, image, profile, { left: history, right: emptyHistory() }, sampledAtMs,
+        DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+        { left: { hand: { forwardImage: { x: 0, y: -1, z: 0 }, geometryQuality: 1, sampledAtMs },
+          face: null, imageToWorldScale: 5, imageAspectRatio: 1, elbowBranchSwitchEnabled: true } }).sides.left!;
+      history = { ...history, inferredBranch: result.inferredBranch };
+      return result;
+    };
+    const first = solve(100);
+    expect(first.elbowPosition.y).toBeGreaterThan(0);
+    expect(first.diagnostic.spatial?.branchDecision).toBe("pending");
+    const duplicate = solve(100);
+    expect(duplicate.elbowPosition.y).toBeGreaterThan(0);
+    expect(duplicate.diagnostic.spatial?.pendingHandSamples).toBe(1);
+    expect(solve(133).elbowPosition.y).toBeGreaterThan(0);
+    const confirmed = solve(166);
+    expect(confirmed.diagnostic.spatial?.branchDecision).toBe("switched");
+    expect(confirmed.elbowPosition.y).toBeLessThan(0);
+  });
+
+  it("can score alternatives in shadow mode without changing the elbow", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.45, .433); world[15] = lm(.7, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    let history: ArmGeometryHistory = { ...emptyHistory(), calibratedLength: { upper: .5, lower: .5 },
+      previousPole: { x: 0, y: 1, z: 0 }, previousElbowDirection: { x: 0, y: 1, z: 0 } };
+    for (const sampledAtMs of [100, 133, 166, 200]) {
+      const result = solveAnatomicalArmFrames(world, image, profile, { left: history, right: emptyHistory() }, sampledAtMs,
+        DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+        { left: { hand: { forwardImage: { x: 0, y: -1, z: 0 }, geometryQuality: 1, sampledAtMs },
+          face: null, imageToWorldScale: 5, imageAspectRatio: 1, elbowBranchSwitchEnabled: false } }).sides.left!;
+      expect(result.elbowPosition.y).toBeGreaterThan(0);
+      expect(result.diagnostic.spatial?.candidateCount).toBeGreaterThanOrEqual(25);
+      expect(result.diagnostic.spatial?.scoreMargin).toBeGreaterThan(0);
+      history = { ...history, inferredBranch: result.inferredBranch };
+    }
+  });
+
+  it("does not choose a bend side when the elbow circle collapses near extension", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.699, .0316); world[15] = lm(1.198, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    const history: ArmGeometryHistory = { ...emptyHistory(), calibratedLength: { upper: .5, lower: .5 },
+      previousElbowDirection: { x: 0, y: 1, z: 0 } };
+    const result = solveAnatomicalArmFrames(world, image, profile, { left: history, right: emptyHistory() }, 100,
+      DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+      { left: { hand: { forwardImage: { x: 0, y: -1, z: 0 }, geometryQuality: 1, sampledAtMs: 100 },
+        face: null, imageToWorldScale: 5, imageAspectRatio: 1, elbowBranchSwitchEnabled: true } }).sides.left!;
+    expect(result.diagnostic.spatial?.branchDecision).toBe("unobservable");
+    expect(result.elbowPosition.y).toBeGreaterThan(0);
+  });
+
+  it("allows wrist flexion inside the Hand angular dead zone without changing the elbow", () => {
+    const world = Array.from({ length: 33 }, () => lm(0, 0));
+    world[11] = lm(.2, 0); world[12] = lm(-.2, 0);
+    world[13] = lm(.45, .433); world[15] = lm(.7, 0);
+    world[14] = lm(-.45, 0); world[16] = lm(-.7, 0);
+    world[23] = lm(.15, -.55); world[24] = lm(-.15, -.55);
+    const image = imageFrame(world); image[13].visibility = 0;
+    let history: ArmGeometryHistory = { ...emptyHistory(), calibratedLength: { upper: .5, lower: .5 },
+      previousElbowDirection: { x: 0, y: 1, z: 0 } };
+    for (const sampledAtMs of [100, 133, 166, 200]) {
+      const result = solveAnatomicalArmFrames(world, image, profile, { left: history, right: emptyHistory() }, sampledAtMs,
+        DEFAULT_AVATAR_MOTION_CONFIG.armFrame, false, undefined, undefined, undefined,
+        { left: { hand: { forwardImage: { x: .966, y: .259, z: 0 }, geometryQuality: 1, sampledAtMs },
+          face: null, imageToWorldScale: 5, imageAspectRatio: 1, elbowBranchSwitchEnabled: true } }).sides.left!;
+      expect(result.elbowPosition.y).toBeGreaterThan(0);
+      expect(result.diagnostic.spatial?.branchDecision).not.toBe("switched");
+      history = { ...history, inferredBranch: result.inferredBranch };
+    }
+  });
+
   it("does not anchor the bend side from a degenerate near-straight frame", () => {
     // Mỏ neo phía gập chỉ được ghi khi mặt phẳng gập còn xác định. Tay gần duỗi thẳng thì
     // hướng lệch khuỷu là nhiễu — ghi nó vào sẽ khóa nhầm phía cho các frame sau.
@@ -602,7 +689,7 @@ describe("three-point anatomical arm-frame solver", () => {
         allowContact: false, observedMinimumEllipseDistance: 2, quality: 1,
       } },
     }).sides.left!;
-    expect(solved.diagnostic.spatial?.candidateCount).toBe(24);
+    expect(solved.diagnostic.spatial?.candidateCount).toBeGreaterThanOrEqual(25);
     expect(solved.diagnostic.spatial?.faceEvidenceUsed).toBe(true);
     expect(solved.diagnostic.confidenceFlags).not.toContain("elbow-face-clearance-branch");
     expect(solved.elbowDirection).toEqual({ x: 0, y: 1, z: 0 });
