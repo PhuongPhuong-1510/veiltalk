@@ -1,0 +1,170 @@
+{
+  "generatedAt": "2026-10-01T23:18:52.137Z",
+  "baselineHead": "5df5ee8ec6a8f62581844a17af0d886608527004",
+  "files": [
+    {
+      "file": "frontend/package.json",
+      "sha256": "7eeb38292c841781fa016a810d1a444f1d7b8554ce131a5f53f7f73709ee4747"
+    },
+    {
+      "file": "frontend/scripts/audit-motion-rigs.mjs",
+      "sha256": "91d2ebe31b3638bfbfc687eaaa78a2826e686f07c7a2293351fc5169bc53bcaf"
+    },
+    {
+      "file": "frontend/src/App.tsx",
+      "sha256": "581b86f64fc662a1a6ef2bacfc24cbed5d7da06caaff1d1d25d9c78988f759d2"
+    },
+    {
+      "file": "frontend/src/components/avatar/AvatarMotionPreview.tsx",
+      "sha256": "b375696d7d71f7a32731724e73794e55ec94b29a27326fe252862c032667e941"
+    },
+    {
+      "file": "frontend/src/components/avatar/avatarMotionPreview.css",
+      "sha256": "64ca9bf2dbabe8abce83ca78c0307368e85a662054d9fa26d3297ee6ef4ccf5f"
+    },
+    {
+      "file": "frontend/src/components/dev/AvatarRendererDevHarness.tsx",
+      "sha256": "48944639c8473f55bde33feb7a8b7d9d514e3a7b5bbbbc49772748077cd63fe7"
+    },
+    {
+      "file": "frontend/src/components/dev/MotionReplayPanel.tsx",
+      "sha256": "53083abe7f687534dbcaac51f4fc92e707d719a423dec0fa75ee3d85d6022551"
+    },
+    {
+      "file": "frontend/src/components/dev/avatarRendererDevHarness.css",
+      "sha256": "b6bcf2691fe06ed12befb08e419e82222db4342740ffd4a828ece16dc622d360"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armFrameSolver.ts",
+      "sha256": "282501ea19a11fcda44226e5ceaacc3ebe839026fed986ef265a3f9b013bbba7"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarCollision.test.ts",
+      "sha256": "a689fe24b9f14af66287dc22962d2d8806171bc2c87895d1a472d414cabc03d5"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarCollisionCorrection.ts",
+      "sha256": "9ede6f78cd34ed5a600405fce4c87c7774999e205d58315b86f7b3d7e4c7f0b2"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarCollisionTypes.ts",
+      "sha256": "aeecc71e6267b7a564585eceda8567e16046fd64bf25779f4c6bd589efcbb79f"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarInterArmCollision.ts",
+      "sha256": "a51f296364b4789349f57211855da780e490ca4def31dd614bf561dc631eb374"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionDiagnostics.ts",
+      "sha256": "004b657b04e5ac4be19fb4c6000499b28428be84977fbe361fff0fece4921e29"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionProcessor.test.ts",
+      "sha256": "c01a86460f9b1979511f5f8ae0f20ed1c06d40719de65254fce704fab717e36f"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionProcessor.ts",
+      "sha256": "c95df3d7dd16e043e5ab2410639415b2e3c1fb33da3096c6da08f246219791a6"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarPoseTypes.ts",
+      "sha256": "5e23abfce1471919873a4c35d0c73805ad74179e3f1cd7473ac444d10e78a548"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/bimanualHandTemporal.test.ts",
+      "sha256": "6bb991eeb15e8e713a252eb1330b656375c2b1795541b7207922950a6d3f04fa"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/bimanualPalmAssist.test.ts",
+      "sha256": "e9275b5fb2c6852c6e11d7c992b59f84b02cb58e6699c6ea8466a016e6a35e61"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/bimanualPalmAssist.ts",
+      "sha256": "3d5b50e00257d3788f569aa4d8ee8365762418d6b9f56f2e72b69ce54c6bfc57"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/contactRuntime.ts",
+      "sha256": "ab52a92dc282a0c9023ab8f64e298990de74d8ac10554fc07832db079455b7be"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/handLandmarkConditioning.test.ts",
+      "sha256": "2b20ee3fa454a63e29e81101be723c6e3f2a8290865d2922f8058ecd373524f7"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/handLandmarkConditioning.ts",
+      "sha256": "89d11b6fcfaab6c97e67e45c388f9cb85964bb94cca0e55f38252944171ac708"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/handTwistRig.ts",
+      "sha256": "d7cb1997855c03b60d21c604b658ffa02cda3cccf886afb4ac571bb60fbacf8c"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/jointConstraints.test.ts",
+      "sha256": "496e2206e72278dfcf4b66a401c1851dd7068a7df029d21916893dab4b234735"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/jointConstraints.ts",
+      "sha256": "ba0835f642c774bbdeeb965983e0db294b343a164b5030bfb3d99e86a6be8d95"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/motionBenchmark.ts",
+      "sha256": "6233a7541d14a024f71588f54c1ff7acd2d89cfbfc0aec12cd7dce1387f64e28"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/motionOwnership.test.ts",
+      "sha256": "78d4298fda26ad14db8bef25ffd741e20483bc278e24c3b46a09dbf79248d0ce"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/motionOwnership.ts",
+      "sha256": "caa46fc3535439d1acdec975ca78c38b837668129f10bd4e7a0c3acc44bcd9c8"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/motionReplay.test.ts",
+      "sha256": "8ad8846c32733ce3517b43fb91ffcfebd5be33c18676de7ef2e7bcf936190739"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/motionReplay.ts",
+      "sha256": "d3df9b63db656d72bcce9866a3a5c8c828f5769b60397646d6e9c8da3872cf54"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/rigAwareArmEndpoint.test.ts",
+      "sha256": "54ce779eaab87db1d7c4e359b411acb0a4090e880dffe6fa27dc2c2f5e89f3e5"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/rigAwareArmEndpoint.ts",
+      "sha256": "a9bfc3718915302948b20ccdd6973aad351fe419c6828822d26adbc56172c4b1"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/syntheticMotionRecording.ts",
+      "sha256": "05cb604883834a5b709a7494445c1878348e88f9be45b1f79901b23548a8a9de"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/wristDepthMemory.test.ts",
+      "sha256": "c593b106126c4293194ea09adf61b7bcf54c391d0767dc5575ebb06190f85889"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/wristDepthMemory.ts",
+      "sha256": "7a7fb56603322d01dd0745cef07cc120214e79cf0d488e2a765ee8f03f03cc9d"
+    },
+    {
+      "file": "frontend/src/lib/avatar-renderer/avatarRenderer.ts",
+      "sha256": "aae7fdcbe08a9c064a9696279055f1ce01662b005ce282aa1310306d59b6b6c0"
+    },
+    {
+      "file": "frontend/vite.config.ts",
+      "sha256": "3349a5b4c75c9d5e0c1cd17e09980a8bb5ef52b6eb8b78bb4f0c9fb20d364669"
+    }
+  ],
+  "testResult": {
+    "files": 113,
+    "tests": 942,
+    "passed": true
+  },
+  "buildPassed": true,
+  "lintExit": 0,
+  "limitations": [
+    "No browser instance available",
+    "No physical webcam or XR end-to-end acceptance",
+    "Synthetic rig graph is not normalized/skinned visual acceptance"
+  ]
+}

@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { BimanualHandFeatures } from "./bimanualHandFeatures";
 import { BimanualHandTemporal } from "./bimanualHandTemporal";
 
-const features={} as BimanualHandFeatures;
+const features: BimanualHandFeatures = {
+  valid: true, normalizedByPalmWidth: 1, wristDistance: 1, palmCenterDistance: 1,
+  tipCentroidDistance: 1, thumbThumb: { distance: 0, proximity: 1 },
+  indexIndex: { distance: 0, proximity: 1 }, leftThumbRightIndex: { distance: 1, proximity: 0 },
+  rightThumbLeftIndex: { distance: 1, proximity: 0 }, nearestRegularTipDistance: 0,
+  regularTipContactCount: 1, regularSegmentIntersectionCount: 0, regularSegmentIntersectionScore: 0,
+  palmsFacing: 0, palmsSameDirection: 1, palmForwardAlignment: 1, heartVerticalOrder: 1,
+};
 const heart={heart:.9,palmsTogether:0,clasp:0,interlace:0};
 
 describe("BimanualHandTemporal",()=>{

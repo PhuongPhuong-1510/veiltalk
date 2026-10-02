@@ -31,9 +31,10 @@ function colliders(profile: AvatarCollisionProfile, side: "left"|"right", pose: 
 }
 
 /** All left/right limb pairs, including real palm capsules supplied through pose.hand. */
-export function queryAvatarInterArmCollisions(profile:AvatarCollisionProfile,leftPose:AvatarCollisionPose,rightPose:AvatarCollisionPose):InterArmCollisionContact[]{
+export function queryAvatarInterArmCollisions(profile:AvatarCollisionProfile,leftPose:AvatarCollisionPose,rightPose:AvatarCollisionPose,ignoreHandPair=false):InterArmCollisionContact[]{
   const left=colliders(profile,"left",leftPose),right=colliders(profile,"right",rightPose),contacts:InterArmCollisionContact[]=[];
   for(const [leftPart,leftCollider] of Object.entries(left) as Array<[AvatarCollisionArmPart,CapsuleCollider]>) for(const [rightPart,rightCollider] of Object.entries(right) as Array<[AvatarCollisionArmPart,CapsuleCollider]>){
+    if(ignoreHandPair&&leftPart==="hand"&&rightPart==="hand")continue;
     const hit=capsuleCapsuleContact(leftCollider,rightCollider,{pairKey:`arm:left:${leftPart}|arm:right:${rightPart}`,ownerA:{kind:"arm",side:"left",part:leftPart},ownerB:{kind:"arm",side:"right",part:rightPart}});if(!hit.valid||hit.penetrationDepth<=0)continue;
     contacts.push({leftPart,rightPart,penetrationDepth:hit.penetrationDepth,normalRightToLeft:hit.normalBToA,closestPointLeft:hit.pointA,closestPointRight:hit.pointB,normalizedPenetration:hit.normalizedPenetration,leftParameter:hit.parameterA??.5,rightParameter:hit.parameterB??.5});
   }
@@ -48,8 +49,8 @@ const freedom=(mask:ArmObservability)=>{
 const vector=(p:Vector3Data)=>new Vector3(p.x,p.y,p.z);
 
 /** Deepest-first mutual projection. The less-observed arm receives more displacement. */
-export function correctAvatarInterArmCollision(profile:AvatarCollisionProfile,leftBaseline:AvatarCollisionPose,rightBaseline:AvatarCollisionPose,observability:Record<"left"|"right",ArmObservability>,maxDisplacement:number,maxIterations=3,depthOrdering:"left-front"|"right-front"|null=null):InterArmCorrectionResult{
-  let left=leftBaseline,right=rightBaseline,contacts=queryAvatarInterArmCollisions(profile,left,right);const before=contacts;
+export function correctAvatarInterArmCollision(profile:AvatarCollisionProfile,leftBaseline:AvatarCollisionPose,rightBaseline:AvatarCollisionPose,observability:Record<"left"|"right",ArmObservability>,maxDisplacement:number,maxIterations=3,depthOrdering:"left-front"|"right-front"|null=null,ignoreHandPair=false):InterArmCorrectionResult{
+  let left=leftBaseline,right=rightBaseline,contacts=queryAvatarInterArmCollisions(profile,left,right,ignoreHandPair);const before=contacts;
   const leftPole=vector(left.elbow).sub(vector(left.shoulder)),rightPole=vector(right.elbow).sub(vector(right.shoulder));
   const leftFreedom=freedom(observability.left),rightFreedom=freedom(observability.right),sum=Math.max(1e-8,leftFreedom+rightFreedom);
   if(leftFreedom+rightFreedom<=1e-8)return{left,right,contactsBefore:before,contactsAfter:contacts,iterations:0,baselinePreserved:true};
@@ -62,10 +63,10 @@ export function correctAvatarInterArmCollision(profile:AvatarCollisionProfile,le
     const rightIk=solveContactArmIk({shoulder:right.shoulder,wristTarget:nextRight,upperLength:profile.arms.right.upperLength,lowerLength:profile.arms.right.lowerLength,preferredPole:poleFromDesired(right.shoulder,nextRight,desiredRightElbow,rightPole)});
     if(!leftIk||!rightIk)break;
     const leftShift=vector(leftIk.wrist).sub(vector(left.wrist)),rightShift=vector(rightIk.wrist).sub(vector(right.wrist));
-    const candidateLeft={...left,elbow:leftIk.elbow,wrist:leftIk.wrist,...(left.hand?{hand:vector(left.hand).add(leftShift)}:{})};const candidateRight={...right,elbow:rightIk.elbow,wrist:rightIk.wrist,...(right.hand?{hand:vector(right.hand).add(rightShift)}:{})};
+    const candidateLeft=leftFreedom===0?left:{...left,elbow:leftIk.elbow,wrist:leftIk.wrist,...(left.hand?{hand:vector(left.hand).add(leftShift)}:{}),...(left.palmCenter?{palmCenter:vector(left.palmCenter).add(leftShift)}:{})};const candidateRight=rightFreedom===0?right:{...right,elbow:rightIk.elbow,wrist:rightIk.wrist,...(right.hand?{hand:vector(right.hand).add(rightShift)}:{}),...(right.palmCenter?{palmCenter:vector(right.palmCenter).add(rightShift)}:{})};
     const depthDelta=candidateLeft.wrist.z-candidateRight.wrist.z;
     if((depthOrdering==="left-front"&&depthDelta<0)||(depthOrdering==="right-front"&&depthDelta>0))break;
-    const next=queryAvatarInterArmCollisions(profile,candidateLeft,candidateRight);if(score(next)>=score(contacts))break;left=candidateLeft;right=candidateRight;contacts=next;
+    const next=queryAvatarInterArmCollisions(profile,candidateLeft,candidateRight,ignoreHandPair);if(score(next)>=score(contacts))break;left=candidateLeft;right=candidateRight;contacts=next;
   }
   return{left,right,contactsBefore:before,contactsAfter:contacts,iterations:maxIterations,baselinePreserved:left===leftBaseline&&right===rightBaseline};
 }

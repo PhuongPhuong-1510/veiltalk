@@ -1,3 +1,4 @@
+import { retargetArmEndpoint } from "./rigAwareArmEndpoint";
 import { Quaternion, Vector3 } from "three";
 
 import type { RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
@@ -38,7 +39,10 @@ export interface ArmGeometryHistory { previousPole: Vector3Data | null; previous
 
    */
 
-  previousElbowDirection?: Vector3Data | null }
+  previousElbowDirection?: Vector3Data | null;
+  /** Provisional measurements from genuine observations; never grants unbounded inference. */
+  observedLength?: { upper: number | null; lower: number | null };
+  previousDeltas?: ArmDeltaOutput }
 
 export interface HandElbowBranchEvidence {
 
@@ -53,6 +57,7 @@ export interface HandElbowBranchEvidence {
 }
 
 export interface ArmSpatialEvidence {
+  rigEndpointEnabled?: boolean;
 
   hand: HandElbowBranchEvidence | null;
 
@@ -79,7 +84,7 @@ export interface SideArmGeometryResult {
 
   primary: { upper: Vector3Data; lower: Vector3Data | null }; secondary: { upper: Vector3Data; lower: Vector3Data | null };
 
-  elbowSource: ElbowSource; elbowPosition: Vector3Data; observedLengths: { upper: number; lower: number } | null;
+  elbowSource: ElbowSource; elbowPosition: Vector3Data; observedLengths: { upper: number; lower: number | null } | null;
 
   /** Phase 3B partial-arm: hướng khuỷu lệch trục vai–cổ tay của frame này, để frame sau khóa phía gập. */
 
@@ -898,6 +903,9 @@ function solveSide(
 
     const calibrationFromObservation = Boolean(upperCalibration && lowerCalibration);
 
+    upperCalibration ??= history.observedLength?.upper;
+    lowerCalibration ??= history.observedLength?.lower;
+
     if (!upperCalibration || !lowerCalibration) {
 
       // P0-3: chưa calibrated không còn nghĩa là "không thể infer". Dùng prior giải phẫu
@@ -1001,6 +1009,19 @@ function solveSide(
   if (segmentRatio !== null && (segmentRatio < config.minimumSegmentRatio || segmentRatio > config.maximumSegmentRatio)) { lowerDirectionValid = false; flags.push("extreme-segment-ratio"); }
 
   upper.normalize(); if (lowerDirectionValid) lower!.normalize(); armAxis.normalize();
+
+  // An experimental retarget objective changes avatar segment directions only. It never changes
+  // observed human lengths, elbow provenance, calibration or the partial-arm geometry policy.
+  const avatarArm = profile.collisionReference?.arms[side];
+  if (spatialEvidence?.rigEndpointEnabled && avatarArm && elbowObserved && wrist && lowerDirectionValid
+    && spatialEvidence.wrist?.source !== "reconstructed") {
+    const endpoint = retargetArmEndpoint({ shoulder: vectorData(shoulder), elbow: vectorData(elbow), wrist: vectorData(wrist),
+      avatarUpperLength: avatarArm.upperLength, avatarLowerLength: avatarArm.lowerLength });
+    if (endpoint) {
+      upper = vector(endpoint.upperDirection); lower = vector(endpoint.lowerDirection);
+      flags.push(endpoint.projected ? "rig-endpoint-projected" : "rig-endpoint-retargeted");
+    }
+  }
 
   if (directionFilter) { upper = vector(directionFilter(i.upper, vectorData(upper))).normalize(); if (lowerDirectionValid) lower = vector(directionFilter(i.lower, vectorData(lower!))).normalize(); }
 
@@ -1206,7 +1227,7 @@ function solveSide(
 
     const deltaLocal = multiplyQuaternions(inverseQuaternion(joint.restLocalRotation), multiplyQuaternions(inverseQuaternion(parentTargetWorld), targetWorld));
 
-    const safe = constraintsEnabled ? constrainJointRotation(name, deltaLocal) : deltaLocal; if (!safe) return reject("invalid-constraint", flags);
+    const safe = constraintsEnabled ? constrainJointRotation(name, deltaLocal, history.previousDeltas?.[name]) : deltaLocal; if (!safe) return reject("invalid-constraint", flags);
 
     deltas[name] = safe; targetWorldRotations[name] = multiplyQuaternions(parentTargetWorld, multiplyQuaternions(joint.restLocalRotation, safe));
 
@@ -1252,7 +1273,8 @@ function solveSide(
 
     secondary: { upper: upperSecondary, lower: lowerDirectionValid ? lowerSecondary : null }, elbowSource, elbowPosition: vectorData(elbow),
 
-    observedLengths: elbowObserved && lowerDirectionValid ? { upper: upperLength, lower: lowerLength! } : null }, diagnostic, visibilityState };
+    observedLengths: elbowObserved ? { upper: upperLength,
+      lower: lowerDirectionValid && spatialEvidence?.wrist?.source !== "reconstructed" ? lowerLength : null } : null }, diagnostic, visibilityState };
 
 }
 

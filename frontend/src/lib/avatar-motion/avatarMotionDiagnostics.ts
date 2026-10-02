@@ -184,6 +184,10 @@ export interface ArmFrameDiagnostic {
   };
   /** Phase 3B.4: nguồn wrist dùng cho arm solve; chỉ là diagnostic local, không vào packet. */
   wristEvidence?: {
+    depthSign?: -1 | 1 | null;
+    depthAmbiguity?: number | null;
+    calibrationEligible?: boolean;
+    calibrationSamples?: { upper: number; lower: number };
     source: WristEvidenceSource;
     sourceChanged: boolean;
     effectiveGraceMs: number;

@@ -22,6 +22,19 @@ const budget: AvatarCollisionCorrectionBudget = { maxWristDisplacementPerFrame: 
 const clear: AvatarCollisionPose = { shoulder: {x:-.4,y:.65,z:0}, elbow: {x:-.85,y:.45,z:0}, wrist: {x:-1.15,y:.15,z:0} };
 
 describe("avatar self collision", () => {
+  it("does not modify a contact-owned arm during inter-arm correction", () => {
+    const left: AvatarCollisionPose = { shoulder:{x:-.4,y:.7,z:0},elbow:{x:-.05,y:.4,z:0},wrist:{x:.2,y:.2,z:0},hand:{x:.24,y:.2,z:0} };
+    const right: AvatarCollisionPose = { shoulder:{x:.4,y:.7,z:0},elbow:{x:.05,y:.4,z:0},wrist:{x:-.2,y:.2,z:0},hand:{x:-.24,y:.2,z:0} };
+    const result = correctAvatarInterArmCollision(profile,left,right,{left:"---",right:"SEW"},.02);
+    expect(result.left).toBe(left);
+  });
+  it("excludes only intentional hand-hand contact while retaining other collision pairs", () => {
+    const left: AvatarCollisionPose = { shoulder:{x:-.4,y:.7,z:0},elbow:{x:-.05,y:.4,z:0},wrist:{x:0,y:.2,z:0},hand:{x:0,y:.3,z:0} };
+    const right: AvatarCollisionPose = { shoulder:{x:.4,y:.7,z:0},elbow:{x:.05,y:.4,z:0},wrist:{x:0,y:.2,z:0},hand:{x:0,y:.3,z:0} };
+    const hits = queryAvatarInterArmCollisions(profile,left,right,true);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some(hit=>hit.leftPart==="hand"&&hit.rightPart==="hand")).toBe(false);
+  });
   it("preserves the exact baseline object when there is no collision", () => {
     const result = correctAvatarArmCollision(profile, { side:"left", baseline:clear, deltaSeconds:1/60, observability:"SEW", bendPole:{x:0,y:1,z:0}, budget });
     expect(result.pose).toBe(clear);

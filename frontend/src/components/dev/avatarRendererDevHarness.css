@@ -1,4 +1,8 @@
 .avatar-renderer-dev { min-height: 100vh; padding: 20px; color: #f5f3ff; background: #0d0b14; font: 14px/1.45 Inter, sans-serif; }
+.motion-replay-panel { margin-top: 18px; padding: 16px; border: 1px solid #6956d8; border-radius: 12px; background: #171326; }
+.motion-replay-panel button, .motion-replay-panel label, .motion-replay-panel>span { display: inline-block; margin: 6px 10px 6px 0; }
+.motion-replay-panel select { margin-left: 8px; padding: 6px; }
+.motion-replay-panel pre { max-height: 320px; overflow: auto; white-space: pre-wrap; }
 .avatar-renderer-dev header, .dev-controls, .dev-panels { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .avatar-renderer-dev header { justify-content: space-between; } .avatar-renderer-dev h1 { margin: 4px 0; }
 .avatar-renderer-dev button { padding: 8px 12px; border: 1px solid #6956d8; border-radius: 8px; color: white; background: #342a69; }

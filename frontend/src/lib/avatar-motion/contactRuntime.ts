@@ -259,6 +259,7 @@ export class ContactRuntime {
   setProfile(profile:NormalizedAvatarRigProfile|null){this.profile=profile;this.rig=profile?buildAvatarContactRig(profile):null;this.reset();}
   reset(){this.sides={left:memory(),right:memory()};this.diagnostics={left:diagnostic("left"),right:diagnostic("right")};}
   snapshot(){return structuredClone(this.diagnostics);}
+  correctionOwners():Record<ArmSide,boolean>{return{left:this.diagnostics.left.correctionApplied,right:this.diagnostics.right.correctionApplied};}
 
   update(
     side:ArmSide,frame:RawTrackingFrameV1,handLandmarks:RawNormalizedLandmarkV1[]|null,sampledAtMs:number|null,

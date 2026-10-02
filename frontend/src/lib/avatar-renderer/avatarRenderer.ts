@@ -1,3 +1,4 @@
+import { assistBimanualPalms, type BimanualPalmAssistResult } from "../avatar-motion/bimanualPalmAssist";
 import { AmbientLight, Box3, Color, DirectionalLight, PerspectiveCamera, Quaternion, Scene, Vector3, WebGLRenderer } from "three";
 
 import { IDENTITY_QUATERNION, isFingerJointName, type AvatarPoseJointNameV2, type AvatarPosePacket, type QuaternionData, type ShoulderMotionStateV1 } from "../avatar-motion/avatarPoseTypes";
@@ -23,6 +24,7 @@ import { buildAvatarCollisionProfile, poseAvatarCollisionProfile, type AvatarCol
 import { correctAvatarArmCollision } from "../avatar-motion/avatarCollisionCorrection";
 import { correctAvatarInterArmCollision, queryAvatarInterArmCollisions, type InterArmCollisionContact } from "../avatar-motion/avatarInterArmCollision";
 import type { AvatarCollisionCorrectionResult, AvatarCollisionPose } from "../avatar-motion/avatarCollisionTypes";
+import { processorOwnsJointTemporal, rendererClearanceMask } from "../avatar-motion/motionOwnership";
 
 
 
@@ -36,6 +38,7 @@ export interface AppliedSelfCollisionDiagnostic {
   left: AvatarCollisionCorrectionResult | null;
   right: AvatarCollisionCorrectionResult | null;
   interArm: InterArmCollisionContact[];
+  palmAssist?: BimanualPalmAssistResult;
 }
 
 export interface AppliedShoulderTranslationDiagnostic {
@@ -462,6 +465,43 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
 
 
 
+  /** Normalized humanoid FK after the most recent draw; sequence may lag a new input packet. */
+  getFinalArmSnapshot(): { sequence: number | null; atMs: number; space: "normalized-avatar-world"; arms: Record<string, unknown>; skinnedArms: Record<string, unknown> } {
+    const arms: Record<string, unknown> = {};
+    const skinnedArms: Record<string, unknown> = {};
+    const model = this.model;
+    if (model) {
+      model.root.updateMatrixWorld(true);
+      for (const side of ["left", "right"] as const) {
+        const joints: Record<string, unknown> = {};
+        for (const name of ["UpperArm", "LowerArm", "Hand"] as const) {
+          const bone = model.bones[`${side}${name}`];
+          if (!bone) continue;
+          const p = bone.getWorldPosition(new Vector3()), q = bone.getWorldQuaternion(new Quaternion());
+          joints[name] = { position: { x: p.x, y: p.y, z: p.z }, rotation: { x: q.x, y: q.y, z: q.z, w: q.w } };
+        }
+        arms[side] = joints;
+        if (model.vrm) {
+          const rawJoints: Record<string, unknown> = {};
+          for (const name of ["UpperArm", "LowerArm", "Hand"] as const) {
+            const raw = model.vrm.humanoid.getRawBoneNode(`${side}${name}`);
+            if (!raw) continue;
+            const p = raw.getWorldPosition(new Vector3()), q = raw.getWorldQuaternion(new Quaternion());
+            rawJoints[name] = { position: { x: p.x, y: p.y, z: p.z }, rotation: { x: q.x, y: q.y, z: q.z, w: q.w } };
+          }
+          const palmNodes = (["Hand", "IndexProximal", "MiddleProximal", "LittleProximal"] as const).map(name => model.vrm!.humanoid.getRawBoneNode(`${side}${name}`));
+          if (palmNodes.every(Boolean)) {
+            const points = palmNodes.map(node => node!.getWorldPosition(new Vector3()));
+            const center = points.reduce((sum, p) => sum.add(p), new Vector3()).multiplyScalar(.25);
+            rawJoints.palmCenter = { x: center.x, y: center.y, z: center.z };
+          }
+          skinnedArms[side] = rawJoints;
+        }
+      }
+    }
+    return { sequence: this.appliedSequence, atMs: this.now(), space: "normalized-avatar-world", arms, skinnedArms };
+  }
+
   private applyTarget(packet: AvatarPosePacket, dt: number): void {
 
     const rotationAlpha = this.smoothing ? dampingAlpha(20, dt) : 1;
@@ -522,7 +562,7 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
 
       // Hand tracking commonly arrives at only 10-15 Hz. Interpolate fingers at render cadence so
       // they do not visibly step relative to the already-smoothed wrist/arm chain.
-      const alpha = isProcessorOwnedRotation(packet.version, name) ? 1 : isFingerJointName(name) ? fingerRotationAlpha : rotationAlpha;
+      const alpha = isProcessorOwnedRotation(packet.version, name) || processorOwnsJointTemporal(packet.motionOwnership, name) ? 1 : isFingerJointName(name) ? fingerRotationAlpha : rotationAlpha;
 
       const current = this.currentRotations[name] ?? rest; const value = alpha < 1 ? slerpQuaternion(current, targetLocal, alpha) : targetLocal; this.currentRotations[name] = value;
 
@@ -562,16 +602,23 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
       const shoulder=upper.getWorldPosition(new Vector3()),elbow=lower.getWorldPosition(new Vector3()),wrist=hand.getWorldPosition(new Vector3());
       const handRef=model.rigProfile?.hands?.[side],frame=handRef?.contactFrame;
       const palmEnd=frame?.palmLength?new Vector3(frame.forwardLocal.x,frame.forwardLocal.y,frame.forwardLocal.z).applyQuaternion(hand.getWorldQuaternion(new Quaternion())).normalize().multiplyScalar(frame.palmLength).add(wrist):wrist.clone();
-      const pose:AvatarCollisionPose={shoulder,elbow,wrist,hand:palmEnd};poses[side]=pose;
+      const palmProbe=frame?.probes?.palmCenter?.offsetLocal;
+      const palmCenter=palmProbe?new Vector3(palmProbe.x,palmProbe.y,palmProbe.z).applyQuaternion(hand.getWorldQuaternion(new Quaternion())).add(wrist):undefined;
+      const pose:AvatarCollisionPose={shoulder,elbow,wrist,hand:palmEnd,...(palmCenter?{palmCenter}:{})};poses[side]=pose;
       const axis=wrist.clone().sub(shoulder).normalize(),pole=elbow.clone().sub(shoulder);pole.addScaledVector(axis,-pole.dot(axis));if(pole.lengthSq()<1e-10)pole.set(0,0,1);else pole.normalize();
       const total=posedProfile.arms[side].upperLength+posedProfile.arms[side].lowerLength;
-      const result=correctAvatarArmCollision(posedProfile,{side,baseline:pose,deltaSeconds:dt,observability:packet.armObservability?.[side]??"---",bendPole:pole,budget:{maxWristDisplacementPerFrame:total*.08,maxElbowAngularCorrectionPerSecond:8,maxTotalCorrection:total*.3,maxIterations:4,influence:1}});
+      const result=correctAvatarArmCollision(posedProfile,{side,baseline:pose,deltaSeconds:dt,observability:rendererClearanceMask(packet.armObservability?.[side]??"---",packet.motionOwnership,side),bendPole:pole,budget:{maxWristDisplacementPerFrame:total*.08,maxElbowAngularCorrectionPerSecond:8,maxTotalCorrection:total*.3,maxIterations:4,influence:1}});
       diagnostic[side]=result;if(!result.baselinePreserved){this.applyCorrectedArm(side,pose,result.pose);poses[side]=result.pose;model.root.updateMatrixWorld(true);}
     }
     if(poses.left&&poses.right){
+      if(packet.bimanualPalmContact?.version===1 && packet.armObservability?.left==="SEW" && packet.armObservability?.right==="SEW" && !packet.motionOwnership?.contactArms.left && !packet.motionOwnership?.contactArms.right){
+        const assist=assistBimanualPalms(posedProfile,poses.left,poses.right,packet.bimanualPalmContact.influence,(posedProfile.arms.left.upperLength+posedProfile.arms.left.lowerLength)*Math.min(.015,Math.max(0,dt)*.4));
+        diagnostic.palmAssist=assist;
+        if(assist.applied){this.applyCorrectedArm("left",poses.left,assist.left);model.root.updateMatrixWorld(true);this.applyCorrectedArm("right",poses.right,assist.right);model.root.updateMatrixWorld(true);poses.left=assist.left;poses.right=assist.right;}
+      }
       const depthDelta=poses.left.wrist.z-poses.right.wrist.z,depthThreshold=Math.max(posedProfile.arms.left.handRadius,posedProfile.arms.right.handRadius);
       if(Math.abs(depthDelta)>depthThreshold)this.interArmDepthOrdering=depthDelta>0?"left-front":"right-front";
-      const inter=correctAvatarInterArmCollision(posedProfile,poses.left,poses.right,packet.armObservability??{left:"---",right:"---"},(posedProfile.arms.left.lowerLength+posedProfile.arms.right.lowerLength)*.04,3,this.interArmDepthOrdering);
+      const inter=correctAvatarInterArmCollision(posedProfile,poses.left,poses.right,{left:rendererClearanceMask(packet.armObservability?.left??"---",packet.motionOwnership,"left"),right:rendererClearanceMask(packet.armObservability?.right??"---",packet.motionOwnership,"right")},(posedProfile.arms.left.lowerLength+posedProfile.arms.right.lowerLength)*.04,3,this.interArmDepthOrdering,diagnostic.palmAssist?.applied===true||diagnostic.palmAssist?.reason==="already-touching");
       if(!inter.baselinePreserved){this.applyCorrectedArm("left",poses.left,inter.left);model.root.updateMatrixWorld(true);this.applyCorrectedArm("right",poses.right,inter.right);model.root.updateMatrixWorld(true);poses.left=inter.left;poses.right=inter.right;}
       diagnostic.interArm=queryAvatarInterArmCollisions(posedProfile,poses.left,poses.right);
     }
@@ -580,11 +627,14 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
 
   private applyCorrectedArm(side:"left"|"right",from:AvatarCollisionPose,to:AvatarCollisionPose):void{
     const model=this.model!,upper=model.bones[`${side}UpperArm`]!,lower=model.bones[`${side}LowerArm`]!;
+    const preservedHandWorld=model.bones[`${side}Hand`]?.getWorldQuaternion(new Quaternion());
     this.rotateBoneDirectionWorld(upper,new Vector3().subVectors(new Vector3(from.elbow.x,from.elbow.y,from.elbow.z),new Vector3(from.shoulder.x,from.shoulder.y,from.shoulder.z)),new Vector3().subVectors(new Vector3(to.elbow.x,to.elbow.y,to.elbow.z),new Vector3(to.shoulder.x,to.shoulder.y,to.shoulder.z)));
     this.currentRotations[`${side}UpperArm`]={x:upper.quaternion.x,y:upper.quaternion.y,z:upper.quaternion.z,w:upper.quaternion.w};model.root.updateMatrixWorld(true);
     const elbow=lower.getWorldPosition(new Vector3()),hand=model.bones[`${side}Hand`]!,wrist=hand.getWorldPosition(new Vector3());
     this.rotateBoneDirectionWorld(lower,wrist.sub(elbow),new Vector3(to.wrist.x,to.wrist.y,to.wrist.z).sub(elbow));
     this.currentRotations[`${side}LowerArm`]={x:lower.quaternion.x,y:lower.quaternion.y,z:lower.quaternion.z,w:lower.quaternion.w};
+    model.root.updateMatrixWorld(true);
+    if(preservedHandWorld){const palm=model.bones[`${side}Hand`]!;const parent=palm.parent?.getWorldQuaternion(new Quaternion())??new Quaternion();palm.quaternion.copy(parent.invert().multiply(preservedHandWorld)).normalize();this.currentRotations[`${side}Hand`]={x:palm.quaternion.x,y:palm.quaternion.y,z:palm.quaternion.z,w:palm.quaternion.w};}
   }
 
   private rotateBoneDirectionWorld(bone:import("three").Object3D,from:Vector3,to:Vector3):void{

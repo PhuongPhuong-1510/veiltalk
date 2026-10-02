@@ -25,6 +25,8 @@ export interface AvatarCollisionPose {
   wrist: Vector3Data;
   /** Optional palm center. The wrist is used when it is unavailable. */
   hand?: Vector3Data;
+  /** Actual rig palm probe; separate from the palm capsule endpoint. */
+  palmCenter?: Vector3Data;
 }
 
 export interface AvatarCollisionCorrectionBudget {

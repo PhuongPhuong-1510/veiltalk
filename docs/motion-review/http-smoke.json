@@ -1,0 +1,68 @@
+[
+  {
+    "path": "/avatar/motion",
+    "status": 200,
+    "type": "text/html",
+    "bytes": null
+  },
+  {
+    "path": "/dev/avatar-renderer",
+    "status": 200,
+    "type": "text/html",
+    "bytes": null
+  },
+  {
+    "path": "/src/components/dev/AvatarRendererDevHarness.tsx",
+    "status": 200,
+    "type": "text/javascript",
+    "bytes": "292629"
+  },
+  {
+    "path": "/src/components/avatar/AvatarMotionPreview.tsx",
+    "status": 200,
+    "type": "text/javascript",
+    "bytes": "22626"
+  },
+  {
+    "path": "/src/components/dev/MotionReplayPanel.tsx",
+    "status": 200,
+    "type": "text/javascript",
+    "bytes": "21705"
+  },
+  {
+    "path": "/models/avatars/reference-avatar-2.vrm",
+    "status": 200,
+    "type": "",
+    "bytes": "22529772"
+  },
+  {
+    "path": "/mediapipe/models/face_landmarker.task",
+    "status": 200,
+    "type": "",
+    "bytes": "3758596"
+  },
+  {
+    "path": "/mediapipe/models/hand_landmarker.task",
+    "status": 200,
+    "type": "",
+    "bytes": "7819105"
+  },
+  {
+    "path": "/mediapipe/models/pose_landmarker_full.task",
+    "status": 200,
+    "type": "",
+    "bytes": "9398198"
+  },
+  {
+    "path": "/mediapipe/wasm/vision_wasm_internal.js",
+    "status": 200,
+    "type": "text/javascript",
+    "bytes": "330871"
+  },
+  {
+    "path": "/mediapipe/wasm/vision_wasm_internal.wasm",
+    "status": 200,
+    "type": "application/wasm",
+    "bytes": "11153617"
+  }
+]

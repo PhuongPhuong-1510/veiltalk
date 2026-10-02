@@ -165,7 +165,9 @@ describe("AvatarMotionProcessor", () => {
       const upperFrame=(timestamp:number)=>{const input=frame();input.frameTimestampMs=timestamp;input.face.sampledAtMs=timestamp;input.pose.sampledAtMs=timestamp;setPoseLandmark(input,7,.15,-.05);setPoseLandmark(input,8,-.15,-.05);setPoseLandmark(input,11,.2,.3);setPoseLandmark(input,12,-.2,.3);input.pose.worldLandmarks![23].visibility=0;input.pose.worldLandmarks![24].visibility=0;return input;};
       for(let index=0;index<30;index+=1){now=100+index*33;processor.process(upperFrame(now));}
       now+=33;const moved=upperFrame(now),angle=.3,c=Math.cos(angle),s=Math.sin(angle);
-      setPoseLandmark(moved,11,.2*c,.3,-.2*s);setPoseLandmark(moved,12,-.2*c,.3,.2*s);
+      // Pose vectors negate Z in semantic space; facial transform is already a rotation
+      // in the avatar convention. Both fixtures must describe the same positive yaw.
+      setPoseLandmark(moved,11,.2*c,.3,.2*s);setPoseLandmark(moved,12,-.2*c,.3,-.2*s);
       moved.face.facialTransform!.data=[c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1];
       const packet=processor.process(moved);expect(packet.version).toBe(2);expect(packet.jointRotations.chest?.y).toBeGreaterThan(0);expect(Math.abs(packet.headRotation?.y??0)).toBeLessThan(.01);
     });
@@ -442,6 +444,20 @@ describe("AvatarMotionProcessor", () => {
       expect(after.matchingContinuity).toBe("reacquired");
       expect(after.trackingEpochId).toBe(initial.trackingEpochId);
       expect(after.neutralTwistRadians).toBe(initial.neutralTwistRadians);
+      expect(after.neutralReanchored).toBe(false);
+    });
+
+    it("camera restart expires volatile arm history but preserves neutral on the same rig", () => {
+      let now=120;
+      const processor=new AvatarMotionProcessor({filtered:false,handTwistEnabled:true,now:()=>now});processor.setRigProfile(rigProfile);
+      const first=sampledFrame(100);first.rawHands=[handCandidateWithMiddleDepth(0,LEFT_WRIST_IMAGE,"left",100,.06)];processor.process(first);
+      const before=processor.getLastDiagnostics()!.handTwist.left;
+      expect(before.neutralInitialized).toBe(true);
+      processor.resetCameraTracking();now=1020;
+      const next=sampledFrame(1000);next.rawHands=[handCandidateWithMiddleDepth(0,LEFT_WRIST_IMAGE,"left",1000,.08)];processor.process(next);
+      const after=processor.getLastDiagnostics()!.handTwist.left;
+      expect(after.trackingEpochId).toBeGreaterThan(before.trackingEpochId);
+      expect(after.neutralTwistRadians).toBe(before.neutralTwistRadians);
       expect(after.neutralReanchored).toBe(false);
     });
 
@@ -1520,7 +1536,9 @@ describe("AvatarMotionProcessor", () => {
     const diagnostic = processor.getLastDiagnostics()!.arms.left;
     expect(diagnostic.elbowInference.source).toBe("inferred-rest-prior");
     expect(diagnostic.confidenceFlags).toContain("observed-elbow-hand-conflict");
-    expect(diagnostic.confidenceFlags).toContain("elbow-hand-palm-branch");
+    // Palm may reject the observed elbow, but the default inference follows the rig/history
+    // continuation pole. It must not claim a palm-scored candidate search that did not run.
+    expect(diagnostic.confidenceFlags).not.toContain("elbow-hand-palm-branch");
     expect(diagnostic.elbowInference.inferredPosition!.y).toBeLessThan(0);
   });
 
@@ -1546,12 +1564,50 @@ describe("AvatarMotionProcessor", () => {
   });
   it("calibrates only observed segments then uses inferred elbow as a temporary fallback", () => {
     let now = 100; const processor = new AvatarMotionProcessor({ filtered: false, now: () => now }); processor.setRigProfile(rigProfile);
-    for (const timestamp of [100, 120, 140]) { const observed = frame(); observed.frameTimestampMs = timestamp; observed.pose.sampledAtMs = timestamp; now = timestamp; processor.process(observed); }
-    const hidden = frame(); hidden.frameTimestampMs = 160; hidden.pose.sampledAtMs = 160; hidden.pose.landmarks![13].visibility = 0; now = 160; processor.process(hidden);
+    for (let index = 0; index < DEFAULT_AVATAR_MOTION_CONFIG.armFrame.calibrationMinimumSamples; index++) {
+      const timestamp = 100 + index * 20;
+      const observed = sampledFrame(timestamp); now = timestamp; processor.process(observed);
+    }
+    const hiddenAt = now + 20;
+    const hidden = sampledFrame(hiddenAt); hidden.pose.landmarks![13].visibility = 0; now = hiddenAt; processor.process(hidden);
     const diagnostic = processor.getLastDiagnostics()!.arms.left; expect(diagnostic.elbowInference.source).toBe("inferred-history"); expect(diagnostic.elbowInference.calibratedUpperLength).toBeGreaterThan(0);
     expect(diagnostic.segmentLossState).toEqual({ upper: "recovering", lower: "recovering" });
-    const continued = structuredClone(hidden); continued.frameTimestampMs = 360; continued.pose.sampledAtMs = 360; now = 360; processor.process(continued);
+    const continued = structuredClone(hidden); continued.frameTimestampMs = hiddenAt + 200; continued.pose.sampledAtMs = hiddenAt + 200; now = hiddenAt + 200; processor.process(continued);
     expect(processor.getLastDiagnostics()?.arms.left.segmentLossState).toEqual({ upper: "active", lower: "active" });
+  });
+
+  it("calibrates genuinely observed upper arms but never lower lengths from reconstructed wrists", () => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    for (const timestamp of [100, 160, 220]) {
+      now = timestamp; const input = sampledFrame(timestamp);
+      input.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", timestamp)]; processor.process(input);
+    }
+    const counts = processor.getLastDiagnostics()!.arms.left.wristEvidence!.calibrationSamples;
+    for (const timestamp of [280, 340, 400]) {
+      now = timestamp; const input = sampledFrame(timestamp);
+      input.pose.landmarks![15].visibility = 0;
+      input.rawHands = [handCandidate(0, LEFT_WRIST_IMAGE, "left", timestamp)];
+      processor.process(input);
+      const evidence = processor.getLastDiagnostics()!.arms.left.wristEvidence!;
+      expect(evidence.source).toBe("hand-image");
+      expect(evidence.reconstructionRejectionReason).toBeNull();
+      expect(evidence.calibrationEligible).toBe(false);
+      expect(evidence.calibrationSamples!.lower).toBe(counts!.lower);
+      expect(evidence.calibrationSamples!.upper).toBeGreaterThan(counts!.upper);
+    }
+  });
+
+  it.each(["SEW", "SE-", "S-W", "-EW", "S--", "-E-", "--W", "---"] as const)("reports genuine %s evidence independently of geometry recovery", (mask) => {
+    let now = 100;
+    const processor = new AvatarMotionProcessor({ filtered: false, handTwistEnabled: false, now: () => now });
+    processor.setRigProfile(rigProfile);
+    for (let i = 0; i < 8; i++) { now = 100+i*33; processor.process(sampledFrame(now)); }
+    now += 33; const input = sampledFrame(now);
+    for (const [index, offset] of [[11,0],[13,1],[15,2]]) input.pose.landmarks![index].visibility = mask[offset] === "-" ? 0 : 1;
+    const packet = processor.process(input);
+    expect(packet.armObservability?.left).toBe(mask);
   });
   it("Mức 1B-2: reacquire blend triggers when poleSource upgrades even though elbowSource never changes (no angular jump)", () => {
     // Đo được trước sửa: elbowSource giữ nguyên "observed" xuyên suốt (elbow luôn quan sát

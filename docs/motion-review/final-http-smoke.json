@@ -1,0 +1,39 @@
+{
+  "at": "2026-10-01T23:18:52.903Z",
+  "rows": [
+    {
+      "url": "http://127.0.0.1:5173/dev/avatar-renderer",
+      "status": 200,
+      "type": "text/html",
+      "coep": "require-corp",
+      "coop": "same-origin",
+      "bytes": 628
+    },
+    {
+      "url": "http://127.0.0.1:5173/avatar/motion",
+      "status": 200,
+      "type": "text/html",
+      "coep": "require-corp",
+      "coop": "same-origin",
+      "bytes": 628
+    },
+    {
+      "url": "http://127.0.0.1:5174/avatar/motion",
+      "status": 200,
+      "type": "text/html",
+      "coep": "require-corp",
+      "coop": "same-origin",
+      "bytes": 471
+    },
+    {
+      "url": "http://127.0.0.1:5174/assets/index-DQidLdKd.js",
+      "status": 200,
+      "bytes": 257038
+    },
+    {
+      "url": "http://127.0.0.1:5174/assets/AvatarMotionPreview-CPynI5jK.js",
+      "status": 200,
+      "bytes": 1251700
+    }
+  ]
+}

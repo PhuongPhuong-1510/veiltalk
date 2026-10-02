@@ -45,7 +45,7 @@ export function correctAvatarArmCollision(profile: AvatarCollisionProfile, input
     if (ik.projected && ik.targetError > input.budget.maxTotalCorrection) return bestOr("unreachable", iteration - 1);
     const axis = v(ik.wrist).sub(shoulder).normalize(), offset = v(ik.elbow).sub(shoulder); offset.addScaledVector(axis, -offset.dot(axis));
     if (baselineHemisphere * offset.dot(baselinePole) < -1e-8) return bestOr("topology-change", iteration - 1);
-    pose = { ...input.baseline, elbow: ik.elbow, wrist: ik.wrist, ...(input.baseline.hand ? { hand: v(input.baseline.hand).add(v(ik.wrist).sub(baselineWrist)) } : {}) };
+    pose = { ...input.baseline, elbow: ik.elbow, wrist: ik.wrist, ...(input.baseline.hand ? { hand: v(input.baseline.hand).add(v(ik.wrist).sub(baselineWrist)) } : {}), ...(input.baseline.palmCenter ? { palmCenter: v(input.baseline.palmCenter).add(v(ik.wrist).sub(baselineWrist)) } : {}) };
     contacts = queryAvatarArmBodyCollisions(profile, input.side, pose);
     const score = collisionScore(contacts);
     if (score < bestScore) { bestScore = score; bestPose = pose; bestContacts = contacts; }

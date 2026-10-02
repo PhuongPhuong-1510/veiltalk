@@ -102,6 +102,14 @@ export interface AvatarPartTrackingInfo {
   sampledAtMs: number | null;
 }
 
+/** Plain optional policy metadata. Old packets retain their renderer behavior. */
+export interface AvatarMotionOwnershipV1 {
+  version: 1;
+  armTemporal: "legacy-renderer" | "processor";
+  /** Only true while an enabled contact correction actually changes that chain. */
+  contactArms: Record<"left" | "right", boolean>;
+}
+
 /** Contract plain-data dùng chung cho local renderer và P4-T15. */
 export interface AvatarPosePacketV1 {
   version: 1;
@@ -141,6 +149,9 @@ export interface AvatarPosePacketV1 {
   handMotion: HandMotionDiagnosticsSnapshot | null;
   /** Current partial-arm evidence; optional for backward-compatible receivers. */
   armObservability?: Record<"left"|"right", ArmObservability>;
+  motionOwnership?: AvatarMotionOwnershipV1;
+  /** Experimental confirmed palm contact. No raw image/world landmarks cross this contract. */
+  bimanualPalmContact?: { version: 1; influence: number };
 }
 
 /**

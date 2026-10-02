@@ -36,6 +36,7 @@ import {
 import "./App.css";
 
 const SPLASH_MIN_DURATION_MS = 2_000;
+const AvatarMotionPreview = lazy(() => import("./components/avatar/AvatarMotionPreview"));
 const TrackingDevHarness = import.meta.env.DEV
   ? lazy(() => import("./components/dev/TrackingDevHarness"))
   : null;
@@ -533,6 +534,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginScreen />} />
       <Route path="/register" element={<RegisterScreen />} />
       <Route path="/avatar/setup" element={<AvatarSelectScreen />} />
+      <Route path="/avatar/motion" element={<Suspense fallback={<div>Đang tải avatar…</div>}><AvatarMotionPreview /></Suspense>} />
       <Route path="/avatar/customize" element={<TaskPlaceholder title="Tùy chỉnh avatar" task="P4-T11" />} />
       <Route path="/home" element={<TaskPlaceholder title="Kokoro của bạn" task="P4-T12" />} />
       {TrackingDevHarness && (

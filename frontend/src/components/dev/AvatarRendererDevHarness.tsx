@@ -22,6 +22,8 @@ import type { RendererMetricsSnapshot } from "../../lib/avatar-renderer/renderer
 import { isCurrentModelLoadRequest } from "../../lib/avatar-renderer/modelLoader";
 import type { RawTrackingFrameV1 } from "../../lib/tracking/rawTrackingTypes";
 import type { TrackingMetricsSnapshot } from "../../lib/tracking/trackingMetrics";
+import { MotionReplayPanel } from "./MotionReplayPanel";
+import { MotionRecorder, rebaseTrackingFrame, type MotionRecordingV1 } from "../../lib/avatar-motion/motionReplay";
 import { useTracking } from "../../lib/tracking/useTracking";
 import { DEFAULT_POSE_MODEL, type PoseModelVariant } from "../../lib/tracking/mediaPipeRuntime";
 import { GestureFixtureCollector, reportFixtureGaps, type FixtureGapReport, type GestureFixtureCondition, type GestureFixtureDistance, type GestureFixtureOcclusion, type GestureFixtureOrientation, type GestureFixturePose, type GestureFixtureSplit } from "../../lib/avatar-motion/gestureFixture";
@@ -44,7 +46,7 @@ export default function AvatarRendererDevHarness() {
   const modelLoadRequestRef = useRef(0);
   const freezeTimerRef = useRef<number | null>(null);
   const evidenceCaptureTimerRef = useRef<number | null>(null);
-  const processorRef = useRef(new AvatarMotionProcessor({continuousFingerEnabled:true})); const latestPacket = useRef<AvatarPosePacket | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
+  const [motionProcessor] = useState(() => new AvatarMotionProcessor({continuousFingerEnabled:true})); const processorRef = useRef(motionProcessor); const latestPacket = useRef<AvatarPosePacket | null>(null); const latestRaw = useRef<RawTrackingFrameV1 | null>(null); const frozenRaw = useRef<RawTrackingFrameV1 | null>(null);
   const [filtered, setFiltered] = useState(true); const [constraints, setConstraints] = useState(true); const [smoothing, setSmoothing] = useState(true);
   const [handTwistEnabled, setHandTwistEnabled] = useState(true);
   // Phase 3B.3 — mặc định TẮT. Bật là hành động thử nghiệm có chủ đích của người test.
@@ -52,6 +54,13 @@ export default function AvatarRendererDevHarness() {
   // AR6 đang là pipeline cần nghiệm thu trên trang này: bật ngay từ frame đầu để không vô tình test
   // classifier/preset legacy rồi tưởng đó là continuous tracking.
   const [continuousFingerEnabled,setContinuousFingerEnabled]=useState(true);
+  const motionRecorderRef = useRef(new MotionRecorder());
+  const replayActiveRef = useRef(false);
+  const replayRequestRef = useRef<number | null>(null);
+  const [bimanualPalmAssistEnabled,setBimanualPalmAssistEnabled] = useState(false);
+  const [rigEndpointEnabled,setRigEndpointEnabled] = useState(false);
+  const [handConditioningEnabled,setHandConditioningEnabled] = useState(false);
+  const [processorArmTemporal,setProcessorArmTemporal] = useState(false);
   const [contactShadowEnabled,setContactShadowEnabled]=useState(true);
   const [contactCorrectionEnabled,setContactCorrectionEnabled]=useState(false);
   const [contactDiagnostics,setContactDiagnostics]=useState(()=>processorRef.current.getContactDiagnostics());
@@ -110,16 +119,19 @@ export default function AvatarRendererDevHarness() {
   const [fixtureGaps, setFixtureGaps] = useState<FixtureGapReport>(() => reportFixtureGaps([]));
   const [fixtureStatus, setFixtureStatus] = useState<string>("Chưa thu mẫu nào.");
 
+  const trackingMetricsRef = useRef(trackingMetrics); trackingMetricsRef.current = trackingMetrics;
+  const simulatedLossRef = useRef(simulatedLoss); simulatedLossRef.current = simulatedLoss;
   const processInput = useCallback((frame: RawTrackingFrameV1) => {
-    const input = simulatedLoss ? { ...frame, face: { ...frame.face, state: "lost" as const }, leftHand: { ...frame.leftHand, state: "lost" as const }, rightHand: { ...frame.rightHand, state: "lost" as const }, pose: { ...frame.pose, state: "lost" as const } } : frame;
+    const input = simulatedLossRef.current ? { ...frame, face: { ...frame.face, state: "lost" as const }, leftHand: { ...frame.leftHand, state: "lost" as const }, rightHand: { ...frame.rightHand, state: "lost" as const }, pose: { ...frame.pose, state: "lost" as const } } : frame;
     const next = processorRef.current.process(input); latestPacket.current = next; rendererRef.current?.applyPose(next);
+    if (!replayActiveRef.current && motionRecorderRef.current.active) motionRecorderRef.current.record(input,next,performance.now(),{arm:processorRef.current.getLastDiagnostics(),contact:processorRef.current.getContactDiagnostics(),fingers:processorRef.current.getContinuousFingerDiagnostics(),bimanual:processorRef.current.getBimanualHandDiagnostics(),tracking:trackingMetricsRef.current},rendererRef.current?.getFinalArmSnapshot()??null);
     if(fingerTraceActiveRef.current&&fingerTraceRef.current.length<300){
       const entry={capturedAtMs:performance.now(),frameTimestampMs:frame.frameTimestampMs,video:{width:frame.videoWidth,height:frame.videoHeight},handSamples:{left:frame.leftHand,right:frame.rightHand},rawHands:frame.rawHands,poseWrists:{left:frame.pose.landmarks?.[15]??null,right:frame.pose.landmarks?.[16]??null},handMotion:next.handMotion??null,continuousFinger:processorRef.current.getContinuousFingerDiagnostics(),jointRotations:next.jointRotations};
       fingerTraceRef.current.push(entry);
       if(fingerTraceRef.current.length%5===0)setFingerTraceCount(fingerTraceRef.current.length);
       if(fingerTraceRef.current.length>=300){fingerTraceActiveRef.current=false;setFingerTraceActive(false);setFingerTraceCount(300);}
     }
-  }, [simulatedLoss]);
+  }, []);
   const startFingerTrace=useCallback(()=>{fingerTraceRef.current=[];fingerTraceActiveRef.current=true;setFingerTraceCount(0);setFingerTraceActive(true);},[]);
   const stopFingerTrace=useCallback(()=>{fingerTraceActiveRef.current=false;setFingerTraceActive(false);setFingerTraceCount(fingerTraceRef.current.length);},[]);
   const downloadFingerTrace=useCallback(()=>{
@@ -127,7 +139,7 @@ export default function AvatarRendererDevHarness() {
     const url=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:"application/json"}));
     const anchor=document.createElement("a");anchor.href=url;anchor.download=`ar6-finger-trace-${Date.now()}.json`;anchor.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   },[avatarModelId,fingerRig]);
-  const onFrame = useCallback((frame: RawTrackingFrameV1) => { if (frozenRaw.current) return; latestRaw.current = frame; processInput(frame); }, [processInput]);
+  const onFrame = useCallback((frame: RawTrackingFrameV1) => { if (frozenRaw.current || replayActiveRef.current) return; latestRaw.current = frame; processInput(frame); }, [processInput]);
   const onMetrics = useCallback((value: TrackingMetricsSnapshot) => { setTrackingMetrics(value); }, []);
   const onError = useCallback((reason: unknown) => setError(reason instanceof Error ? reason.message : "Tracking error"), []);
   // Đổi model pose phải dựng lại pipeline (useTracking dispose theo options), nên tracking sẽ
@@ -136,6 +148,23 @@ export default function AvatarRendererDevHarness() {
   const tracking = useTracking(trackingOptions);
 
   useEffect(() => { processorRef.current.setFiltered(filtered); }, [filtered]);
+  useEffect(()=>{processorRef.current.setBimanualPalmAssistEnabled(bimanualPalmAssistEnabled);},[bimanualPalmAssistEnabled]);
+  useEffect(()=>{processorRef.current.setRigEndpointEnabled(rigEndpointEnabled);},[rigEndpointEnabled]);
+  useEffect(()=>{processorRef.current.setHandConditioningEnabled(handConditioningEnabled);},[handConditioningEnabled]);
+  useEffect(()=>{processorRef.current.setProcessorArmTemporal(processorArmTemporal);},[processorArmTemporal]);
+  const stopMotionReplay = useCallback(()=>{replayActiveRef.current=false;if(replayRequestRef.current!==null)cancelAnimationFrame(replayRequestRef.current);replayRequestRef.current=null;processorRef.current.reset();},[]);
+  const playMotionReplay = useCallback((recording:MotionRecordingV1)=>{
+    stopMotionReplay();motionRecorderRef.current.stop();replayActiveRef.current=true;
+    const start=performance.now(),first=recording.frames[0].atMs,offset=start-first;let index=0;
+    const step=()=>{
+      if(!replayActiveRef.current)return;
+      const elapsed=performance.now()-start;
+      // Bound catch-up work so a suspended tab cannot block the main thread.
+      let processed=0;while(index<recording.frames.length&&recording.frames[index].atMs-first<=elapsed&&processed++<4){const entry=recording.frames[index++];processInput(rebaseTrackingFrame(entry.raw,offset));}
+      if(index<recording.frames.length)replayRequestRef.current=requestAnimationFrame(step);else{replayActiveRef.current=false;replayRequestRef.current=null;processorRef.current.reset();}
+    };replayRequestRef.current=requestAnimationFrame(step);
+  },[processInput,stopMotionReplay]);
+  useEffect(()=>()=>{if(replayRequestRef.current!==null)cancelAnimationFrame(replayRequestRef.current);},[]);
   useEffect(() => { processorRef.current.setConstraints(constraints); }, [constraints]);
   useEffect(() => { processorRef.current.setHandTwistEnabled(handTwistEnabled); }, [handTwistEnabled]);
   useEffect(() => { processorRef.current.setGestureEnabled(gestureEnabled); }, [gestureEnabled]);
@@ -337,7 +366,7 @@ export default function AvatarRendererDevHarness() {
     link.click(); URL.revokeObjectURL(url);
     setFixtureStatus(`Đã xuất ${file.sampleCount} mẫu.`);
   }
-  async function toggleTracking() { if (!tracking || !videoRef.current) return; if (trackingRunning) { tracking.stop(); setTrackingRunning(false); } else { setError(null); await tracking.start(videoRef.current); setTrackingRunning(true); } }
+  async function toggleTracking() { if (!tracking || !videoRef.current) return; if (trackingRunning) { tracking.stop(); processorRef.current.resetCameraTracking(); setTrackingRunning(false); } else { setError(null); processorRef.current.resetCameraTracking(); try { await tracking.start(videoRef.current); setTrackingRunning(true); } catch(reason) { onError(reason); } } }
   function toggleRenderer() { const renderer = rendererRef.current; if (!renderer) return; if (rendererRunning) renderer.stop(); else renderer.start(); setRendererRunning(!rendererRunning); }
   function toggleFreeze() { if (frozenRaw.current) { frozenRaw.current = null; setFrozen(false); setSampleName("live"); return; } if (!latestRaw.current) return; frozenRaw.current = structuredClone(latestRaw.current); setFrozen(true); setFrozenSequence((value) => value + 1); setSampleName("webcam"); processInput(frozenRaw.current); }
   function freezeAfterCountdown() {
@@ -407,6 +436,10 @@ export default function AvatarRendererDevHarness() {
       <button onClick={toggleFreeze} disabled={!frozen && !latestRaw.current}>{frozen ? "Unfreeze" : "Freeze current"}</button><button onClick={freezeAfterCountdown} disabled={frozen || freezeCountdown !== null || !latestRaw.current}>{freezeCountdown === null ? "Freeze in 5s" : `Freeze in ${freezeCountdown}s`}</button>
       <button className="evidence-capture-button" onClick={captureEvidenceAfterCountdown} disabled={evidenceCaptureCountdown !== null}>{evidenceCaptureCountdown === null ? "Chụp bằng chứng sau 5s" : `Chuẩn bị chụp: ${evidenceCaptureCountdown}s`}</button>
       {evidenceCaptureStatus && <span className="evidence-capture-status" role="status">{evidenceCaptureStatus}</span>}
+      <label><input type="checkbox" checked={bimanualPalmAssistEnabled} onChange={(e)=>setBimanualPalmAssistEnabled(e.target.checked)} /> Palms-together assist (A/B)</label>
+      <label><input type="checkbox" checked={rigEndpointEnabled} onChange={(e)=>setRigEndpointEnabled(e.target.checked)} /> Rig-aware wrist reach (A/B)</label>
+      <label><input type="checkbox" checked={handConditioningEnabled} onChange={(e)=>setHandConditioningEnabled(e.target.checked)} /> Wrist-relative hand filter (A/B)</label>
+      <label><input type="checkbox" checked={processorArmTemporal} onChange={(e)=>setProcessorArmTemporal(e.target.checked)} /> Arm temporal at processor (A/B)</label>
       <label><input type="checkbox" checked={filtered} onChange={(e) => setFiltered(e.target.checked)} /> Dynamics/filter</label><label><input type="checkbox" checked={constraints} onChange={(e) => setConstraints(e.target.checked)} /> Constraints</label><label><input type="checkbox" checked={handTwistEnabled} onChange={(e) => setHandTwistEnabled(e.target.checked)} /> Hand twist (2B-5)</label><label><input type="checkbox" checked={continuousFingerEnabled} onChange={(e)=>setContinuousFingerEnabled(e.target.checked)} /> Continuous fingers (AR6)</label><label><input type="checkbox" checked={contactShadowEnabled} onChange={(e)=>{const enabled=e.target.checked;setContactShadowEnabled(enabled);if(!enabled)setContactCorrectionEnabled(false);}} /> Hand-body contact (AR9 shadow)</label><label><input type="checkbox" checked={contactCorrectionEnabled} onChange={(e)=>{const enabled=e.target.checked;setContactCorrectionEnabled(enabled);if(enabled)setContactShadowEnabled(true);}} /> Apply AR9 correction</label><label><input type="checkbox" checked={gestureEnabled} disabled={continuousFingerEnabled} onChange={(e) => setGestureEnabled(e.target.checked)} /> Finger gesture (legacy)</label><label><input type="checkbox" checked={smoothing} onChange={(e) => setSmoothing(e.target.checked)} /> Bone smoothing</label><label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
       <label>Pose model <select value={poseModel} onChange={(e) => { if (trackingRunning) { tracking?.stop(); setTrackingRunning(false); } setPoseModel(e.target.value as PoseModelVariant); }}><option value="full">full (chính xác hơn)</option><option value="lite">lite (nhẹ hơn)</option></select></label>
       <label>Avatar model <select value={avatarModelId} onChange={(event) => selectAvatarModel(event.target.value)}>{DEV_AVATAR_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select></label>
@@ -621,5 +654,6 @@ export default function AvatarRendererDevHarness() {
       </article>
       <article><h2>Phase 3A arm-frame</h2><p>Head: legacy/unverified, excluded from arm acceptance.</p><pre>{JSON.stringify(motionDiagnostics, null, 2)}</pre></article>
     </section>
-  </main>;
+  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
+    </main>;
 }
