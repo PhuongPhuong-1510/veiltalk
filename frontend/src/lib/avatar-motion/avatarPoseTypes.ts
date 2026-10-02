@@ -104,6 +104,7 @@ export interface AvatarPartTrackingInfo {
 
 /** Plain optional policy metadata. Old packets retain their renderer behavior. */
 export interface AvatarMotionOwnershipV1 {
+  bodyDepthBarrier?:boolean;
   version: 1;
   armTemporal: "legacy-renderer" | "processor";
   /** Only true while an enabled contact correction actually changes that chain. */

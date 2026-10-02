@@ -99,6 +99,7 @@ export interface ArmStabilityDiagnostic {
 }
 
 export interface ArmFrameDiagnostic {
+  depthFusion?: import("./armDepthFusion").ArmDepthDiagnostic;
   side: ArmSide;
   pole: Vector3Data | null;
   poleSource: PoleSource;

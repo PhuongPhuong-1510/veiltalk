@@ -1,4 +1,5 @@
 import { retargetArmEndpoint } from "./rigAwareArmEndpoint";
+import { constrainArmDof,ARM_DOF_LIMITS } from "./armDofConstraints";
 import { Quaternion, Vector3 } from "three";
 
 import type { RawNormalizedLandmarkV1 } from "../tracking/rawTrackingTypes";
@@ -58,6 +59,8 @@ export interface HandElbowBranchEvidence {
 
 export interface ArmSpatialEvidence {
   rigEndpointEnabled?: boolean;
+  depthTargetOffset?: Vector3Data | null;
+  dofConstraintsEnabled?: boolean;
 
   hand: HandElbowBranchEvidence | null;
 
@@ -1013,13 +1016,14 @@ function solveSide(
   // An experimental retarget objective changes avatar segment directions only. It never changes
   // observed human lengths, elbow provenance, calibration or the partial-arm geometry policy.
   const avatarArm = profile.collisionReference?.arms[side];
-  if (spatialEvidence?.rigEndpointEnabled && avatarArm && elbowObserved && wrist && lowerDirectionValid
+  if ((spatialEvidence?.rigEndpointEnabled || spatialEvidence?.depthTargetOffset) && avatarArm && elbowObserved && wrist && lowerDirectionValid
     && spatialEvidence.wrist?.source !== "reconstructed") {
     const endpoint = retargetArmEndpoint({ shoulder: vectorData(shoulder), elbow: vectorData(elbow), wrist: vectorData(wrist),
-      avatarUpperLength: avatarArm.upperLength, avatarLowerLength: avatarArm.lowerLength });
+      avatarUpperLength: avatarArm.upperLength, avatarLowerLength: avatarArm.lowerLength, targetOffset: spatialEvidence.depthTargetOffset });
     if (endpoint) {
       upper = vector(endpoint.upperDirection); lower = vector(endpoint.lowerDirection);
       flags.push(endpoint.projected ? "rig-endpoint-projected" : "rig-endpoint-retargeted");
+      if (spatialEvidence.depthTargetOffset) flags.push("relative-depth-objective");
     }
   }
 
@@ -1208,6 +1212,7 @@ function solveSide(
   const projectedPole = projectToArm(pole ?? upperSecondary); if (!projectedPole) return reject("invalid-pole", flags);
 
   const targetWorldRotations: Partial<Record<ControlledArmJoint, QuaternionData>> = {}; const deltas: ArmDeltaOutput = {};
+  if(constraintsEnabled&&spatialEvidence?.dofConstraintsEnabled)flags.push("rig-local-dof-limits");
 
   const segments: Array<[ControlledArmJoint, Vector3, Vector3Data]> = [[i.upper, upper, upperSecondary]];
 
@@ -1227,7 +1232,9 @@ function solveSide(
 
     const deltaLocal = multiplyQuaternions(inverseQuaternion(joint.restLocalRotation), multiplyQuaternions(inverseQuaternion(parentTargetWorld), targetWorld));
 
-    const safe = constraintsEnabled ? constrainJointRotation(name, deltaLocal, history.previousDeltas?.[name]) : deltaLocal; if (!safe) return reject("invalid-constraint", flags);
+    const safe = constraintsEnabled ? spatialEvidence?.dofConstraintsEnabled
+      ? constrainArmDof(deltaLocal,joint.anatomicalRestBasis.primaryLocal,name.endsWith("UpperArm")?ARM_DOF_LIMITS.upper:ARM_DOF_LIMITS.lower,history.previousDeltas?.[name])
+      : constrainJointRotation(name, deltaLocal, history.previousDeltas?.[name]) : deltaLocal; if (!safe) return reject("invalid-constraint", flags);
 
     deltas[name] = safe; targetWorldRotations[name] = multiplyQuaternions(parentTargetWorld, multiplyQuaternions(joint.restLocalRotation, safe));
 

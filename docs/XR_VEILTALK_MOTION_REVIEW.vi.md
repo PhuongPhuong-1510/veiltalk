@@ -1,5 +1,7 @@
 # Đối chiếu chuyển động tay XR Animator và VeilTalk; kế hoạch A–Z
 
+> Trạng thái mới hơn: [triển khai tiếp depth/body-local/DOF](MOTION_DEPTH_CONTINUATION.vi.md).
+
 > Bản này giữ số đo và nhận định **baseline trước triển khai**. Code đã được triển khai tiếp trong working tree; xem [trạng thái từng bước, kết quả kiểm chứng và hướng dẫn webcam](MOTION_IMPLEMENTATION_AND_WEBCAM_TEST.vi.md). Những dòng “chưa sửa runtime”, tám test lỗi và F01–F10 bên dưới mô tả đợt khảo sát cũ, không phải trạng thái hiện tại.
 
 Ngày rà soát: 02/10/2026. VeilTalk HEAD `5df5ee8ec6a8f62581844a17af0d886608527004`; XR HEAD `53c20eb91517d2807d142c122a868ca9157c3016`.

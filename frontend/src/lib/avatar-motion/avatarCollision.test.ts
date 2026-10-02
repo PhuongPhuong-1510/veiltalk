@@ -22,6 +22,19 @@ const budget: AvatarCollisionCorrectionBudget = { maxWristDisplacementPerFrame: 
 const clear: AvatarCollisionPose = { shoulder: {x:-.4,y:.65,z:0}, elbow: {x:-.85,y:.45,z:0}, wrist: {x:-1.15,y:.15,z:0} };
 
 describe("avatar self collision", () => {
+  it("keeps a recent posterior hand correction behind the head in body-local coordinates",()=>{
+    const p={...profile,body:{...profile.body,frontNormal:{x:0,y:0,z:1}}};
+    const pose={shoulder:{x:-.4,y:1.2,z:0},elbow:{x:-.1,y:1.45,z:0},wrist:{x:.05,y:1.45,z:0}};
+    const back=queryAvatarArmBodyCollisions(p,"left",pose,{head:-1,torso:null}).filter(c=>c.bodyPart==="head"&&c.armPart!=="upperArm");
+    expect(back.length).toBeGreaterThan(0);for(const hit of back)expect(hit.surfaceNormal.z).toBeLessThan(0);
+    const front=queryAvatarArmBodyCollisions(p,"left",pose,{head:1,torso:null}).filter(c=>c.bodyPart==="head"&&c.armPart!=="upperArm");
+    for(const hit of front)expect(hit.surfaceNormal.z).toBeGreaterThan(0);
+  });
+  it("depth-direction policy never creates attraction in a separated arm",()=>{
+    const p={...profile,body:{...profile.body,frontNormal:{x:0,y:0,z:1}}};
+    const result=correctAvatarArmCollision(p,{side:"left",baseline:clear,deltaSeconds:1/60,observability:"SEW",bendPole:{x:0,y:1,z:0},budget,bodyDepthSides:{head:-1,torso:-1}});
+    expect(result.pose).toBe(clear);expect(result.reason).toBe("no-collision");
+  });
   it("does not modify a contact-owned arm during inter-arm correction", () => {
     const left: AvatarCollisionPose = { shoulder:{x:-.4,y:.7,z:0},elbow:{x:-.05,y:.4,z:0},wrist:{x:.2,y:.2,z:0},hand:{x:.24,y:.2,z:0} };
     const right: AvatarCollisionPose = { shoulder:{x:.4,y:.7,z:0},elbow:{x:.05,y:.4,z:0},wrist:{x:-.2,y:.2,z:0},hand:{x:-.24,y:.2,z:0} };

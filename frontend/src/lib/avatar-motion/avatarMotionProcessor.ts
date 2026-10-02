@@ -65,9 +65,10 @@ import { computeWristSwing, createWristSwingTemporalState, handWorldVectorToAvat
 import { Quaternion, Vector3 } from "three";
 
 import { HandLandmarkConditioner } from "./handLandmarkConditioning";
+import { ArmDepthFusion } from "./armDepthFusion";
 import { WristDepthMemory } from "./wristDepthMemory";
 
-export interface AvatarMotionProcessorOptions { handConditioningEnabled?: boolean; processorArmTemporal?: boolean; rigEndpointEnabled?: boolean; bimanualPalmAssistEnabled?: boolean; filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; wristSwingEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
+export interface AvatarMotionProcessorOptions { dofConstraintsEnabled?:boolean; bodyDepthBarrierEnabled?:boolean; depthFusionEnabled?: boolean; handConditioningEnabled?: boolean; processorArmTemporal?: boolean; rigEndpointEnabled?: boolean; bimanualPalmAssistEnabled?: boolean; filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; wristSwingEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
 
 export interface ShoulderVerticalDiagnosticSnapshot {
   raw: { left: number; right: number };
@@ -296,6 +297,10 @@ export class AvatarMotionProcessor {
   private handConditioningEnabled: boolean;
   private processorArmTemporal: boolean;
   private rigEndpointEnabled: boolean;
+  private depthFusionEnabled: boolean;
+  private bodyDepthBarrierEnabled:boolean;
+  private dofConstraintsEnabled:boolean;
+  private readonly depthFusion = {left:new ArmDepthFusion(),right:new ArmDepthFusion()};
   private bimanualPalmAssistEnabled: boolean;
   private readonly handConditioners = { left: new HandLandmarkConditioner(), right: new HandLandmarkConditioner() };
   private readonly wristDepth = { left: new WristDepthMemory(), right: new WristDepthMemory() };
@@ -400,6 +405,9 @@ export class AvatarMotionProcessor {
   constructor(options: AvatarMotionProcessorOptions = {}) {
     this.bimanualPalmAssistEnabled = options.bimanualPalmAssistEnabled ?? false;
     this.rigEndpointEnabled = options.rigEndpointEnabled ?? false;
+    this.dofConstraintsEnabled=options.dofConstraintsEnabled??false;
+    this.bodyDepthBarrierEnabled = options.bodyDepthBarrierEnabled??false;
+    this.depthFusionEnabled = options.depthFusionEnabled ?? false;
     this.processorArmTemporal = options.processorArmTemporal ?? false;
     this.handConditioningEnabled = options.handConditioningEnabled ?? false;
     this.now = options.now ?? (() => performance.now());
@@ -445,6 +453,10 @@ export class AvatarMotionProcessor {
   }
 
   setBimanualPalmAssistEnabled(enabled: boolean): void { this.bimanualPalmAssistEnabled = enabled; }
+
+  setDofConstraintsEnabled(enabled:boolean):void {this.dofConstraintsEnabled=enabled;}
+  setBodyDepthBarrierEnabled(enabled:boolean):void {this.bodyDepthBarrierEnabled=enabled;}
+  setDepthFusionEnabled(enabled:boolean):void {if(enabled!==this.depthFusionEnabled){this.depthFusion.left.reset();this.depthFusion.right.reset();}this.depthFusionEnabled=enabled;}
 
   setRigEndpointEnabled(enabled: boolean): void { this.rigEndpointEnabled = enabled; }
 
@@ -813,7 +825,7 @@ export class AvatarMotionProcessor {
       if (sampledAtMs !== null && isNewSample) for (const side of ["left", "right"] as const) {
         if (poseDiscontinuity[side]) {
           Object.assign(this.armState[side], createArmTemporalState());
-          this.wristDepth[side].reset(); this.handConditioners[side].reset();
+          this.wristDepth[side].reset(); this.handConditioners[side].reset(); this.depthFusion[side].reset();
         }
       }
       const preparedEvidence = frame.pose.worldLandmarks && frame.pose.landmarks
@@ -824,7 +836,7 @@ export class AvatarMotionProcessor {
         const reconstructed = preparedEvidence.reconstruction[side];
         const base = handElbowEvidence[side] ?? { hand: null, face: null, imageToWorldScale: null, imageAspectRatio: 1 };
         handElbowEvidence[side] = {
-          ...base, rigEndpointEnabled: this.rigEndpointEnabled,
+          ...base, dofConstraintsEnabled:this.dofConstraintsEnabled, rigEndpointEnabled: this.rigEndpointEnabled, depthTargetOffset: this.depthFusionEnabled ? this.depthObjective(frame, handContext, side, preparedEvidence, processedTimestampMs) : null,
           wrist: reconstructed?.accepted
             ? { source: "reconstructed", confidence: reconstructed.confidence, depthAmbiguity: reconstructed.depthAmbiguity }
             : { source: "pose-world", confidence: 1, depthAmbiguity: 0 },
@@ -1089,6 +1101,7 @@ export class AvatarMotionProcessor {
               medianAbsoluteDeviation: state.lengthProfile.lower.medianAbsoluteDeviation,
             },
           },
+          depthFusion: this.depthFusionEnabled ? this.depthFusion[side].snapshot() : undefined,
           wristEvidence: {
             source: wristEvidence.source,
             sourceChanged: wristEvidence.sourceChanged,
@@ -1157,7 +1170,7 @@ export class AvatarMotionProcessor {
       this.applyFingerGesture(jointRotations, frame, handContext, processedTimestampMs);
     }
     const contact = this.contactRuntime.correctionOwners();
-    const motionOwnership = { version: 1 as const, armTemporal: this.processorArmTemporal ? "processor" as const : "legacy-renderer" as const, contactArms: { left: this.contactCorrectionEnabled && contact.left, right: this.contactCorrectionEnabled && contact.right } };
+    const motionOwnership = { version: 1 as const, bodyDepthBarrier:this.bodyDepthBarrierEnabled, armTemporal: this.processorArmTemporal ? "processor" as const : "legacy-renderer" as const, contactArms: { left: this.contactCorrectionEnabled && contact.left, right: this.contactCorrectionEnabled && contact.right } };
     const bimanual = this.bimanualPalmAssistEnabled ? this.bimanualRuntime.snapshot() : null;
     const freshBimanual = bimanual && bimanual.lastObservedAtMs !== null && processedTimestampMs - bimanual.lastObservedAtMs >= 0 && processedTimestampMs - bimanual.lastObservedAtMs <= 100;
     const bimanualPalmContact = this.bimanualPalmAssistEnabled && bimanual && bimanual.mode === "palmsTogether" && !bimanual.occluded && freshBimanual && bimanual.confidence >= 0.62
@@ -1254,7 +1267,7 @@ export class AvatarMotionProcessor {
       if (!match.matched || match.candidateArrayIndex === null) continue;
       const rawCandidate = frame.rawHands[match.candidateArrayIndex];
       if (!rawCandidate) continue;
-      if (match.continuity !== "continued") this.handConditioners[side].reset();
+      if (match.continuity !== "continued") {this.handConditioners[side].reset();this.depthFusion[side].reset();}
       const candidate = this.handConditioningEnabled ? this.handConditioners[side].condition(rawCandidate, videoWidth, videoHeight) : rawCandidate;
       candidatesBySide[side] = candidate;
       const palm = computeHandPalmBasis(candidate.landmarks, candidate.worldLandmarks, candidate.handedness, videoWidth, videoHeight);
@@ -1429,6 +1442,36 @@ export class AvatarMotionProcessor {
       imageLandmarks[indices.wrist] = { x: projectedImage.x, y: projectedImage.y, z: projectedImage.z, visibility: 1 };
     }
     return { worldLandmarks, imageLandmarks, wrist, reconstruction };
+  }
+
+  private depthObjective(frame:RawTrackingFrameV1, hand:HandMotionContext, side:ArmSide, prepared:PreparedArmPoseEvidence, nowMs:number):Vector3Data|null {
+    const indices=side==="left"?[11,13,15]:[12,14,16],world=frame.pose.worldLandmarks!,image=frame.pose.landmarks!;
+    const memory=this.depthFusion[side],threshold=this.config.armFrame.visibilityEnter;
+    if(prepared.wrist[side].source!=="pose-world"||frame.pose.sampledAtMs===null||indices.some(i=>!world[i]||!image[i]||(image[i].visibility??0)<threshold)) {
+      memory.suspend("partial-observation");return null;
+    }
+    const width=frame.videoWidth??0,height=frame.videoHeight??0;
+    if(!(width>0&&height>0)||![11,12].every(i=>image[i]&&(image[i].visibility??0)>=threshold&&image[i].x>=-.1&&image[i].x<=1.1&&image[i].y>=-.1&&image[i].y<=1.1)) {
+      memory.suspend("shoulder-scale-unavailable");return null;
+    }
+    const scale=estimateShoulderImageToWorldScale({leftShoulderWorld:world[11],rightShoulderWorld:world[12],leftShoulderImage:image[11],rightShoulderImage:image[12],videoWidth:width,videoHeight:height});
+    if(scale===null){memory.suspend("shoulder-scale-unavailable");return null;}
+    const match=hand.matchResult[side];
+    const candidate=match.matched&&match.candidateArrayIndex!==null?(frame.rawHands[match.candidateArrayIndex]??hand.candidatesBySide[side]):null;
+    const semantic=(p:RawNormalizedLandmarkV1)=>({x:p.x,y:-p.y,z:-p.z});
+    const shoulderDx=world[11].x-world[12].x,shoulderDy=world[11].y-world[12].y,shoulderDz=world[11].z-world[12].z;
+    const freshHand=candidate&&nowMs-candidate.sampledAtMs>=0&&nowMs-candidate.sampledAtMs<=150&&Math.abs(frame.pose.sampledAtMs-candidate.sampledAtMs)<=100;
+    const projectedLower=freshHand&&candidate.landmarks[0]
+      ? Math.hypot(candidate.landmarks[0].x-image[indices[1]].x,(candidate.landmarks[0].y-image[indices[1]].y)*height/width)*scale : null;
+    return memory.solve({
+      shoulder:semantic(world[indices[0]]),elbow:semantic(world[indices[1]]),wrist:semantic(world[indices[2]]),
+      shoulderImageWidth:Math.hypot(image[11].x-image[12].x,(image[11].y-image[12].y)*height/width),
+      imageToWorldScale:scale,projectedLowerLength:projectedLower,
+      calibratedLowerLength:this.armState[side].calibratedLength.lower,
+      preferredLowerDepthSign:this.wristDepth[side].preferred(nowMs,"elbow"),
+      shoulderProjection:Math.hypot(shoulderDx,shoulderDy)/Math.hypot(shoulderDx,shoulderDy,shoulderDz),
+      hand:candidate,videoWidth:width,videoHeight:height,poseAtMs:frame.pose.sampledAtMs,nowMs,matchQuality:match.matchQuality??0,
+    });
   }
 
   private applyHandTwist(
@@ -1830,7 +1873,7 @@ export class AvatarMotionProcessor {
       for (const segment of ["upper", "lower"] as const) fresh.segments[segment].currentOutputDelta = this.idlePose?.[side][segment] ?? fresh.segments[segment].currentOutputDelta;
       Object.assign(this.armState[side], fresh); delete this.lastGeometryDiagnostics[side];
       Object.assign(this.wristEvidenceState[side], createWristEvidenceState());
-      this.wristDepth[side].reset(); this.handConditioners[side].reset();
+      this.wristDepth[side].reset(); this.handConditioners[side].reset(); this.depthFusion[side].reset();
       Object.assign(this.armStabilityState[side], createArmStabilityProcessorState());
     }
     this.lastTorso = null; this.lastReliableShoulderImageToWorldScale = null; this.diagnostics = null;

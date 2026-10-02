@@ -16,6 +16,13 @@ export default function AvatarMotionPreview() {
   const [modelLabel,setModelLabel]=useState("Avatar thử nghiệm"),[ready,setReady]=useState(false);
   const [running,setRunning]=useState(false),[starting,setStarting]=useState(false);
   const [error,setError]=useState<string|null>(null),[status,setStatus]=useState("Đang tải avatar…");
+  const [features,setFeatures]=useState({depth:false,barrier:false,dof:false,shape:false,reach:false,contact:false,palms:false});
+  useEffect(()=>{
+    const p=processorRef.current!;
+    p.setDepthFusionEnabled(features.depth);p.setBodyDepthBarrierEnabled(features.barrier);p.setDofConstraintsEnabled(features.dof);
+    p.setHandConditioningEnabled(features.shape);p.setRigEndpointEnabled(features.reach);
+    p.setContactCorrectionEnabled(features.contact);p.setBimanualPalmAssistEnabled(features.palms);
+  },[features]);
   const onFrame=useCallback((frame:RawTrackingFrameV1)=>{const packet=processorRef.current?.process(frame);if(packet)rendererRef.current?.applyPose(packet);},[]);
   const onError=useCallback((reason:unknown)=>{setError(reason instanceof Error?reason.message:"Không thể theo dõi chuyển động.");setRunning(false);},[]);
   const options=useMemo(()=>({profile:"full-rate" as const,resolution:"720p" as const,delegate:"GPU" as const,tasks:{face:true,hands:true,pose:true},onFrame,onError}),[onFrame,onError]);
@@ -51,6 +58,18 @@ export default function AvatarMotionPreview() {
       <button disabled={!ready||!running} onClick={()=>{processorRef.current?.calibrateFaceNeutral();setStatus("Giữ mặt, thân và hai vai ở tư thế trung tính trong vài giây.");}}>Căn chỉnh tư thế trung tính</button>
       <label>Chọn avatar VRM trên máy <input type="file" accept=".vrm" disabled={starting} onChange={event=>{const file=event.target.files?.[0];if(file){setModelLabel(file.name);setModelUrl(URL.createObjectURL(file));}}}/></label>
     </section>
+    <details><summary>Tính năng chuyển động đang thử nghiệm</summary>
+      <p>Bật từng tính năng để so sánh trên cùng động tác.</p>
+      {([
+        ["depth","Hỗ trợ chiều sâu khi tay tiến hoặc lùi"],
+        ["barrier","Giữ phía trước/sau cơ thể khi tránh xuyên"],
+        ["dof","Giới hạn xoay cánh tay theo rig"],
+        ["shape","Lọc hình dạng bàn tay"],
+        ["reach","Điều chỉnh tầm với theo avatar"],
+        ["contact","Hỗ trợ chạm đầu và cơ thể"],
+        ["palms","Hỗ trợ chắp hai bàn tay"],
+      ] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={features[key]} onChange={event=>setFeatures(value=>({...value,[key]:event.target.checked}))}/>{label}</label>)}
+    </details>
     <p role="status">{status}</p>{error&&<p role="alert">{error}</p>}
     <p>Thử giơ tay, xoay cổ tay, xòe/nắm ngón và che từng bàn tay trong thời gian ngắn. Các thử nghiệm contact và so A/B nằm ở trang kiểm tra chuyển động.</p>
     {import.meta.env.DEV&&<a href="/dev/avatar-renderer">Mở trang kiểm tra chuyển động và replay</a>}

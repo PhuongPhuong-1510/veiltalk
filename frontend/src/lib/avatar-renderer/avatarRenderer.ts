@@ -21,6 +21,7 @@ import type { GazeEyelidSupport } from "../avatar-motion/gazeEyelidCoupling";
 
 import { retargetFacialExpressions } from "./facialRetargeting";
 import { buildAvatarCollisionProfile, poseAvatarCollisionProfile, type AvatarCollisionProfile } from "../avatar-motion/avatarCollisionProfile";
+import { BodyLocalDepthMemory } from "../avatar-motion/bodyLocalDepth";
 import { correctAvatarArmCollision } from "../avatar-motion/avatarCollisionCorrection";
 import { correctAvatarInterArmCollision, queryAvatarInterArmCollisions, type InterArmCollisionContact } from "../avatar-motion/avatarInterArmCollision";
 import type { AvatarCollisionCorrectionResult, AvatarCollisionPose } from "../avatar-motion/avatarCollisionTypes";
@@ -198,6 +199,7 @@ export class AvatarRenderer {
   private devFacialPreview: { kind: "expression" | "raw-morph"; name: string; value: number } | null = null;
 
   private readonly currentRawMorphWeights = new Map<string, number>();
+  private readonly bodyDepthMemory={left:{head:new BodyLocalDepthMemory(),torso:new BodyLocalDepthMemory()},right:{head:new BodyLocalDepthMemory(),torso:new BodyLocalDepthMemory()}};
   private collisionProfile: AvatarCollisionProfile | null = null;
   private selfCollisionDiagnostic: AppliedSelfCollisionDiagnostic = { enabled: false, mode: "correction", left: null, right: null, interArm: [] };
   private interArmDepthOrdering:"left-front"|"right-front"|null=null;
@@ -257,6 +259,7 @@ export class AvatarRenderer {
     this.target = null; this.appliedSequence = null;
 
     this.currentExpressions = {}; this.currentRotations = {}; this.currentRawMorphWeights.clear();
+    for(const memory of Object.values(this.bodyDepthMemory)){memory.head.reset();memory.torso.reset();}
     this.collisionProfile = loaded.rigProfile ? buildAvatarCollisionProfile(loaded.rigProfile) : null;
     this.interArmDepthOrdering = null;
     this.selfCollisionDiagnostic = { enabled: Boolean(this.collisionProfile), mode: "correction", left: null, right: null, interArm: [] };
@@ -607,7 +610,12 @@ getVerticalOffset(): number { return this.verticalOffsetRatio; }
       const pose:AvatarCollisionPose={shoulder,elbow,wrist,hand:palmEnd,...(palmCenter?{palmCenter}:{})};poses[side]=pose;
       const axis=wrist.clone().sub(shoulder).normalize(),pole=elbow.clone().sub(shoulder);pole.addScaledVector(axis,-pole.dot(axis));if(pole.lengthSq()<1e-10)pole.set(0,0,1);else pole.normalize();
       const total=posedProfile.arms[side].upperLength+posedProfile.arms[side].lowerLength;
-      const result=correctAvatarArmCollision(posedProfile,{side,baseline:pose,deltaSeconds:dt,observability:rendererClearanceMask(packet.armObservability?.[side]??"---",packet.motionOwnership,side),bendPole:pole,budget:{maxWristDisplacementPerFrame:total*.08,maxElbowAngularCorrectionPerSecond:8,maxTotalCorrection:total*.3,maxIterations:4,influence:1}});
+      const depthEnabled=packet.motionOwnership?.bodyDepthBarrier===true;
+      const depthMemory=this.bodyDepthMemory[side],forward=posedProfile.body.frontNormal;
+      const observed=packet.armObservability?.[side]==="SEW"&&packet.tracking.pose.outputState==="active"&&!packet.motionOwnership?.contactArms[side];
+      if(!depthEnabled){depthMemory.head.reset();depthMemory.torso.reset();}
+      const depthSides=depthEnabled&&forward?{head:depthMemory.head.update(palmCenter??wrist,posedProfile.body.head.center,forward,posedProfile.body.head.radius,this.now(),observed,packet.tracking.pose.sampledAtMs),torso:depthMemory.torso.update(palmCenter??wrist,posedProfile.body.torso.start,forward,posedProfile.body.torso.radius,this.now(),observed,packet.tracking.pose.sampledAtMs)}:undefined;
+      const result=correctAvatarArmCollision(posedProfile,{side,baseline:pose,bodyDepthSides:depthSides,deltaSeconds:dt,observability:rendererClearanceMask(packet.armObservability?.[side]??"---",packet.motionOwnership,side),bendPole:pole,budget:{maxWristDisplacementPerFrame:total*.08,maxElbowAngularCorrectionPerSecond:8,maxTotalCorrection:total*.3,maxIterations:4,influence:1}});
       diagnostic[side]=result;if(!result.baselinePreserved){this.applyCorrectedArm(side,pose,result.pose);poses[side]=result.pose;model.root.updateMatrixWorld(true);}
     }
     if(poses.left&&poses.right){

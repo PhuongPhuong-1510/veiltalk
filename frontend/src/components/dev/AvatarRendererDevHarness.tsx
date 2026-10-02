@@ -58,6 +58,9 @@ export default function AvatarRendererDevHarness() {
   const replayActiveRef = useRef(false);
   const replayRequestRef = useRef<number | null>(null);
   const [bimanualPalmAssistEnabled,setBimanualPalmAssistEnabled] = useState(false);
+  const [dofConstraintsEnabled,setDofConstraintsEnabled] = useState(false);
+  const [bodyDepthBarrierEnabled,setBodyDepthBarrierEnabled] = useState(false);
+  const [depthFusionEnabled,setDepthFusionEnabled] = useState(false);
   const [rigEndpointEnabled,setRigEndpointEnabled] = useState(false);
   const [handConditioningEnabled,setHandConditioningEnabled] = useState(false);
   const [processorArmTemporal,setProcessorArmTemporal] = useState(false);
@@ -148,6 +151,9 @@ export default function AvatarRendererDevHarness() {
   const tracking = useTracking(trackingOptions);
 
   useEffect(() => { processorRef.current.setFiltered(filtered); }, [filtered]);
+  useEffect(()=>{processorRef.current.setDofConstraintsEnabled(dofConstraintsEnabled);},[dofConstraintsEnabled]);
+  useEffect(()=>{processorRef.current.setBodyDepthBarrierEnabled(bodyDepthBarrierEnabled);},[bodyDepthBarrierEnabled]);
+  useEffect(()=>{processorRef.current.setDepthFusionEnabled(depthFusionEnabled);},[depthFusionEnabled]);
   useEffect(()=>{processorRef.current.setBimanualPalmAssistEnabled(bimanualPalmAssistEnabled);},[bimanualPalmAssistEnabled]);
   useEffect(()=>{processorRef.current.setRigEndpointEnabled(rigEndpointEnabled);},[rigEndpointEnabled]);
   useEffect(()=>{processorRef.current.setHandConditioningEnabled(handConditioningEnabled);},[handConditioningEnabled]);
@@ -437,6 +443,9 @@ export default function AvatarRendererDevHarness() {
       <button className="evidence-capture-button" onClick={captureEvidenceAfterCountdown} disabled={evidenceCaptureCountdown !== null}>{evidenceCaptureCountdown === null ? "Chụp bằng chứng sau 5s" : `Chuẩn bị chụp: ${evidenceCaptureCountdown}s`}</button>
       {evidenceCaptureStatus && <span className="evidence-capture-status" role="status">{evidenceCaptureStatus}</span>}
       <label><input type="checkbox" checked={bimanualPalmAssistEnabled} onChange={(e)=>setBimanualPalmAssistEnabled(e.target.checked)} /> Palms-together assist (A/B)</label>
+      <label><input type="checkbox" checked={dofConstraintsEnabled} onChange={e=>setDofConstraintsEnabled(e.target.checked)} /> Rig-local swing/twist limits (A/B)</label>
+      <label><input type="checkbox" checked={bodyDepthBarrierEnabled} onChange={e=>setBodyDepthBarrierEnabled(e.target.checked)} /> Body-local depth barrier (A/B)</label>
+      <label><input type="checkbox" checked={depthFusionEnabled} onChange={e=>setDepthFusionEnabled(e.target.checked)} /> Relative arm depth fusion (A/B)</label>
       <label><input type="checkbox" checked={rigEndpointEnabled} onChange={(e)=>setRigEndpointEnabled(e.target.checked)} /> Rig-aware wrist reach (A/B)</label>
       <label><input type="checkbox" checked={handConditioningEnabled} onChange={(e)=>setHandConditioningEnabled(e.target.checked)} /> Wrist-relative hand filter (A/B)</label>
       <label><input type="checkbox" checked={processorArmTemporal} onChange={(e)=>setProcessorArmTemporal(e.target.checked)} /> Arm temporal at processor (A/B)</label>
@@ -654,6 +663,6 @@ export default function AvatarRendererDevHarness() {
       </article>
       <article><h2>Phase 3A arm-frame</h2><p>Head: legacy/unverified, excluded from arm acceptance.</p><pre>{JSON.stringify(motionDiagnostics, null, 2)}</pre></article>
     </section>
-  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
+  <MotionReplayPanel recorder={motionRecorderRef.current} metadata={{avatarModelId,poseModel,simulatedLoss,dofConstraintsEnabled,bodyDepthBarrierEnabled,depthFusionEnabled,bimanualPalmAssistEnabled,rigEndpointEnabled,handConditioningEnabled,processorArmTemporal,filtered,constraints,handTwistEnabled,continuousFingerEnabled,contactCorrectionEnabled,rigProfile:rendererRef.current?.getRigProfile()??null,fingerRig,upperBodyRigProfile:rendererRef.current?.getUpperBodyRigProfile()??null}} onReplay={playMotionReplay} onStop={stopMotionReplay} />
     </main>;
 }

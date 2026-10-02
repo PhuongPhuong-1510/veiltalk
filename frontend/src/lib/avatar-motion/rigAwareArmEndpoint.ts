@@ -13,9 +13,11 @@ const data = (p: Vector3) => ({x:p.x,y:p.y,z:p.z});
 export function retargetArmEndpoint(input: {
   shoulder: Vector3Data; elbow: Vector3Data; wrist: Vector3Data;
   avatarUpperLength: number; avatarLowerLength: number;
+  /** Optional relative depth objective in observed human units; measurements stay raw. */
+  targetOffset?: Vector3Data | null;
 }): RigAwareEndpointResult | null {
   const s = vector(input.shoulder), e = vector(input.elbow), w = vector(input.wrist);
-  const humanLength = e.distanceTo(s)+w.distanceTo(e), offset = w.clone().sub(s), reach = offset.length();
+  const humanLength = e.distanceTo(s)+w.distanceTo(e), offset = input.targetOffset ? vector(input.targetOffset) : w.clone().sub(s), reach = offset.length();
   const avatarLength = input.avatarUpperLength+input.avatarLowerLength;
   if (![humanLength, reach, avatarLength, ...s.toArray(), ...e.toArray(), ...w.toArray()].every(Number.isFinite)
     || humanLength <= 1e-6 || reach <= 1e-6 || !(input.avatarUpperLength > 0 && input.avatarLowerLength > 0)) return null;

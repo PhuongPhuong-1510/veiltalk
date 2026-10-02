@@ -1,5 +1,7 @@
 # Ma trận thử nghiệm cơ chế XR cho VeilTalk
 
+> Palm apparent-scale/foreshortening fusion và body-local clearance đã có nhánh opt-in: [đợt triển khai tiếp](MOTION_DEPTH_CONTINUATION.vi.md). Chưa có quyết định giữ/default dựa trên webcam.
+
 > Cập nhật triển khai: conditioning, rig reach và palms-together assist đã có code/công tắc thử; depth/provenance/ownership đã được nối. “Chưa thử” trong bảng là **chưa nghiệm thu webcam/XR A/B**, không có nghĩa tất cả còn chưa viết code. Chi tiết và giới hạn: [bản triển khai](MOTION_IMPLEMENTATION_AND_WEBCAM_TEST.vi.md).
 
 Cập nhật 02/10/2026. Đi kèm [báo cáo và kế hoạch A–Z](XR_VEILTALK_MOTION_REVIEW.vi.md). Đây là danh sách giả thuyết và gate; chưa có kết quả A/B webcam, chưa có quyết định bật runtime. Source evidence là khảo sát tĩnh, không chứng minh cơ chế là nguyên nhân XR chuyển động tốt hơn.

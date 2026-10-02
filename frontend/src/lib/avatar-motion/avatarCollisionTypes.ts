@@ -38,6 +38,7 @@ export interface AvatarCollisionCorrectionBudget {
 }
 
 export interface AvatarCollisionCorrectionInput {
+  bodyDepthSides?: {head:import("./bodyLocalDepth").BodyDepthSide|null;torso:import("./bodyLocalDepth").BodyDepthSide|null};
   side: "left" | "right";
   baseline: AvatarCollisionPose;
   deltaSeconds: number;

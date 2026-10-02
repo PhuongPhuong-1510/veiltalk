@@ -1,4 +1,6 @@
 import { Vector3 } from "three";
+import { bodyLocalOutwardNormal } from "./bodyLocalDepth";
+import type { AvatarCollisionCorrectionInput } from "./avatarCollisionTypes";
 import { capsuleCapsuleContact, capsuleSphereContact } from "./collision/collisionPrimitives";
 import type { CapsuleCollider } from "./collision/collisionTypes";
 import type { Vector3Data } from "./avatarPoseTypes";
@@ -7,7 +9,7 @@ import type { AvatarCollisionArmPart, AvatarCollisionBodyPart, AvatarCollisionPo
 
 const v = (p: Vector3Data) => new Vector3(p.x, p.y, p.z);
 
-export function queryAvatarArmBodyCollisions(profile: AvatarCollisionProfile, side: "left" | "right", pose: AvatarCollisionPose): CollisionContact[] {
+export function queryAvatarArmBodyCollisions(profile: AvatarCollisionProfile, side: "left" | "right", pose: AvatarCollisionPose, depthSides?:AvatarCollisionCorrectionInput["bodyDepthSides"]): CollisionContact[] {
   const dimensions = profile.arms[side];
   const arm: Record<AvatarCollisionArmPart, CapsuleCollider> = {
     upperArm: { start: pose.shoulder, end: pose.elbow, radius: dimensions.upperRadius },
@@ -23,7 +25,15 @@ export function queryAvatarArmBodyCollisions(profile: AvatarCollisionProfile, si
       const result = sphere ? capsuleSphereContact(collider, sphere,meta) : capsuleCapsuleContact(collider, profile.body[bodyPart as "neck"|"torso"],meta);
       if (!result.valid || result.penetrationDepth <= 0) continue;
       let surfaceNormal=result.normalBToA;
-      if((bodyPart==="torso"||bodyPart==="chestLeft"||bodyPart==="chestRight")&&profile.body.frontNormal&&(armPart==="forearm"||armPart==="hand")){
+      if(depthSides&&profile.body.frontNormal&&(armPart==="forearm"||armPart==="hand")){
+        const headFamily=bodyPart==="head"||bodyPart==="neck";
+        const sphereCenter=headFamily?profile.body.head.center:profile.body.torso.start;
+        const radius=headFamily?profile.body.head.radius:profile.body.torso.radius;
+        const depth=v(result.pointA).sub(v(sphereCenter)).dot(v(profile.body.frontNormal).normalize());
+        // A clearly measured current side wins; hysteresis only acts near the mid-plane.
+        const preferred=Math.abs(depth)>radius*.2?(depth>0?1:-1):bodyPart==="head"||bodyPart==="neck"?depthSides.head:depthSides.torso;
+        surfaceNormal=bodyLocalOutwardNormal(surfaceNormal,profile.body.frontNormal,preferred);
+      }else if((bodyPart==="torso"||bodyPart==="chestLeft"||bodyPart==="chestRight")&&profile.body.frontNormal&&(armPart==="forearm"||armPart==="hand")){
         const front=v(profile.body.frontNormal).normalize(),frontDepth=v(result.pointA).sub(v(profile.body.torso.start)).dot(front);
         // Near the torso mid-plane, a webcam cross-body gesture is front-side unless depth gives
         // strong evidence that it is behind. Bias the correction outward instead of deeper inside.

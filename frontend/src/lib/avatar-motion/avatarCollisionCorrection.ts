@@ -9,7 +9,7 @@ const observedWeight = (mask: AvatarCollisionCorrectionInput["observability"]) =
 
 /** Iterative, length-preserving correction. It returns the exact input pose whenever no contact exists. */
 export function correctAvatarArmCollision(profile: AvatarCollisionProfile, input: AvatarCollisionCorrectionInput): AvatarCollisionCorrectionResult {
-  const before = queryAvatarArmBodyCollisions(profile, input.side, input.baseline);
+  const before = queryAvatarArmBodyCollisions(profile, input.side, input.baseline, input.bodyDepthSides);
   if (!before.length) return { pose: input.baseline, baselinePreserved: true, resolved: true, reason: "no-collision", iterations: 0, wristDisplacement: 0, contactsBefore: [], contactsAfter: [] };
   // One or zero observed joints cannot establish motion intent. Collision remains diagnostic only;
   // it must not manufacture a new wrist target from an ambiguous/held arm.
@@ -46,7 +46,7 @@ export function correctAvatarArmCollision(profile: AvatarCollisionProfile, input
     const axis = v(ik.wrist).sub(shoulder).normalize(), offset = v(ik.elbow).sub(shoulder); offset.addScaledVector(axis, -offset.dot(axis));
     if (baselineHemisphere * offset.dot(baselinePole) < -1e-8) return bestOr("topology-change", iteration - 1);
     pose = { ...input.baseline, elbow: ik.elbow, wrist: ik.wrist, ...(input.baseline.hand ? { hand: v(input.baseline.hand).add(v(ik.wrist).sub(baselineWrist)) } : {}), ...(input.baseline.palmCenter ? { palmCenter: v(input.baseline.palmCenter).add(v(ik.wrist).sub(baselineWrist)) } : {}) };
-    contacts = queryAvatarArmBodyCollisions(profile, input.side, pose);
+    contacts = queryAvatarArmBodyCollisions(profile, input.side, pose, input.bodyDepthSides);
     const score = collisionScore(contacts);
     if (score < bestScore) { bestScore = score; bestPose = pose; bestContacts = contacts; }
     if (!contacts.length) return result("resolved", true, iteration);
@@ -74,7 +74,7 @@ export function correctAvatarArmCollision(profile: AvatarCollisionProfile, input
     const output = resolved || publishPartial ? pose : input.baseline;
     return { pose: output, baselinePreserved: output === input.baseline, resolved, reason, iterations,
       wristDisplacement: v(output.wrist).distanceTo(baselineWrist), contactsBefore: before,
-      contactsAfter: output === input.baseline ? before : queryAvatarArmBodyCollisions(profile, input.side, output) };
+      contactsAfter: output === input.baseline ? before : queryAvatarArmBodyCollisions(profile, input.side, output, input.bodyDepthSides) };
   }
 }
 

@@ -1,0 +1,146 @@
+{
+  "generatedAt": "2026-10-02T06:26:07.093Z",
+  "baselineHead": "8b636f8e2093c39969e7c87267133004f6052eba",
+  "sourceHash": "b13b1d97f553ac8371e54641f8cd95e85850ef8649636489b0d7d7ffbe973bd4",
+  "files": [
+    {
+      "file": "frontend/src/components/avatar/AvatarMotionPreview.tsx",
+      "sha256": "dc90a69089443d54a61958d027721c1f05fcebab946b7e818f2fcafff9bc3f2a"
+    },
+    {
+      "file": "frontend/src/components/avatar/avatarMotionPreview.css",
+      "sha256": "64a816324a998f2d851658316e1727ea0d8d7bdd33fa76bc0267f2d48b83f497"
+    },
+    {
+      "file": "frontend/src/components/dev/AvatarRendererDevHarness.tsx",
+      "sha256": "7c06b3d316b762143955dba9fec24a6a319bc75125ac952dc2b77aaaa02b5af3"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armDepthFusion.test.ts",
+      "sha256": "731c9843800f1d10bb03a23a3529b514a77a4ef71af7edaeb5c94fd67598f716"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armDepthFusion.ts",
+      "sha256": "cf07aaafe9f922784da1ca7f165a290ab0af25f1235a4bdb4f7907671a8e0eb4"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armDofConstraints.test.ts",
+      "sha256": "9f0671e73a385f50d3498bbd94d3bb7f64f70f585b9b3169ed6ebcbbf5e5c494"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armDofConstraints.ts",
+      "sha256": "78773d0ad703b14c304eb8f25098c3933e580b83c0762f69550b586480cb8c62"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/armFrameSolver.ts",
+      "sha256": "7da8541e78ed37f261ea9cd472443b6f6199602d5f13140df48af8600365e4ca"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarCollision.test.ts",
+      "sha256": "38bc62026ebe8949de8456df20a96add268fdcce39c511302e49ecba1ae1a03a"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarCollisionCorrection.ts",
+      "sha256": "05d55e288db977675e96fbe9daedeaa66591ce54417b006dc28f71040001954b"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarCollisionQuery.ts",
+      "sha256": "64076280b7bfb24f9473f6fedf665e801fd5b265ef016cbee47eec17e6581123"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarCollisionTypes.ts",
+      "sha256": "23e7d5fa019b338275e32ff8c935fe27e7daf96c26ea10d755686d79eb6fdd23"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionDiagnostics.ts",
+      "sha256": "2e9eb9b3a7aad7d20b89c9f14df6e0672964a9e809434e185d17035142e29b04"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionProcessor.test.ts",
+      "sha256": "6bc9aec57464fb9012a58e726c52d1379cd6699f4770ebc9ad7c45285a3a3c15"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarMotionProcessor.ts",
+      "sha256": "6059238c6b9938a7e88a145d21412674b515c69b13889d453d0e09d30d3b3358"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/avatarPoseTypes.ts",
+      "sha256": "d9c01f7fc41655e2d2c2d8dc146f07c921892541c7eec8773ea7a496513bdcba"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/bodyLocalDepth.test.ts",
+      "sha256": "6b887bd97f848bd005daa78201653f1be64813e94dd1bc662e37f76f6c838283"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/bodyLocalDepth.ts",
+      "sha256": "f988628de28e0bbd26f8b271793c173f9ac29e97976b54c8aff83f3a81518404"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/motionBenchmark.ts",
+      "sha256": "9d9b322b59b820728824347c9d400e518bb06df7ad0710b7ad45bc5c08941e68"
+    },
+    {
+      "file": "frontend/src/lib/avatar-motion/rigAwareArmEndpoint.ts",
+      "sha256": "bcbd817f6f5e21443f00924ca69940978ef474791c974f882c29fbde8c88dd38"
+    },
+    {
+      "file": "frontend/src/lib/avatar-renderer/avatarRenderer.ts",
+      "sha256": "2757aa5f9fe2a0afabb30bbc8e2fb12f5acc724bfe03eb35d38b208faa6c46fa"
+    }
+  ],
+  "checks": {
+    "testFiles": 116,
+    "tests": 962,
+    "testsPassed": true,
+    "buildExit": 0,
+    "lintExit": 0,
+    "rigAuditSha256": "5679577d2799b06a4d21d240b29b91b03754f4f57e5d39bffb5711a5768b34a2",
+    "http": [
+      {
+        "url": "http://127.0.0.1:5173/dev/avatar-renderer",
+        "status": 200,
+        "bytes": 628,
+        "coep": "require-corp",
+        "coop": "same-origin"
+      },
+      {
+        "url": "http://127.0.0.1:5173/avatar/motion",
+        "status": 200,
+        "bytes": 628,
+        "coep": "require-corp",
+        "coop": "same-origin"
+      },
+      {
+        "url": "http://127.0.0.1:5174/avatar/motion",
+        "status": 200,
+        "bytes": 471,
+        "coep": "require-corp",
+        "coop": "same-origin"
+      },
+      {
+        "url": "http://127.0.0.1:5173/src/components/dev/AvatarRendererDevHarness.tsx",
+        "status": 200,
+        "bytes": 298645,
+        "coep": "require-corp",
+        "coop": "same-origin"
+      },
+      {
+        "url": "http://127.0.0.1:5173/src/components/dev/MotionReplayPanel.tsx",
+        "status": 200,
+        "bytes": 22308,
+        "coep": "require-corp",
+        "coop": "same-origin"
+      },
+      {
+        "url": "http://127.0.0.1:5174/assets/AvatarMotionPreview-DbJZpIdk.js",
+        "status": 200,
+        "bytes": 1263806
+      }
+    ]
+  },
+  "limitations": [
+    "No webcam/browser visual acceptance",
+    "No XR end-to-end comparison",
+    "No full anatomical hinge/cone, fingertip IK or remote integration"
+  ]
+}

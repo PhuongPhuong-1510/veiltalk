@@ -1,5 +1,7 @@
 # Bản triển khai chuyển động tay và lượt test webcam đầu tiên
 
+> Có đợt triển khai tiếp: [depth fusion, body-local barrier và rig-local DOF](MOTION_DEPTH_CONTINUATION.vi.md). Bảng dưới giữ trạng thái đợt đầu; J/L/S/V và bộ test đã được bổ sung tiếp, vẫn chưa nghiệm thu A–Z.
+
 Ngày 02/10/2026. Nền trước thay đổi: VeilTalk `5df5ee8ec6a8f62581844a17af0d886608527004`. Thay đổi hiện nằm trong working tree; không sửa XR. Kế hoạch gốc: [A–Z](XR_VEILTALK_MOTION_REVIEW.vi.md), [ma trận kỹ thuật](XR_TECHNIQUE_MATRIX.vi.md).
 
 ## Mở bản chạy thử

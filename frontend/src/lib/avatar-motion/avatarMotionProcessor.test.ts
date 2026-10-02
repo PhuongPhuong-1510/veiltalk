@@ -8,6 +8,40 @@ import { DEFAULT_AVATAR_MOTION_CONFIG } from "./motionConfig";
 import type { UpperBodyJointProfile, UpperBodyRigProfileV1 } from "./upperBodyRigProfile";
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
+
+it("wires independent rig-local constraints and body-depth policy into the runtime",()=>{
+  const processor=new AvatarMotionProcessor({dofConstraintsEnabled:true,bodyDepthBarrierEnabled:true,now:()=>100});
+  processor.setRigProfile(rigProfile);
+  try{const packet=processor.process(sampledFrame(100));expect(packet.motionOwnership!.bodyDepthBarrier).toBe(true);
+    expect(processor.getLastDiagnostics()!.arms.left.confidenceFlags).toContain("rig-local-dof-limits");
+    processor.setDofConstraintsEnabled(false);processor.setBodyDepthBarrierEnabled(false);
+    const next=processor.process(sampledFrame(133));expect(next.motionOwnership!.bodyDepthBarrier).toBe(false);
+  }finally{processor.dispose();}
+});
+
+it("wires relative depth to avatar reach without changing raw arm calibration or partial-arm policy",()=>{
+  let clock=0;
+  const profile:NormalizedAvatarRigProfile={...rigProfile,collisionReference:{head:{centerWorld:{x:0,y:1,z:0},radius:.1},torso:{startWorld:{x:0,y:.5,z:0},endWorld:{x:0,y:-.5,z:0},radius:.1},arms:{left:{shoulderWorld:{x:0,y:0,z:0},upperLength:.3,lowerLength:.3,radius:.02},right:{shoulderWorld:{x:0,y:0,z:0},upperLength:.3,lowerLength:.3,radius:.02}}}};
+  const base=new AvatarMotionProcessor({now:()=>clock,handTwistEnabled:false}),fusion=new AvatarMotionProcessor({now:()=>clock,depthFusionEnabled:true,handTwistEnabled:false});
+  base.setRigProfile(profile);fusion.setRigProfile(profile);
+  try{
+    for(let i=0;i<24;i++){
+      clock=100+i*33;const raw=sampledFrame(clock);
+      raw.pose.worldLandmarks![13]=landmark(-.5,.1,0);raw.pose.worldLandmarks![15]=landmark(-.8,.3,-.1);
+      const candidate=handCandidate(0,LEFT_WRIST_IMAGE,"left",clock);
+      if(i>=15)candidate.landmarks=candidate.landmarks.map(p=>({...p,x:LEFT_WRIST_IMAGE.x+(p.x-LEFT_WRIST_IMAGE.x)*1.6,y:LEFT_WRIST_IMAGE.y+(p.y-LEFT_WRIST_IMAGE.y)*1.6}));
+      raw.rawHands=[candidate];const original=JSON.stringify(raw);
+      base.process(raw);fusion.process(raw);expect(JSON.stringify(raw)).toBe(original);
+    }
+    const a=base.getLastDiagnostics()!.arms.left,b=fusion.getLastDiagnostics()!.arms.left;
+    expect(b.depthFusion!.calibratedSamples).toBe(8);expect(b.depthFusion!.applied).toBe(true);
+    expect(b.confidenceFlags).toContain("relative-depth-objective");
+    expect(b.elbowInference.calibratedUpperLength).toBe(a.elbowInference.calibratedUpperLength);
+    expect(b.elbowInference.calibratedLowerLength).toBe(a.elbowInference.calibratedLowerLength);
+    clock+=33;const lost=sampledFrame(clock);lost.pose.landmarks![15].visibility=0;
+    fusion.process(lost);expect(fusion.getLastDiagnostics()!.arms.left.depthFusion!.reason).toBe("partial-observation");
+  }finally{base.dispose();fusion.dispose();}
+});
 const zero = { x: 0, y: 0, z: 0 };
 const leftBasis = { primaryLocal: { x: 1, y: 0, z: 0 }, secondaryLocal: { x: 0, y: 1, z: 0 }, binormalLocal: { x: 0, y: 0, z: 1 }, primaryWorld: { x: 1, y: 0, z: 0 }, secondaryWorld: { x: 0, y: 1, z: 0 }, binormalWorld: { x: 0, y: 0, z: 1 }, worldRotation: identity };
 const rightBasis = { primaryLocal: { x: -1, y: 0, z: 0 }, secondaryLocal: { x: 0, y: 1, z: 0 }, binormalLocal: { x: 0, y: 0, z: -1 }, primaryWorld: { x: -1, y: 0, z: 0 }, secondaryWorld: { x: 0, y: 1, z: 0 }, binormalWorld: { x: 0, y: 0, z: -1 }, worldRotation: { x: 0, y: 1, z: 0, w: 0 } };
