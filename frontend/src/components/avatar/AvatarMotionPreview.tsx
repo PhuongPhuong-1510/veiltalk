@@ -17,7 +17,7 @@ export default function AvatarMotionPreview() {
   const [modelUrl,setModelUrl]=useState("/models/avatars/reference-avatar-2.vrm");
   const [modelLabel,setModelLabel]=useState("Avatar thử nghiệm"),[ready,setReady]=useState(false);
   const [running,setRunning]=useState(false),[starting,setStarting]=useState(false);
-  const [trackingMetrics,setTrackingMetrics]=useState<TrackingMetricsSnapshot|null>(null);
+  const [,setTrackingMetrics]=useState<TrackingMetricsSnapshot|null>(null);
   const [error,setError]=useState<string|null>(null),[status,setStatus]=useState("Đang tải avatar…");
   useEffect(()=>{
     const p=processorRef.current!;
@@ -67,7 +67,6 @@ export default function AvatarMotionPreview() {
       <button disabled={!ready||!running} onClick={()=>{processorRef.current?.calibrateFaceNeutral();setStatus("Giữ mặt, thân và hai vai ở tư thế trung tính trong vài giây.");}}>Căn chỉnh tư thế trung tính</button>
       <label>Chọn avatar VRM trên máy <input type="file" accept=".vrm" disabled={starting} onChange={event=>{const file=event.target.files?.[0];if(file){setModelLabel(file.name);setModelUrl(URL.createObjectURL(file));}}}/></label>
     </section>
-    {trackingMetrics&&<p role="status">Hand input: {trackingMetrics.handInputMode??"full-frame"} · confidence: {trackingMetrics.handConfidenceMode??"normal"} · adaptive model: {trackingMetrics.adaptiveHandAvailable?"ready":"unavailable"} · execution: {trackingMetrics.handExecution==="worker"?"worker":"main"}</p>}
     <p role="status">{status}</p>{error&&<p role="alert">{error}</p>}
     <p>Thử giơ tay, xoay cổ tay, xòe/nắm ngón và che từng bàn tay trong thời gian ngắn. Trạng thái nhận diện tay được hiển thị khi camera hoạt động.</p>
     {import.meta.env.DEV&&<a href="/dev/avatar-renderer">Mở trang kiểm tra chuyển động và replay</a>}
