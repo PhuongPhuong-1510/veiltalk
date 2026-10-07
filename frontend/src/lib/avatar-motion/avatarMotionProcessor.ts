@@ -67,11 +67,12 @@ import { computeWristSwing, createWristSwingTemporalState, handWorldVectorToAvat
 import { Quaternion, Vector3 } from "three";
 
 import { HandLandmarkConditioner } from "./handLandmarkConditioning";
+import { PoseDepthConditioner } from "./poseDepthConditioning";
 import type { RigImageObjective } from "./rigAwareArmEndpoint";
 import { ArmDepthFusion } from "./armDepthFusion";
 import { WristDepthMemory } from "./wristDepthMemory";
 
-export interface AvatarMotionProcessorOptions { fingertipContactEnabled?:boolean; dofConstraintsEnabled?:boolean; bodyDepthBarrierEnabled?:boolean; depthFusionEnabled?: boolean; handConditioningEnabled?: boolean; processorArmTemporal?: boolean; rigEndpointEnabled?: boolean; elbowBranchSwitchEnabled?: boolean; bimanualPalmAssistEnabled?: boolean; filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; wristSwingEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
+export interface AvatarMotionProcessorOptions { poseDepthConditioningEnabled?: boolean; fingertipContactEnabled?:boolean; dofConstraintsEnabled?:boolean; bodyDepthBarrierEnabled?:boolean; depthFusionEnabled?: boolean; handConditioningEnabled?: boolean; processorArmTemporal?: boolean; rigEndpointEnabled?: boolean; elbowBranchSwitchEnabled?: boolean; bimanualPalmAssistEnabled?: boolean; filtered?: boolean; constraints?: boolean; handTwistEnabled?: boolean; wristSwingEnabled?: boolean; gestureEnabled?: boolean; continuousFingerEnabled?: boolean; gazeMode?: "faithful" | "cinematic"; now?: () => number; config?: AvatarMotionConfig }
 
 export interface ShoulderVerticalDiagnosticSnapshot {
   raw: { left: number; right: number };
@@ -307,6 +308,8 @@ export class AvatarMotionProcessor {
   private readonly depthFusion = {left:new ArmDepthFusion(),right:new ArmDepthFusion()};
   private bimanualPalmAssistEnabled: boolean;
   private readonly handConditioners = { left: new HandLandmarkConditioner(), right: new HandLandmarkConditioner() };
+  private readonly poseDepthConditioner = new PoseDepthConditioner();
+  private poseDepthConditioningEnabled: boolean;
   private readonly wristDepth = { left: new WristDepthMemory(), right: new WristDepthMemory() };
   private videoGeometry: string | null = null;
   private readonly facialNeutral: FacialNeutralCalibrator;
@@ -418,6 +421,7 @@ export class AvatarMotionProcessor {
     this.depthFusionEnabled = options.depthFusionEnabled ?? false;
     this.processorArmTemporal = options.processorArmTemporal ?? false;
     this.handConditioningEnabled = options.handConditioningEnabled ?? false;
+    this.poseDepthConditioningEnabled = options.poseDepthConditioningEnabled ?? false;
     this.now = options.now ?? (() => performance.now());
     this.config = options.config ?? DEFAULT_AVATAR_MOTION_CONFIG;
     this.facialNeutral = new FacialNeutralCalibrator({
@@ -479,6 +483,11 @@ export class AvatarMotionProcessor {
   setHandConditioningEnabled(enabled: boolean): void {
     if (this.handConditioningEnabled !== enabled) { this.handConditioners.left.reset(); this.handConditioners.right.reset(); }
     this.handConditioningEnabled = enabled;
+  }
+
+  setPoseDepthConditioningEnabled(enabled: boolean): void {
+    if (this.poseDepthConditioningEnabled !== enabled) this.poseDepthConditioner.reset();
+    this.poseDepthConditioningEnabled = enabled;
   }
 
   setFiltered(enabled: boolean): void {
@@ -773,7 +782,8 @@ export class AvatarMotionProcessor {
     return { ...result, shoulderMotion };
   }
 
-  process(frame: RawTrackingFrameV1): AvatarPosePacket {
+  process(rawFrame: RawTrackingFrameV1): AvatarPosePacket {
+    let frame = rawFrame;
     const geometry = `${frame.videoWidth}x${frame.videoHeight}`;
     if (this.videoGeometry !== null && this.videoGeometry !== geometry) {
       this.resetArmState();
@@ -781,6 +791,7 @@ export class AvatarMotionProcessor {
       this.resetHandSampleClassification();
     }
     this.videoGeometry = geometry;
+    if (this.poseDepthConditioningEnabled) frame = this.poseDepthConditioner.condition(rawFrame);
     const processedTimestampMs = this.now();
     const tracking = {
       face: this.part("face", frame.face.state, frame.face.sampledAtMs, processedTimestampMs, this.config.freshnessMs.face),
@@ -993,7 +1004,23 @@ export class AvatarMotionProcessor {
           if (acceptedGeometry.elbowDirection && acceptedGeometry.elbowSource === "observed" && wristEvidence.source === "pose-world") {
             state.previousElbowDirection = acceptedGeometry.elbowDirection;
           }
-          if (acceptedGeometry.elbowSource === "observed") { state.previousObservedElbow = acceptedGeometry.elbowPosition; state.inferenceStartedAtMs = null; if (acceptedGeometry.observedLengths) this.updateLengthCalibration(state, acceptedGeometry.observedLengths); }
+          if (acceptedGeometry.elbowSource === "observed") {
+            state.previousObservedElbow = acceptedGeometry.elbowPosition; state.inferenceStartedAtMs = null;
+            if (acceptedGeometry.observedLengths) {
+              // Z conditioning changes instantaneous segment length. Calibration must
+              // retain raw measurements and the solver's observed/reconstructed gate.
+              const lengths: { upper: number | null; lower: number | null } = { ...acceptedGeometry.observedLengths };
+              if (frame !== rawFrame) {
+                const ids = side === "left" ? [11, 13, 15] : [12, 14, 16];
+                for (const [segment, index] of [["upper", 0], ["lower", 1]] as const) {
+                  const a = rawFrame.pose.worldLandmarks?.[ids[index]], b = rawFrame.pose.worldLandmarks?.[ids[index + 1]];
+                  const distance = a && b ? Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) : NaN;
+                  lengths[segment] = lengths[segment] !== null && Number.isFinite(distance) && distance > 0 ? distance : null;
+                }
+              }
+              this.updateLengthCalibration(state, lengths);
+            }
+          }
           else state.inferenceStartedAtMs ??= processedTimestampMs;
         } else if (solved?.diagnostics[side].hardRejectionReason?.startsWith("elbow-inference")) state.inferenceStartedAtMs ??= processedTimestampMs;
         const trackingReacquired = segmentReacquired.upper || segmentReacquired.lower;
@@ -1881,7 +1908,7 @@ export class AvatarMotionProcessor {
     this.lastMouthExpressions = createNeutralMouthExpressionSnapshot();
     if (resetCalibration) this.facialNeutral.reset();
   }
-  private updateLengthCalibration(state: ArmTemporalState, lengths: { upper: number; lower: number | null }): void {
+  private updateLengthCalibration(state: ArmTemporalState, lengths: { upper: number | null; lower: number | null }): void {
     for (const segment of ["upper", "lower"] as const) {
       const sample = lengths[segment];
       if (sample === null) continue;
@@ -1926,6 +1953,7 @@ export class AvatarMotionProcessor {
     this.torsoLeanDiagnostics={angle:null,filteredAngle:0,source:"unavailable",confidence:0,cues:{shoulderScale:null,faceScale:null,scaleMismatch:null,depth:null},penalties:{head:0,yaw:0,roll:0,shrug:0},limited:false,state:"idle"};
   }
   private resetArmState(): void {
+    this.poseDepthConditioner.reset();
     for (const side of ["left", "right"] as const) {
       const fresh = createArmTemporalState();
       // Khởi tạo ngay ở tư thế buông tay để lúc chưa có sample nào avatar không đứng T-pose.

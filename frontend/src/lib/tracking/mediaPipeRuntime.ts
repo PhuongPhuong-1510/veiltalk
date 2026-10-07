@@ -58,6 +58,7 @@ export class MediaPipeRuntime {
   private readonly poseModel: PoseModelVariant;
   private landmarkers: TrackingLandmarkers | null = null;
   private initPromise: Promise<void> | null = null;
+  private handsPromise: Promise<void> | null = null;
   private disposed = false;
   selectedDelegate: ConfiguredDelegate | null = null;
 
@@ -79,7 +80,12 @@ export class MediaPipeRuntime {
     if (this.disposed) throw new Error("MediaPipe runtime đã dispose.");
     if (this.landmarkers) return;
     if (!this.initPromise) {
-      this.initPromise = this.initializeWithFallback().finally(() => { this.initPromise = null; });
+      this.initPromise = this.initializeWithFallback().then(() => {
+        if (this.disposed) {
+          this.closeTasks();
+          throw new Error("MediaPipe runtime đã dispose trong khi khởi tạo.");
+        }
+      }).finally(() => { this.initPromise = null; });
     }
     return this.initPromise;
   }
@@ -89,8 +95,32 @@ export class MediaPipeRuntime {
     return this.landmarkers;
   }
 
+  /** Load only the main-thread hand task if the optional worker is unavailable. */
+  async initializeHands(): Promise<void> {
+    if (this.disposed) throw new Error("MediaPipe runtime đã dispose.");
+    if (this.landmarkers?.hands) return;
+    if (!this.handsPromise) this.handsPromise = (async () => {
+      await this.initialize();
+      const fileset = await this.dependencies.resolveFileset(publicAsset("wasm"));
+      if (this.disposed) throw new Error("MediaPipe runtime đã dispose.");
+      const hands = await this.dependencies.createHands(fileset, {
+        baseOptions: { modelAssetPath: publicAsset("models/hand_landmarker.task"), delegate: this.selectedDelegate! },
+        runningMode: "VIDEO", numHands: 2,
+      });
+      if (this.disposed) { hands.close(); throw new Error("MediaPipe runtime đã dispose."); }
+      this.landmarkers!.hands = hands;
+    })().finally(() => { this.handsPromise = null; });
+    return this.handsPromise;
+  }
+
+  releaseHands(): void {
+    this.landmarkers?.hands?.close();
+    if (this.landmarkers) delete this.landmarkers.hands;
+  }
+
   private async initializeWithFallback(): Promise<void> {
     const fileset = await this.dependencies.resolveFileset(publicAsset("wasm"));
+    if (this.disposed) throw new Error("MediaPipe runtime đã dispose.");
     if (this.delegate !== "AUTO") {
       this.landmarkers = await this.createTasks(fileset, this.delegate);
       this.selectedDelegate = this.delegate;
@@ -100,6 +130,7 @@ export class MediaPipeRuntime {
       this.landmarkers = await this.createTasks(fileset, "GPU");
       this.selectedDelegate = "GPU";
     } catch (gpuError) {
+      if (this.disposed) throw gpuError;
       try {
         this.landmarkers = await this.createTasks(fileset, "CPU");
         this.selectedDelegate = "CPU";
@@ -125,6 +156,7 @@ export class MediaPipeRuntime {
         outputFacialTransformationMatrixes: true,
       });
       created.push(face);
+      if (this.disposed) throw new Error("MediaPipe runtime đã dispose.");
       result.face = face;
       }
       if (this.selection.hands) {
@@ -134,6 +166,7 @@ export class MediaPipeRuntime {
         numHands: 2,
       });
       created.push(hands);
+      if (this.disposed) throw new Error("MediaPipe runtime đã dispose.");
       result.hands = hands;
       }
       if (this.selection.pose) {
@@ -150,6 +183,7 @@ export class MediaPipeRuntime {
         minTrackingConfidence: 0.6,
       });
       created.push(pose);
+      if (this.disposed) throw new Error("MediaPipe runtime đã dispose.");
       result.pose = pose;
       }
       return result;
@@ -162,6 +196,10 @@ export class MediaPipeRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.closeTasks();
+  }
+
+  private closeTasks(): void {
     this.landmarkers?.face?.close();
     this.landmarkers?.hands?.close();
     this.landmarkers?.pose?.close();

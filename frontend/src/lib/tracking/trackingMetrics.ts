@@ -19,6 +19,12 @@ export interface TrackingMetricsSnapshot {
   mainThreadLongTasks: number;
   mainThreadBlockedMs: number;
   selectedDelegate: ConfiguredDelegate | null;
+  handExecution?: "main-thread" | "worker";
+  handDelegate?: ConfiguredDelegate | null;
+  handWorkerFallback?: string | null;
+  handWorkerDroppedSamples?: number;
+  framePreparationMs?: DistributionMetric;
+  handWorkerRoundTripMs?: DistributionMetric;
   /** Ghi kèm để so sánh chi phí suy luận giữa `lite` và `full` trong cùng một snapshot. */
   poseModel: PoseModelVariant | null;
   stateRatio: Record<"face" | "leftHand" | "rightHand" | "pose", Record<"tracked" | "lost" | "not-sampled", number>>;
@@ -52,6 +58,8 @@ export class TrackingMetricsCollector {
   private lossEvents = { face: 0, leftHand: 0, rightHand: 0, pose: 0 };
   private previousStates: Partial<Record<keyof TrackingMetricsCollector["stateCounts"], string>> = {};
   private runStartedAt: number | null = null;
+  private preparations: number[] = [];
+  private workerRoundTrips: number[] = [];
 
   reset(): void {
     this.cameraTicks = [];
@@ -65,6 +73,7 @@ export class TrackingMetricsCollector {
     this.lossEvents = { face: 0, leftHand: 0, rightHand: 0, pose: 0 };
     this.previousStates = {};
     this.runStartedAt = null;
+    this.preparations = []; this.workerRoundTrips = [];
   }
 
   startLongTaskObserver(): void {
@@ -98,7 +107,12 @@ export class TrackingMetricsCollector {
     this.pushTick(this.inferenceTicks[group], now);
     this.push(this.durations[group], duration);
   }
-  recordPipeline(now: number, duration: number, frame: RawTrackingFrameV1): void {
+  recordWorkerFrame(preparationMs: number, roundTripMs: number): void {
+    if (preparationMs > 0) this.push(this.preparations, preparationMs);
+    if (roundTripMs > 0) this.push(this.workerRoundTrips, roundTripMs);
+  }
+
+  recordPipeline(now: number, duration: number, frame: RawTrackingFrameV1, mainThreadDuration = duration): void {
     this.pushTick(this.pipelineTicks, now);
     this.push(this.durations.pipeline, duration);
     this.recordAge("face", frame.face.sampledAtMs, now);
@@ -112,9 +126,9 @@ export class TrackingMetricsCollector {
       this.previousStates[group] = state;
     }
     // Firefox chưa hỗ trợ Long Tasks API; dùng pipeline task >=50ms làm fallback có ghi nhãn cùng metric.
-    if (!this.observesLongTasks && duration >= 50) {
+    if (!this.observesLongTasks && mainThreadDuration >= 50) {
       this.longTasks += 1;
-      this.blockedMs += duration;
+      this.blockedMs += mainThreadDuration;
     }
   }
 
@@ -150,6 +164,8 @@ export class TrackingMetricsCollector {
       mainThreadLongTasks: this.longTasks,
       mainThreadBlockedMs: this.blockedMs,
       selectedDelegate,
+      framePreparationMs: distribution(this.preparations),
+      handWorkerRoundTripMs: distribution(this.workerRoundTrips),
       poseModel,
       stateRatio: Object.fromEntries((Object.keys(this.stateCounts) as Array<keyof typeof this.stateCounts>).map((group) => {
         const counts = this.stateCounts[group];

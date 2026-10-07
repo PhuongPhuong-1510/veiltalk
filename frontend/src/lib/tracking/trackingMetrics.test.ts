@@ -13,6 +13,20 @@ const frame = {
 } as RawTrackingFrameV1;
 
 describe("TrackingMetricsCollector", () => {
+  it("does not count asynchronous worker waiting as main-thread blocking", () => {
+    vi.stubGlobal("PerformanceObserver", undefined);
+    try {
+      const metrics = new TrackingMetricsCollector();
+      metrics.recordPipeline(200, 100, frame, 20);
+      metrics.recordWorkerFrame(3, 80);
+      const result = metrics.snapshot(200, "GPU");
+      expect(result.inferenceTimeMs.pipeline.average).toBe(100);
+      expect(result.mainThreadBlockedMs).toBe(0);
+      expect(result.mainThreadLongTasks).toBe(0);
+      expect(result.framePreparationMs?.p95).toBe(3);
+      expect(result.handWorkerRoundTripMs?.p95).toBe(80);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it("reports per-model inference FPS, sample ages and configured selection", () => {
     vi.stubGlobal("PerformanceObserver", undefined);
     const metrics = new TrackingMetricsCollector();

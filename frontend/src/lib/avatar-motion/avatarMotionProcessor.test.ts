@@ -13,6 +13,31 @@ import { ContactRuntime } from "./contactRuntime";
 import { observeBodyDepth } from "./observedBodyDepth";
 
 const identity = { x: 0, y: 0, z: 0, w: 1 };
+it("conditions Pose Z for solving while retaining raw recordings and raw length calibration",()=>{
+  let clock=100;
+  const baseline=new AvatarMotionProcessor({now:()=>clock});
+  const conditioned=new AvatarMotionProcessor({now:()=>clock,poseDepthConditioningEnabled:true});
+  baseline.setRigProfile(rigProfile);conditioned.setRigProfile(rigProfile);
+  let changed=false;
+  try {
+    for(let i=0;i<90;i++){
+      clock=100+i*33;const raw=sampledFrame(clock);
+      raw.pose.worldLandmarks![13].z=i%2?.025:-.025;
+      raw.pose.landmarks![13].z=raw.pose.worldLandmarks![13].z*.4;
+      const before=structuredClone(raw),a=baseline.process(raw),b=conditioned.process(raw);
+      expect(raw).toEqual(before);
+      if(i>20&&JSON.stringify(a.jointRotations)!==JSON.stringify(b.jointRotations))changed=true;
+      for(const q of Object.values(b.jointRotations))expect([q!.x,q!.y,q!.z,q!.w].every(Number.isFinite)).toBe(true);
+    }
+    expect(changed).toBe(true);
+    const a=baseline.getLastDiagnostics()!.arms.left.elbowInference,b=conditioned.getLastDiagnostics()!.arms.left.elbowInference;
+    expect(a.calibratedUpperLength).not.toBeNull();
+    expect(b.calibratedUpperLength).toBeCloseTo(a.calibratedUpperLength!,10);
+    expect(b.calibratedLowerLength).toBeCloseTo(a.calibratedLowerLength!,10);
+    conditioned.resetCameraTracking();baseline.resetCameraTracking();
+    clock+=33;expect(conditioned.process(sampledFrame(clock)).jointRotations).toEqual(baseline.process(sampledFrame(clock)).jointRotations);
+  } finally {baseline.dispose();conditioned.dispose();}
+});
 it("shares fresh pre-retarget depth with contact and retains renderer safety in Combined",()=>{
   let clock=100;const seen:unknown[]=[];
   const spy=vi.spyOn(ContactRuntime.prototype,"update").mockImplementation((...args)=>{seen.push(args[12]);});

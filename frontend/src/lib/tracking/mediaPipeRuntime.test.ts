@@ -4,6 +4,35 @@ import { MediaPipeRuntime, type MediaPipeRuntimeDependencies } from "./mediaPipe
 function task() { return { detectForVideo: vi.fn(), close: vi.fn() }; }
 
 describe("MediaPipeRuntime", () => {
+  it("loads the main hand fallback only once and releases it when the worker recovers", async () => {
+    const face = task(), hands = task(), pose = task();
+    const dependencies = {
+      resolveFileset: vi.fn().mockResolvedValue({}), createFace: vi.fn().mockResolvedValue(face),
+      createHands: vi.fn().mockResolvedValue(hands), createPose: vi.fn().mockResolvedValue(pose),
+    } as unknown as MediaPipeRuntimeDependencies;
+    const runtime = new MediaPipeRuntime(dependencies, "GPU", { face: true, hands: false, pose: true });
+    await runtime.initialize(); expect(dependencies.createHands).not.toHaveBeenCalled();
+    await Promise.all([runtime.initializeHands(), runtime.initializeHands()]);
+    expect(dependencies.createHands).toHaveBeenCalledOnce();
+    expect(dependencies.createFace).toHaveBeenCalledOnce(); expect(dependencies.createPose).toHaveBeenCalledOnce();
+    runtime.releaseHands(); expect(hands.close).toHaveBeenCalledOnce(); expect(runtime.tasks.hands).toBeUndefined();
+    runtime.dispose(); expect(hands.close).toHaveBeenCalledOnce();
+  });
+
+  it("closes a model that finishes loading after dispose and does not load further tasks", async () => {
+    let resolveFace!: (value: ReturnType<typeof task>) => void;
+    const face = task();
+    const dependencies = {
+      resolveFileset: vi.fn().mockResolvedValue({}), createFace: vi.fn(() => new Promise(res => { resolveFace = res; })),
+      createHands: vi.fn(), createPose: vi.fn(),
+    } as unknown as MediaPipeRuntimeDependencies;
+    const runtime = new MediaPipeRuntime(dependencies);
+    const initialization = runtime.initialize(); await Promise.resolve();
+    runtime.dispose(); resolveFace(face);
+    await expect(initialization).rejects.toThrow("dispose");
+    expect(face.close).toHaveBeenCalledOnce(); expect(dependencies.createHands).not.toHaveBeenCalled();
+    expect(dependencies.createFace).toHaveBeenCalledOnce(); expect(runtime.selectedDelegate).toBeNull();
+  });
   it("uses one fileset for all tasks and retains models until dispose", async () => {
     const fileset = { wasmLoaderPath: "/loader", wasmBinaryPath: "/binary" };
     const face = task(); const hands = task(); const pose = task();

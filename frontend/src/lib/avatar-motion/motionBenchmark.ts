@@ -58,5 +58,5 @@ export function benchmarkMotionRecording(recording: MotionRecordingV1, name: str
 
 export function compareMotionRecording(recording: MotionRecordingV1): MotionBenchmarkResult[] {
   const base = { filtered: true, constraints: true, continuousFingerEnabled: true, handTwistEnabled: true };
-  return [benchmarkMotionRecording(recording, "rig-local-dof",{...base,dofConstraintsEnabled:true}),benchmarkMotionRecording(recording, "relative-arm-depth", {...base,depthFusionEnabled:true}), benchmarkMotionRecording(recording, "baseline", base), benchmarkMotionRecording(recording, "wrist-relative-shape", { ...base, handConditioningEnabled: true }), benchmarkMotionRecording(recording, "rig-aware-endpoint", { ...base, rigEndpointEnabled: true })];
+  return [benchmarkMotionRecording(recording, "rig-local-dof",{...base,dofConstraintsEnabled:true}),benchmarkMotionRecording(recording, "relative-arm-depth", {...base,depthFusionEnabled:true}), benchmarkMotionRecording(recording, "baseline", base), benchmarkMotionRecording(recording, "pose-z-only", { ...base, poseDepthConditioningEnabled: true }), benchmarkMotionRecording(recording, "wrist-relative-shape", { ...base, handConditioningEnabled: true }), benchmarkMotionRecording(recording, "rig-aware-endpoint", { ...base, rigEndpointEnabled: true })];
 }
