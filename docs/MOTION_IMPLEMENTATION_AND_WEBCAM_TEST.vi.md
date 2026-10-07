@@ -1,5 +1,9 @@
 # Bản triển khai chuyển động tay và lượt test webcam đầu tiên
 
+> Cập nhật 07/10/2026: các công tắc chuyển động và contact A/B trong hướng dẫn lịch sử này đã được gộp thành cấu hình bật sẵn. Xem [cấu hình webcam hiện tại](XR_TRACKING_RUNTIME_PART2_NOTES.vi.md).
+
+> Giao diện Diagnostics hiện giữ các bảng Realtime, Tracking state, F2 mắt/lông mày, AR3 gaze, F3 miệng, F4 expression dynamics, AR9 contact, Phase 3B partial-arm, Avatar self-collision và replay. Đã bỏ các bảng JSON/thu mẫu cũ: Frozen evidence, F1 chi tiết, AR4 chi tiết, F4 fast-speech telemetry, F5-0 audio qualification, Finger rig/AR6 input-output, Capability, thu fixture cử chỉ và Phase 3A arm-frame. Trạng thái F1/AR4 vẫn ở badge đầu trang; số khớp ngón khả dụng nằm trong Realtime. Logic render/tracking tương ứng không bị xóa.
+
 > Có đợt triển khai tiếp: [depth fusion, body-local barrier và rig-local DOF](MOTION_DEPTH_CONTINUATION.vi.md). Bảng dưới giữ trạng thái đợt đầu; J/L/S/V và bộ test đã được bổ sung tiếp, vẫn chưa nghiệm thu A–Z.
 
 Ngày 02/10/2026. Nền trước thay đổi: VeilTalk `5df5ee8ec6a8f62581844a17af0d886608527004`. Thay đổi hiện nằm trong working tree; không sửa XR. Kế hoạch gốc: [A–Z](XR_VEILTALK_MOTION_REVIEW.vi.md), [ma trận kỹ thuật](XR_TECHNIQUE_MATRIX.vi.md).

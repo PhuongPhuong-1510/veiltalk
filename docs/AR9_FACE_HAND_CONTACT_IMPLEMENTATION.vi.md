@@ -1,5 +1,7 @@
 # Bàn giao triển khai nghiên cứu tiếp xúc tay–mặt
 
+> Cập nhật 07/10/2026: trang webcam hiện bật sẵn AR9 shadow, correction và cấu hình Combined + index tip. Các bước bật công tắc bên dưới mô tả quy trình A/B cũ; tham khảo [cấu hình tích hợp](XR_TRACKING_RUNTIME_PART2_NOTES.vi.md) khi test giao diện hiện tại. Nhập vật liệu da mặt thủ công chỉ cần khi nhận diện tự động thất bại.
+
 Ngày: 2026-10-02. Bản thuật toán: `face-contact-v1-2026-10-02`.
 
 Đã triển khai pipeline thử nghiệm từ landmark đến mục tiêu tiếp xúc, IK, bước hiệu chỉnh cuối và công cụ đánh giá. Các công tắc mặc định tắt để giữ AR9 làm đối chứng. Chưa có recording webcam có nhãn nên chưa nghiệm thu các chỉ tiêu precision/recall, gap thực tế, latency hay điều kiện che khuất trong kế hoạch nghiên cứu.

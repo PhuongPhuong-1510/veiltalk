@@ -1,5 +1,7 @@
 # Đối chiếu XR phần 1: tracking runtime, dòng 1–500
 
+> **Cập nhật 07/10/2026:** Sau thời điểm viết báo cáo này, VeilTalk đã triển khai lọc riêng Pose Z và Hand worker chạy song song dưới dạng tùy chọn. Các dòng “chưa có” về hai cơ chế này bên dưới chỉ mô tả trạng thái tại lúc đối chiếu ban đầu. Hai công tắc đã có trong giao diện avatar; vẫn cần nghiệm thu chất lượng chuyển động và hiệu năng bằng webcam thật trước khi bật mặc định. Crop/ROI và lịch chạy tự điều chỉnh chưa được triển khai.
+
 Ngày đối chiếu: **07/10/2026**. Phạm vi: bản tổng hợp 22 mục người dùng gửi, tracking hình ảnh và các tầng filter liên quan trong VeilTalk.
 
 ## Nguồn và mức xác nhận

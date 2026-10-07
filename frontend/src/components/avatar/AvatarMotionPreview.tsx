@@ -5,7 +5,7 @@ import { AvatarRenderer } from "../../lib/avatar-renderer/avatarRenderer";
 import type { RawTrackingFrameV1 } from "../../lib/tracking/rawTrackingTypes";
 import { useTracking } from "../../lib/tracking/useTracking";
 import type { TrackingMetricsSnapshot } from "../../lib/tracking/trackingMetrics";
-import { FACE_CONTACT_BASELINE, FACE_CONTACT_COMBINED } from "../../lib/avatar-motion/faceContactResearch";
+import { INTEGRATED_MOTION_PROFILE as profile } from "../../lib/avatar-motion/integratedMotionProfile";
 import "./avatarMotionPreview.css";
 
 /** Local preview uses the same processor/renderer in production builds, independently of DEV. */
@@ -17,25 +17,26 @@ export default function AvatarMotionPreview() {
   const [modelUrl,setModelUrl]=useState("/models/avatars/reference-avatar-2.vrm");
   const [modelLabel,setModelLabel]=useState("Avatar thử nghiệm"),[ready,setReady]=useState(false);
   const [running,setRunning]=useState(false),[starting,setStarting]=useState(false);
-  const [parallelHands,setParallelHands]=useState(false);
   const [trackingMetrics,setTrackingMetrics]=useState<TrackingMetricsSnapshot|null>(null);
   const [error,setError]=useState<string|null>(null),[status,setStatus]=useState("Đang tải avatar…");
-  const [features,setFeatures]=useState({poseZ:false,depth:false,barrier:false,dof:false,shape:true,reach:false,contact:false,palms:false,fingertips:false,faceContact:false,indexFace:false});
   useEffect(()=>{
     const p=processorRef.current!;
-    p.setDepthFusionEnabled(features.depth);p.setBodyDepthBarrierEnabled(features.barrier);p.setDofConstraintsEnabled(features.dof);
-    p.setHandConditioningEnabled(features.shape);p.setRigEndpointEnabled(features.reach);
-    p.setPoseDepthConditioningEnabled(features.poseZ);
-    p.setContactCorrectionEnabled(features.contact);p.setBimanualPalmAssistEnabled(features.palms);
-    p.setFingertipContactEnabled(features.fingertips);
-    p.setFaceContactResearchOptions(features.faceContact?{...FACE_CONTACT_COMBINED,indexTip:features.indexFace}:FACE_CONTACT_BASELINE);
-  },[features]);
+    p.setFiltered(profile.filtered);p.setConstraints(profile.constraints);p.setHandTwistEnabled(profile.handTwistEnabled);
+    p.setContinuousFingerEnabled(profile.continuousFingerEnabled);
+    p.setDepthFusionEnabled(profile.depthFusionEnabled);p.setBodyDepthBarrierEnabled(profile.bodyDepthBarrierEnabled);p.setDofConstraintsEnabled(profile.dofConstraintsEnabled);
+    p.setHandConditioningEnabled(profile.handConditioningEnabled);p.setRigEndpointEnabled(profile.rigEndpointEnabled);
+    p.setPoseDepthConditioningEnabled(profile.poseDepthConditioningEnabled);p.setProcessorArmTemporal(profile.processorArmTemporal);
+    p.setElbowBranchSwitchEnabled(profile.elbowBranchSwitchEnabled);
+    p.setBimanualPalmAssistEnabled(profile.bimanualPalmAssistEnabled);p.setFingertipContactEnabled(profile.fingertipContactEnabled);
+    p.setContactShadowEnabled(profile.contactShadowEnabled);p.setContactCorrectionEnabled(profile.contactCorrectionEnabled);
+    p.setFaceContactResearchOptions(profile.faceContactResearch);
+  },[]);
   const onFrame=useCallback((frame:RawTrackingFrameV1)=>{const packet=processorRef.current?.process(frame);if(packet)rendererRef.current?.applyPose(packet);},[]);
   const onError=useCallback((reason:unknown)=>{setError(reason instanceof Error?reason.message:"Không thể theo dõi chuyển động.");setRunning(false);},[]);
   const onMetrics=useCallback((value:TrackingMetricsSnapshot)=>setTrackingMetrics(value),[]);
-  const options=useMemo(()=>({profile:"full-rate" as const,resolution:"720p" as const,delegate:"GPU" as const,tasks:{face:true,hands:true,pose:true},parallelHands,onFrame,onError,onMetrics}),[parallelHands,onFrame,onError,onMetrics]);
+  const options=useMemo(()=>({profile:"full-rate" as const,resolution:"720p" as const,delegate:"GPU" as const,tasks:{face:true,hands:true,pose:true},parallelHands:profile.parallelHands,poseGuidedHands:profile.poseGuidedHands,adaptiveHandConfidence:profile.adaptiveHandConfidence,onFrame,onError,onMetrics}),[onFrame,onError,onMetrics]);
   const tracking=useTracking(options);
-  const onReady=useCallback((value:AvatarRenderer)=>{rendererRef.current=value;setRenderer(value);},[]);
+  const onReady=useCallback((value:AvatarRenderer)=>{value.setSmoothing(profile.smoothing);rendererRef.current=value;setRenderer(value);},[]);
   const onDispose=useCallback((value:AvatarRenderer)=>{if(rendererRef.current===value)rendererRef.current=null;},[]);
   useEffect(()=>{
     if(!renderer)return;
@@ -53,8 +54,8 @@ export default function AvatarMotionPreview() {
   useEffect(()=>()=>{if(modelUrl.startsWith("blob:"))URL.revokeObjectURL(modelUrl);},[modelUrl]);
   async function toggleCamera(){
     if(!tracking||!videoRef.current||starting)return;
-    if(running){tracking.stop();processorRef.current?.resetCameraTracking();setRunning(false);setStatus("Camera đã dừng.");return;}
-    setStarting(true);setError(null);processorRef.current?.resetCameraTracking();
+    if(running){tracking.stop();processorRef.current?.resetCameraTracking();setRunning(false);setTrackingMetrics(null);setStatus("Camera đã dừng.");return;}
+    setStarting(true);setError(null);setTrackingMetrics(null);processorRef.current?.resetCameraTracking();
     try{await tracking.start(videoRef.current);setRunning(true);setStatus("Đang theo dõi. Để vai, khuỷu và hai bàn tay trong khung hình khi bắt đầu.");}
     catch(reason){onError(reason);}finally{setStarting(false);}
   }
@@ -66,26 +67,9 @@ export default function AvatarMotionPreview() {
       <button disabled={!ready||!running} onClick={()=>{processorRef.current?.calibrateFaceNeutral();setStatus("Giữ mặt, thân và hai vai ở tư thế trung tính trong vài giây.");}}>Căn chỉnh tư thế trung tính</button>
       <label>Chọn avatar VRM trên máy <input type="file" accept=".vrm" disabled={starting} onChange={event=>{const file=event.target.files?.[0];if(file){setModelLabel(file.name);setModelUrl(URL.createObjectURL(file));}}}/></label>
     </section>
-    <details><summary>Tính năng chuyển động đang thử nghiệm</summary>
-      <p>Bật từng tính năng để so sánh trên cùng động tác.</p>
-      <label><input type="checkbox" checked={parallelHands} disabled={running||starting} onChange={event=>{setParallelHands(event.target.checked);setTrackingMetrics(null);}}/>Xử lý bàn tay song song (chọn trước khi bật camera)</label>
-      {parallelHands&&trackingMetrics&&<p role="status">{trackingMetrics.handExecution==="worker"?"Xử lý bàn tay song song đang hoạt động.":"Thiết bị đang dùng chế độ xử lý thông thường vì chế độ song song chưa khả dụng."}</p>}
-      {([
-        ["poseZ","Giảm rung chiều sâu của cánh tay (lọc Z)"],
-        ["depth","Hỗ trợ chiều sâu khi tay tiến hoặc lùi"],
-        ["barrier","Giữ phía trước/sau cơ thể khi tránh xuyên"],
-        ["dof","Giới hạn xoay cánh tay theo rig"],
-        ["shape","Lọc hình dạng bàn tay"],
-        ["reach","Điều chỉnh tầm với theo avatar"],
-        ["contact","Hỗ trợ chạm đầu và cơ thể"],
-        ["faceContact","Ánh xạ chạm mặt theo bề mặt avatar (bật cùng hỗ trợ chạm)"],
-        ["indexFace","Thử chạm mặt bằng đầu ngón trỏ"],
-        ["palms","Hỗ trợ chắp hai bàn tay"],
-        ["fingertips","Hỗ trợ tiếp xúc đầu ngón hai tay"],
-      ] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={features[key]} onChange={event=>setFeatures(value=>({...value,[key]:event.target.checked}))}/>{label}</label>)}
-    </details>
+    {trackingMetrics&&<p role="status">Hand input: {trackingMetrics.handInputMode??"full-frame"} · confidence: {trackingMetrics.handConfidenceMode??"normal"} · adaptive model: {trackingMetrics.adaptiveHandAvailable?"ready":"unavailable"} · execution: {trackingMetrics.handExecution==="worker"?"worker":"main"}</p>}
     <p role="status">{status}</p>{error&&<p role="alert">{error}</p>}
-    <p>Thử giơ tay, xoay cổ tay, xòe/nắm ngón và che từng bàn tay trong thời gian ngắn. Các thử nghiệm contact và so A/B nằm ở trang kiểm tra chuyển động.</p>
+    <p>Thử giơ tay, xoay cổ tay, xòe/nắm ngón và che từng bàn tay trong thời gian ngắn. Trạng thái nhận diện tay được hiển thị khi camera hoạt động.</p>
     {import.meta.env.DEV&&<a href="/dev/avatar-renderer">Mở trang kiểm tra chuyển động và replay</a>}
   </main>;
 }

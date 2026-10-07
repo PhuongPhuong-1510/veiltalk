@@ -6,6 +6,7 @@ import type { RawTrackingFrameV1 } from "./rawTrackingTypes";
 import { TrackingMetricsCollector, type TrackingMetricsSnapshot } from "./trackingMetrics";
 import { HandTrackingWorker } from "./handTrackingWorker";
 import type { HandTrackingExecutor, HandWorkerSample } from "./handWorkerProtocol";
+import { drawHandInput, HandSensitivitySelector, mapHandResultFromInput, planPoseGuidedHandInput, type HandPoseHint } from "./poseGuidedHandInput";
 
 export type TrackingProfile = "full-rate" | "staggered";
 export type TrackingPipelineState = "idle" | "starting" | "running" | "stopped" | "disposed" | "error";
@@ -19,6 +20,8 @@ export interface TrackingPipelineOptions {
   tasks?: TrackingTaskSelection;
   poseModel?: PoseModelVariant;
   parallelHands?: boolean;
+  poseGuidedHands?: boolean;
+  adaptiveHandConfidence?: boolean;
   onFrame: (frame: RawTrackingFrameV1) => void;
   onMetrics?: (metrics: TrackingMetricsSnapshot) => void;
   onError?: (error: unknown) => void;
@@ -40,7 +43,7 @@ const defaultDependencies = (options: TrackingPipelineOptions): TrackingPipeline
     camera: new CameraController(options.resolution),
     runtime: new MediaPipeRuntime(undefined, options.delegate, { ...tasks, hands: tasks.hands && !parallel }, options.poseModel),
     metrics: new TrackingMetricsCollector(),
-    handWorker: parallel ? new HandTrackingWorker(new URL(`${import.meta.env.BASE_URL}mediapipe/`, document.baseURI).href, options.delegate) : undefined,
+    handWorker: parallel ? new HandTrackingWorker(new URL(`${import.meta.env.BASE_URL}mediapipe/`, document.baseURI).href, options.delegate, undefined, 350, options.adaptiveHandConfidence) : undefined,
     captureFrame: (source) => createImageBitmap(source),
   };
 };
@@ -64,6 +67,11 @@ export class TrackingPipeline {
   private workerEnabled = false;
   private workerFallback: string | null = null;
   private workerDroppedSamples = 0;
+  private readonly sensitivity = new HandSensitivitySelector();
+  private handCanvas: OffscreenCanvas | HTMLCanvasElement | null = null;
+  private handInputMode: "full-frame" | "single" | "combined" | "split" = "full-frame";
+  private handConfidenceMode: "normal" | "sensitive" = "normal";
+  private handRoiMisses = 0;
 
   constructor(
     options: TrackingPipelineOptions,
@@ -104,6 +112,10 @@ export class TrackingPipeline {
           if (generation !== this.generation) return;
         }
       }
+      if (this.options.adaptiveHandConfidence && !this.workerEnabled) {
+        try { await this.dependencies.runtime.initializeSensitiveHands(); }
+        catch { /* Normal Hand remains usable if a second model exceeds device capacity. */ }
+      }
       await this.dependencies.camera.start(video, () => this.handleCameraEnded(generation));
       if (generation !== this.generation) {
         this.dependencies.camera.stop();
@@ -114,6 +126,9 @@ export class TrackingPipeline {
       this.lastHandSampleMs = -Infinity;
       this.lastPoseSampleMs = -Infinity;
       this.previousFrame = undefined;
+      this.sensitivity.reset();
+      this.handInputMode = "full-frame"; this.handConfidenceMode = "normal";
+      this.handRoiMisses = 0;
       this.dependencies.metrics.reset();
       this.lastMetricsEmitMs = -Infinity;
       this.stateValue = "running";
@@ -138,6 +153,8 @@ export class TrackingPipeline {
     this.dependencies.camera.stop();
     this.video = null;
     this.previousFrame = undefined;
+    this.sensitivity.reset(); this.handCanvas = null;
+    this.handRoiMisses = 0;
     this.stateValue = "stopped";
   }
 
@@ -193,6 +210,11 @@ export class TrackingPipeline {
       }
       const fullRate = (this.options.profile ?? "full-rate") === "full-rate";
       const sampleHands = fullRate || startedAt - this.lastHandSampleMs >= (this.options.handIntervalMs ?? 66.7);
+      const previous = this.previousFrame;
+      const poseHint: HandPoseHint | null = (this.options.poseGuidedHands || this.options.adaptiveHandConfidence) && previous && previous.pose.sampledAtMs !== null
+        && previous.videoWidth === video.videoWidth && previous.videoHeight === video.videoHeight
+        ? { pose: previous.pose, width: video.videoWidth, height: video.videoHeight, ageMs: startedAt - previous.pose.sampledAtMs } : null;
+      const handPlan = this.options.poseGuidedHands || this.options.adaptiveHandConfidence ? planPoseGuidedHandInput(poseHint) : null;
       // A single immutable capture feeds both threads. Transfer a copy to Hand,
       // then run Face/Pose while it is processing. Only one frame is in flight.
       if (this.workerEnabled && sampleHands) {
@@ -205,7 +227,7 @@ export class TrackingPipeline {
         preparationMs = this.now() - startedAt;
         results.videoDimensions = { width: snapshot.width, height: snapshot.height };
         const sentAt = this.now();
-        workerJob = this.dependencies.handWorker!.detect(handBitmap, mediaPipeTimestampMs, startedAt).then(
+        workerJob = this.dependencies.handWorker!.detect(handBitmap, mediaPipeTimestampMs, startedAt, poseHint, this.options.poseGuidedHands).then(
           sample => ({ sample, elapsed: this.now() - sentAt }), error => ({ error }),
         );
         capturing = false;
@@ -222,7 +244,22 @@ export class TrackingPipeline {
       }
 
       if (!this.workerEnabled && tasks.hands && sampleHands) {
-        results.hands = this.measure("hands", () => tasks.hands!.detectForVideo(source, mediaPipeTimestampMs));
+        const mode = this.options.adaptiveHandConfidence ? this.sensitivity.select(handPlan, startedAt) : "normal";
+        const handTask = this.dependencies.runtime.getHandTask?.(mode === "sensitive") ?? tasks.hands;
+        let handSource: HTMLVideoElement | ImageBitmap | OffscreenCanvas | HTMLCanvasElement = source;
+        let usedPlan = null;
+        if (this.options.poseGuidedHands && handPlan && this.handRoiMisses < 2) {
+          try {
+            this.handCanvas ??= typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(512, 512) : document.createElement("canvas");
+            drawHandInput(source, handPlan, this.handCanvas);
+            handSource = this.handCanvas; usedPlan = handPlan;
+          } catch { handSource = source; }
+        }
+        const rawHands = this.measure("hands", () => handTask.detectForVideo(handSource, mediaPipeTimestampMs));
+        results.hands = usedPlan ? mapHandResultFromInput(rawHands, usedPlan) : rawHands;
+        this.handRoiMisses = usedPlan ? results.hands.landmarks.length ? 0 : this.handRoiMisses + 1 : 0;
+        this.handInputMode = usedPlan?.layout ?? "full-frame";
+        this.handConfidenceMode = mode === "sensitive" && this.dependencies.runtime.hasSensitiveHands ? "sensitive" : "normal";
         results.sampledAtMs.hands = startedAt;
         this.lastHandSampleMs = results.sampledAtMs.hands;
       }
@@ -242,6 +279,8 @@ export class TrackingPipeline {
           this.scheduleNext(generation); return;
         }
         roundTripMs = outcome.elapsed;
+        this.handInputMode = outcome.sample.inputMode ?? "full-frame";
+        this.handConfidenceMode = outcome.sample.confidenceMode ?? "normal";
         this.dependencies.metrics.recordInference("hands", this.now(), outcome.sample.inferenceMs);
         this.lastHandSampleMs = startedAt;
         if (outcome.sample.sampledAtMs === startedAt && this.now() - startedAt <= 150) {
@@ -263,6 +302,8 @@ export class TrackingPipeline {
           handExecution: this.workerEnabled ? "worker" : "main-thread",
           handDelegate: this.workerEnabled ? this.dependencies.handWorker!.selectedDelegate : this.dependencies.runtime.selectedDelegate,
           handWorkerFallback: this.workerFallback, handWorkerDroppedSamples: this.workerDroppedSamples,
+          handInputMode: this.handInputMode, handConfidenceMode: this.handConfidenceMode,
+          adaptiveHandAvailable: this.workerEnabled ? this.dependencies.handWorker?.adaptiveAvailable ?? false : this.dependencies.runtime.hasSensitiveHands ?? false,
         });
       }
     } catch (error) {
@@ -287,6 +328,10 @@ export class TrackingPipeline {
     this.workerFallback = error instanceof Error ? error.message : String(error);
     this.dependencies.handWorker?.dispose();
     await this.dependencies.runtime.initializeHands();
+    if (this.options.adaptiveHandConfidence) {
+      try { await this.dependencies.runtime.initializeSensitiveHands(); }
+      catch { /* Continue with the normal model. */ }
+    }
   }
 
   private measure<T extends FaceLandmarkerResult | HandLandmarkerResult | PoseLandmarkerResult>(

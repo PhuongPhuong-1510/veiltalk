@@ -59,6 +59,7 @@ export class MediaPipeRuntime {
   private landmarkers: TrackingLandmarkers | null = null;
   private initPromise: Promise<void> | null = null;
   private handsPromise: Promise<void> | null = null;
+  private sensitiveHands: HandLandmarker | null = null;
   private disposed = false;
   selectedDelegate: ConfiguredDelegate | null = null;
 
@@ -116,6 +117,28 @@ export class MediaPipeRuntime {
   releaseHands(): void {
     this.landmarkers?.hands?.close();
     if (this.landmarkers) delete this.landmarkers.hands;
+    this.sensitiveHands?.close(); this.sensitiveHands = null;
+  }
+
+  get hasSensitiveHands(): boolean { return this.sensitiveHands !== null; }
+
+  /** An optional second detector avoids resetting the active tracker when confidence changes. */
+  async initializeSensitiveHands(): Promise<void> {
+    if (this.sensitiveHands) return;
+    await this.initialize();
+    const fileset = await this.dependencies.resolveFileset(publicAsset("wasm"));
+    if (this.disposed) throw new Error("MediaPipe runtime đã dispose.");
+    const task = await this.dependencies.createHands(fileset, {
+      baseOptions: { modelAssetPath: publicAsset("models/hand_landmarker.task"), delegate: this.selectedDelegate! },
+      runningMode: "VIDEO", numHands: 2,
+      minHandDetectionConfidence: .3, minTrackingConfidence: .3, minHandPresenceConfidence: .5,
+    });
+    if (this.disposed) { task.close(); throw new Error("MediaPipe runtime đã dispose."); }
+    this.sensitiveHands = task;
+  }
+
+  getHandTask(sensitive: boolean): Pick<HandLandmarker, "detectForVideo" | "close"> | undefined {
+    return sensitive && this.sensitiveHands ? this.sensitiveHands : this.landmarkers?.hands;
   }
 
   private async initializeWithFallback(): Promise<void> {
@@ -200,6 +223,7 @@ export class MediaPipeRuntime {
   }
 
   private closeTasks(): void {
+    this.sensitiveHands?.close(); this.sensitiveHands = null;
     this.landmarkers?.face?.close();
     this.landmarkers?.hands?.close();
     this.landmarkers?.pose?.close();

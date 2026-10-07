@@ -1,5 +1,7 @@
 # Đợt 2: đầu/cơ thể, hai tay và đầu ngón
 
+> Cập nhật 07/10/2026: các cơ chế contact trong trang webcam đã bật sẵn theo [cấu hình tích hợp](XR_TRACKING_RUNTIME_PART2_NOTES.vi.md). Các bước bật công tắc bên dưới ghi lại quy trình thử nghiệm trước đây.
+
 Ngày 02/10/2026. Triển khai opt-in và bổ sung quan sát ở renderer; chưa nghiệm thu webcam hay kết luận hơn XR bằng đo thực tế. Mốc code trước đợt này: `8ebee95ea7a05345db78241394ca07174104ee1c`.
 
 ## Đối chiếu lại cả bảy nguồn XR

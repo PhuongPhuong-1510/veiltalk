@@ -23,6 +23,9 @@ export interface TrackingMetricsSnapshot {
   handDelegate?: ConfiguredDelegate | null;
   handWorkerFallback?: string | null;
   handWorkerDroppedSamples?: number;
+  handInputMode?: "full-frame" | "single" | "combined" | "split";
+  handConfidenceMode?: "normal" | "sensitive";
+  adaptiveHandAvailable?: boolean;
   framePreparationMs?: DistributionMetric;
   handWorkerRoundTripMs?: DistributionMetric;
   /** Ghi kèm để so sánh chi phí suy luận giữa `lite` và `full` trong cùng một snapshot. */

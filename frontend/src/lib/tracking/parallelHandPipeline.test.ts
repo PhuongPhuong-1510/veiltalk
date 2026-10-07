@@ -3,7 +3,7 @@ import { TrackingPipeline, type TrackingPipelineDependencies } from "./trackingP
 import type { HandWorkerSample } from "./handWorkerProtocol";
 
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-function setup() {
+function setup(features: { poseGuidedHands?: boolean; adaptiveHandConfidence?: boolean } = {}) {
   let callback: VideoFrameRequestCallback | undefined, now = 100;
   const video = { videoWidth: 640, videoHeight: 480, currentTime: 0,
     requestVideoFrameCallback: vi.fn((cb: VideoFrameRequestCallback) => { callback = cb; return 1; }), cancelVideoFrameCallback: vi.fn(),
@@ -17,18 +17,32 @@ function setup() {
   };
   let resolve!: (sample: HandWorkerSample) => void, reject!: (error: Error) => void;
   const worker = { initialize: vi.fn().mockResolvedValue(undefined), selectedDelegate: "GPU", dispose: vi.fn(),
-    detect: vi.fn((_bitmap: ImageBitmap, _timestamp: number, _sampled: number) => new Promise<HandWorkerSample>((res, rej) => { resolve = res; reject = rej; })),
+    detect: vi.fn((_bitmap: ImageBitmap, _timestamp: number, _sampled: number, _poseHint?: unknown, _guided?: boolean) => new Promise<HandWorkerSample>((res, rej) => { resolve = res; reject = rej; })),
   };
   const metrics = { reset: vi.fn(), startLongTaskObserver: vi.fn(), stopLongTaskObserver: vi.fn(), recordCameraFrame: vi.fn(), recordInference: vi.fn(), recordPipeline: vi.fn(), snapshot: vi.fn(() => ({})), recordWorkerFrame: vi.fn() };
   const camera = { start: vi.fn().mockResolvedValue(undefined), stop: vi.fn() };
   const onFrame = vi.fn(), onError = vi.fn(), onMetrics = vi.fn();
-  const pipeline = new TrackingPipeline({ parallelHands: true, onFrame, onError, onMetrics, now: () => now }, { runtime, camera, metrics, handWorker: worker, captureFrame } as unknown as TrackingPipelineDependencies);
+  const pipeline = new TrackingPipeline({ parallelHands: true, ...features, onFrame, onError, onMetrics, now: () => now }, { runtime, camera, metrics, handWorker: worker, captureFrame } as unknown as TrackingPipelineDependencies);
   const finish = (at = worker.detect.mock.calls.at(-1)![2]) => resolve({ result: sample, sampledAtMs: at, inferenceMs: 12 });
   return { pipeline, video, worker, runtime, metrics, captureFrame, bitmaps, camera, onFrame, onError, onMetrics, finish,
     fail: () => reject(new Error("worker timeout")), frame: (time = 1) => callback?.(0, { mediaTime: time } as VideoFrameCallbackMetadata), setNow: (value: number) => { now = value; } };
 }
 
 describe("parallel Hand tracking pipeline", () => {
+  it("passes only a recent Pose hint to the worker and keeps capture timestamps aligned", async () => {
+    const t = setup({ poseGuidedHands: true });
+    const points = Array.from({ length: 33 }, () => ({ x: .5, y: .5, z: 0, visibility: 1 }));
+    points[11].x = .4; points[12].x = .6; points[15].x = .3; points[16].x = .7;
+    t.runtime.tasks.pose.detectForVideo.mockReturnValue({ landmarks: [points], worldLandmarks: [points] } as never);
+    await t.pipeline.start(t.video);
+    t.frame(1); await flush();
+    expect(t.worker.detect.mock.calls[0][3]).toBeNull();
+    t.setNow(125); t.finish(); await flush();
+    t.setNow(150); t.frame(1.033); await flush();
+    expect(t.worker.detect.mock.calls[1][3]).toMatchObject({ width: 640, height: 480, ageMs: 50 });
+    expect(t.worker.detect.mock.calls[1][4]).toBe(true);
+    t.finish(); await flush(); t.pipeline.dispose();
+  });
   it("starts Hand before Face/Pose, reads one immutable source image and publishes matching sample times", async () => {
     const t = setup(); await t.pipeline.start(t.video); t.frame(); await flush();
     expect(t.captureFrame).toHaveBeenNthCalledWith(1, t.video);

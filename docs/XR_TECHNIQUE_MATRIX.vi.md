@@ -1,5 +1,7 @@
 # Ma trận thử nghiệm cơ chế XR cho VeilTalk
 
+> **Cập nhật 07/10/2026:** Pose Z conditioning và Hand worker song song đã có code, công tắc A/B và kiểm thử tự động. Các trạng thái “chưa thử” bên dưới vẫn áp dụng cho nghiệm thu bằng webcam thật. Crop/ROI, bù mẫu tay cũ và lịch chạy tự điều chỉnh chưa được triển khai.
+
 > Đối chiếu bổ sung 07/10/2026: [XR tracking runtime, dòng 1–500](XR_TRACKING_RUNTIME_PART1_AUDIT.vi.md). Phân biệt cơ chế đã có (fixed scheduling, adapter, hand conditioning) với phần còn thiếu (tracking worker, Pose Z conditioning, adaptive scheduling); chưa thay đổi runtime trong đợt đối chiếu này.
 
 > Palm apparent-scale/foreshortening fusion và body-local clearance đã có nhánh opt-in: [đợt triển khai tiếp](MOTION_DEPTH_CONTINUATION.vi.md). Chưa có quyết định giữ/default dựa trên webcam.
