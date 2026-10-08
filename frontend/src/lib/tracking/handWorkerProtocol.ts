@@ -2,20 +2,35 @@ import type { HandLandmarkerResult } from "@mediapipe/tasks-vision";
 import type { ConfiguredDelegate, DelegateSelection } from "./mediaPipeRuntime";
 import type { HandPoseHint } from "./poseGuidedHandInput";
 
+export type HandInputMode = "full-frame" | "single" | "combined" | "split";
+export type HandRoiReason = "roi" | "disabled" | "no-hint" | "stale-hint" | "invalid-plan" | "miss-limit" | "draw-error";
+
+export interface HandWorkerTiming {
+  roiPreparationMs: number;
+  inferenceMs: number;
+  mappingMs: number;
+  /** Worker message receipt to response-ready; excludes response transfer and bitmap close. */
+  workerTotalMs: number;
+}
+
 export type HandWorkerRequest =
   | { kind: "initialize"; id: number; assetBase: string; delegate: DelegateSelection; adaptiveHandConfidence?: boolean }
   | { kind: "detect"; id: number; bitmap: ImageBitmap; timestampMs: number; sampledAtMs: number; poseHint?: HandPoseHint | null; poseGuidedHands?: boolean };
 
 export type HandWorkerResponse =
   | { kind: "ready"; id: number; delegate: ConfiguredDelegate; adaptiveAvailable?: boolean }
-  | { kind: "result"; id: number; result: HandLandmarkerResult; sampledAtMs: number; inferenceMs: number; inputMode?: "full-frame" | "single" | "combined" | "split"; confidenceMode?: "normal" | "sensitive" }
+  | { kind: "result"; id: number; result: HandLandmarkerResult; sampledAtMs: number; inferenceMs: number; timings?: HandWorkerTiming; postMessageMs?: number; inputMode?: HandInputMode; roiReason?: HandRoiReason; confidenceMode?: "normal" | "sensitive" }
   | { kind: "error"; id: number; message: string };
 
 export interface HandWorkerSample {
   result: HandLandmarkerResult;
   sampledAtMs: number;
   inferenceMs: number;
+  timings?: HandWorkerTiming;
+  /** Duration of the main-thread postMessage call, not transfer completion or queue latency. */
+  postMessageMs?: number;
   inputMode?: "full-frame" | "single" | "combined" | "split";
+  roiReason?: HandRoiReason;
   confidenceMode?: "normal" | "sensitive";
 }
 

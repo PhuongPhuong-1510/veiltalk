@@ -18,6 +18,20 @@ const empty = { landmarks: [], worldLandmarks: [], handedness: [], handednesses:
 afterEach(() => vi.useRealTimers());
 
 describe("Hand worker transport", () => {
+  it("reports postMessage initiation duration and preserves worker-local phase durations", async () => {
+    const t = setup(); await t.ready();
+    let clock = 100;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      t.worker.postMessage.mockImplementation(() => { clock += 2; });
+      const promise = t.client.detect(bitmap(), 100, 100);
+      const timings = { roiPreparationMs: 3, inferenceMs: 20, mappingMs: 1, workerTotalMs: 24 };
+      clock = 150;
+      t.send({ kind: "result", id: t.lastRequest().id, result: empty, sampledAtMs: 100, inferenceMs: 24, timings });
+      expect(await promise).toMatchObject({ timings, postMessageMs: 2 });
+      t.client.dispose();
+    } finally { now.mockRestore(); }
+  });
   it("transfers bitmap ownership, preserves sample time and ignores mismatched request ids", async () => {
     const t = setup(); await t.ready();
     const image = bitmap(), promise = t.client.detect(image, 123, 120), request = t.lastRequest();

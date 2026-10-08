@@ -1,0 +1,12 @@
+.tracking-performance{max-width:1200px;margin:20px auto;padding:16px;border:1px solid #64748b;border-radius:10px;color:inherit;background:#131c2d;font:14px system-ui,sans-serif}
+.tracking-performance summary{cursor:pointer;font-weight:600}
+.tracking-performance p{line-height:1.5;margin:12px 0}
+.tracking-performance button{padding:8px 12px;background:#24324a;color:#edf2ff;border:1px solid #64748b;border-radius:6px;cursor:pointer}
+.tracking-performance-tables{display:flex;gap:24px;flex-wrap:wrap;overflow:auto;margin-top:16px}
+.tracking-performance table{border-collapse:collapse;text-align:left;font-size:13px}
+.tracking-performance caption{text-align:left;font-weight:600;margin-bottom:8px}
+.tracking-performance th,.tracking-performance td{padding:6px 10px;border-bottom:1px solid #334155;white-space:nowrap}
+.tracking-performance pre{max-height:320px;overflow:auto;font-size:12px}
+.tracking-performance-empty{max-width:1200px;margin:16px auto;color:inherit}
+.benchmark-controls-lock{display:contents}
+.tracking-performance textarea{display:block;width:min(100%,700px);min-height:70px;margin:8px 0;color:inherit;background:#24324a}

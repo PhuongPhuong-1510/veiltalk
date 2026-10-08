@@ -8,6 +8,7 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
   resolve: (value: HandWorkerResponse) => void;
   reject: (reason: Error) => void;
+  postMessageMs: number;
 }
 
 /** Persistent, bounded request/response transport. Termination invalidates all old results. */
@@ -39,7 +40,7 @@ export class HandTrackingWorker implements HandTrackingExecutor {
       if (!pending || response.id !== pending.id) return;
       clearTimeout(pending.timer); this.pending = null;
       if (response.kind === "error") pending.reject(new Error(response.message));
-      else pending.resolve(response);
+      else pending.resolve(response.kind === "result" ? { ...response, postMessageMs: pending.postMessageMs } : response);
     };
     this.worker.onerror = (event) => { event.preventDefault(); this.fail(new Error(event.message || "Hand worker lỗi.")); };
     this.worker.onmessageerror = () => this.fail(new Error("Không đọc được kết quả Hand worker."));
@@ -72,8 +73,13 @@ export class HandTrackingWorker implements HandTrackingExecutor {
   private request(message: HandWorkerRequest, timeoutMs: number, bitmap?: ImageBitmap): Promise<HandWorkerResponse> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => this.fail(new Error(`Hand worker quá hạn ${timeoutMs} ms.`)), timeoutMs);
-      this.pending = { id: message.id, timer, resolve, reject };
-      try { this.worker!.postMessage(message, bitmap ? [bitmap] : []); }
+      const pending = { id: message.id, timer, resolve, reject, postMessageMs: 0 };
+      this.pending = pending;
+      try {
+        const startedAt = performance.now();
+        this.worker!.postMessage(message, bitmap ? [bitmap] : []);
+        pending.postMessageMs = performance.now() - startedAt;
+      }
       catch (error) { bitmap?.close(); this.fail(error instanceof Error ? error : new Error(String(error))); }
     });
   }

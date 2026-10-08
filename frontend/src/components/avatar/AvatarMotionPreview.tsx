@@ -6,6 +6,7 @@ import type { RawTrackingFrameV1 } from "../../lib/tracking/rawTrackingTypes";
 import { useTracking } from "../../lib/tracking/useTracking";
 import type { TrackingMetricsSnapshot } from "../../lib/tracking/trackingMetrics";
 import { INTEGRATED_MOTION_PROFILE as profile } from "../../lib/avatar-motion/integratedMotionProfile";
+import { TrackingPerformancePanel } from "../dev/TrackingPerformancePanel";
 import "./avatarMotionPreview.css";
 
 /** Local preview uses the same processor/renderer in production builds, independently of DEV. */
@@ -17,7 +18,7 @@ export default function AvatarMotionPreview() {
   const [modelUrl,setModelUrl]=useState("/models/avatars/reference-avatar-2.vrm");
   const [modelLabel,setModelLabel]=useState("Avatar thử nghiệm"),[ready,setReady]=useState(false);
   const [running,setRunning]=useState(false),[starting,setStarting]=useState(false);
-  const [,setTrackingMetrics]=useState<TrackingMetricsSnapshot|null>(null);
+  const [trackingMetrics,setTrackingMetrics]=useState<TrackingMetricsSnapshot|null>(null);
   const [error,setError]=useState<string|null>(null),[status,setStatus]=useState("Đang tải avatar…");
   useEffect(()=>{
     const p=processorRef.current!;
@@ -31,9 +32,21 @@ export default function AvatarMotionPreview() {
     p.setContactShadowEnabled(profile.contactShadowEnabled);p.setContactCorrectionEnabled(profile.contactCorrectionEnabled);
     p.setFaceContactResearchOptions(profile.faceContactResearch);
   },[]);
-  const onFrame=useCallback((frame:RawTrackingFrameV1)=>{const packet=processorRef.current?.process(frame);if(packet)rendererRef.current?.applyPose(packet);},[]);
+  const onFrame=useCallback((frame:RawTrackingFrameV1)=>{
+    const motionStartedAt=performance.now();
+    const packet=processorRef.current?.process(frame);
+    const motionEndedAt=performance.now();
+    const currentRenderer=rendererRef.current;
+    if(packet&&currentRenderer){
+      const applyStartedAt=performance.now();
+      currentRenderer.applyPose(packet);
+      const applyEndedAt=performance.now();
+      return {motionProcessMs:motionEndedAt-motionStartedAt,avatarApplyMs:applyEndedAt-applyStartedAt,avatarAppliedAtMs:applyEndedAt};
+    }
+    return {motionProcessMs:motionEndedAt-motionStartedAt};
+  },[]);
   const onError=useCallback((reason:unknown)=>{setError(reason instanceof Error?reason.message:"Không thể theo dõi chuyển động.");setRunning(false);},[]);
-  const onMetrics=useCallback((value:TrackingMetricsSnapshot)=>setTrackingMetrics(value),[]);
+  const onMetrics=useCallback((value:TrackingMetricsSnapshot)=>setTrackingMetrics({...value,renderFps:rendererRef.current?.getMetrics().fps??null}),[]);
   const options=useMemo(()=>({profile:"full-rate" as const,resolution:"720p" as const,delegate:"GPU" as const,tasks:{face:true,hands:true,pose:true},parallelHands:profile.parallelHands,poseGuidedHands:profile.poseGuidedHands,adaptiveHandConfidence:profile.adaptiveHandConfidence,onFrame,onError,onMetrics}),[onFrame,onError,onMetrics]);
   const tracking=useTracking(options);
   const onReady=useCallback((value:AvatarRenderer)=>{value.setSmoothing(profile.smoothing);rendererRef.current=value;setRenderer(value);},[]);
@@ -68,6 +81,7 @@ export default function AvatarMotionPreview() {
       <label>Chọn avatar VRM trên máy <input type="file" accept=".vrm" disabled={starting} onChange={event=>{const file=event.target.files?.[0];if(file){setModelLabel(file.name);setModelUrl(URL.createObjectURL(file));}}}/></label>
     </section>
     <p role="status">{status}</p>{error&&<p role="alert">{error}</p>}
+    <TrackingPerformancePanel metrics={trackingMetrics} context={{avatar:modelLabel,avatarSource:modelUrl}}/>
     <p>Thử giơ tay, xoay cổ tay, xòe/nắm ngón và che từng bàn tay trong thời gian ngắn. Trạng thái nhận diện tay được hiển thị khi camera hoạt động.</p>
     {import.meta.env.DEV&&<a href="/dev/avatar-renderer">Mở trang kiểm tra chuyển động và replay</a>}
   </main>;

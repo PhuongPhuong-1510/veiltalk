@@ -1,7 +1,7 @@
 import { HandLandmarker } from "@mediapipe/tasks-vision";
 import wasmModuleLoader from "@mediapipe/tasks-vision/vision_wasm_module_internal.js?url";
 import wasmModuleBinary from "@mediapipe/tasks-vision/vision_wasm_module_internal.wasm?url";
-import type { HandWorkerRequest, HandWorkerResponse } from "./handWorkerProtocol";
+import type { HandWorkerRequest, HandWorkerResponse, HandRoiReason } from "./handWorkerProtocol";
 import type { ConfiguredDelegate } from "./mediaPipeRuntime";
 import { drawHandInput, HandSensitivitySelector, mapHandResultFromInput, planPoseGuidedHandInput } from "./poseGuidedHandInput";
 
@@ -16,13 +16,14 @@ const handCanvas = new OffscreenCanvas(512, 512);
 let roiMisses = 0;
 
 scope.onmessage = (event) => {
+  const receivedAt = performance.now();
   const request = event.data;
-  void handle(request).catch((error: unknown) => {
+  void handle(request, receivedAt).catch((error: unknown) => {
     scope.postMessage({ kind: "error", id: request.id, message: error instanceof Error ? error.message : String(error) });
   });
 };
 
-async function handle(request: HandWorkerRequest): Promise<void> {
+async function handle(request: HandWorkerRequest, receivedAt: number): Promise<void> {
   if (request.kind === "initialize") {
     const create = async (delegate: ConfiguredDelegate, sensitive = false) => {
       // A module worker needs the ES module loader, not the public classic-script
@@ -65,14 +66,21 @@ async function handle(request: HandWorkerRequest): Promise<void> {
     const detector = confidenceMode === "sensitive" ? sensitiveHands! : hands;
     let source: ImageBitmap | OffscreenCanvas = request.bitmap;
     let usedPlan = null;
+    let roiReason: HandRoiReason = !request.poseGuidedHands ? "disabled" : !hint ? "no-hint"
+      : hint.ageMs > 120 ? "stale-hint" : !plan ? "invalid-plan" : roiMisses >= 2 ? "miss-limit" : "roi";
     if (request.poseGuidedHands && plan && roiMisses < 2) {
       try { drawHandInput(request.bitmap, plan, handCanvas); source = handCanvas; usedPlan = plan; }
-      catch { source = request.bitmap; }
+      catch { source = request.bitmap; roiReason = "draw-error"; }
     }
+    const inferenceStartedAt = performance.now();
     const raw = detector.detectForVideo(source, request.timestampMs);
+    const inferenceEndedAt = performance.now();
     const result = usedPlan ? mapHandResultFromInput(raw, usedPlan) : raw;
+    const mappingEndedAt = performance.now();
     roiMisses = usedPlan ? result.landmarks.length ? 0 : roiMisses + 1 : 0;
     scope.postMessage({ kind: "result", id: request.id, result, sampledAtMs: request.sampledAtMs, inferenceMs: performance.now() - started,
-      inputMode: usedPlan?.layout ?? "full-frame", confidenceMode });
+      timings: { roiPreparationMs: inferenceStartedAt - started, inferenceMs: inferenceEndedAt - inferenceStartedAt,
+        mappingMs: mappingEndedAt - inferenceEndedAt, workerTotalMs: performance.now() - receivedAt },
+      inputMode: usedPlan?.layout ?? "full-frame", confidenceMode, roiReason });
   } finally { request.bitmap.close(); }
 }
