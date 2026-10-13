@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TrackingPerformancePanel } from "./TrackingPerformancePanel";
-import { TrackingBenchmarkPanel } from "./TrackingBenchmarkPanel";
-import { getBenchmarkProfile, type BenchmarkProfileId } from "./trackingBenchmark";
+import { CameraCadencePanel } from "./CameraCadencePanel";
+import { TRACKING_EXPERIMENT_PRESETS } from "./trackingExperimentPresets";
+import { TrackingExperimentControls } from "./TrackingExperimentControls";
 import type { Group } from "three";
 import { AvatarCanvas } from "../avatar/AvatarCanvas";
 import { AvatarMotionProcessor } from "../../lib/avatar-motion/avatarMotionProcessor";
@@ -27,6 +28,7 @@ import { MotionReplayPanel } from "./MotionReplayPanel";
 import { INTEGRATED_MOTION_PROFILE as profile } from "../../lib/avatar-motion/integratedMotionProfile";
 import { MotionRecorder, rebaseTrackingFrame, type MotionRecordingV1 } from "../../lib/avatar-motion/motionReplay";
 import { useTracking } from "../../lib/tracking/useTracking";
+import { DEFAULT_POSE_MODEL, type PoseModelVariant, type ConfiguredDelegate } from "../../lib/tracking/mediaPipeRuntime";
 import { DEFAULT_DEV_AVATAR_MODEL_ID, DEV_AVATAR_MODELS, getDevAvatarModel, type DevAvatarModel } from "./devAvatarModels";
 import type { UpperBodyCalibrationSnapshot } from "../../lib/avatar-motion/upperBodyCalibration";
 import "./avatarRendererDevHarness.css";
@@ -61,10 +63,10 @@ export default function AvatarRendererDevHarness() {
   const [evidenceCaptureCountdown, setEvidenceCaptureCountdown] = useState<number | null>(null);
   const [evidenceCaptureStatus, setEvidenceCaptureStatus] = useState<string | null>(null);
   const [simulatedLoss, setSimulatedLoss] = useState(false); const [trackingRunning, setTrackingRunning] = useState(false); const [rendererRunning, setRendererRunning] = useState(true);
-  const [benchmarkProfileId, setBenchmarkProfileId] = useState<BenchmarkProfileId>("A");
-  const [benchmarkActive, setBenchmarkActive] = useState(false);
-  const benchmarkProfile = getBenchmarkProfile(benchmarkProfileId);
-  const poseModel = benchmarkProfile.poseModel;
+  const [poseModel, setPoseModel] = useState<PoseModelVariant>(DEFAULT_POSE_MODEL);
+  const [handWorkerDelegate, setHandWorkerDelegate] = useState<ConfiguredDelegate | undefined>();
+  const [experimentId, setExperimentId] = useState("baseline-v1");
+  const experimentPreset = TRACKING_EXPERIMENT_PRESETS.find(preset => preset.id === experimentId)!;
   const [avatarModelId, setAvatarModelId] = useState(DEFAULT_DEV_AVATAR_MODEL_ID);
   const [zoom, setZoom] = useState(1); const [verticalOffset, setVerticalOffset] = useState(0);
   const [error, setError] = useState<string | null>(null); const [capability, setCapability] = useState<ModelCapabilityReport | null>(null); const [packet, setPacket] = useState<AvatarPosePacket | null>(null);
@@ -119,15 +121,8 @@ export default function AvatarRendererDevHarness() {
   const onError = useCallback((reason: unknown) => {setError(reason instanceof Error ? reason.message : "Tracking error");setTrackingRunning(false);}, []);
   // Đổi model pose phải dựng lại pipeline (useTracking dispose theo options), nên tracking sẽ
   // dừng khi chuyển lite↔full — bấm "Start tracking" lại để đo biến thể mới.
-  const trackingOptions = useMemo(() => ({ profile: "full-rate" as const, resolution: "720p" as const, delegate: "GPU" as const, tasks: benchmarkProfile.tasks, poseModel,
-    parallelHands: benchmarkProfile.tasks.hands && parallelHands, poseGuidedHands,
-    adaptiveHandConfidence: benchmarkProfile.tasks.hands && adaptiveHandConfidence, onFrame, onMetrics, onError }), [benchmarkProfile, poseModel, parallelHands, poseGuidedHands, adaptiveHandConfidence, onFrame, onMetrics, onError]);
+  const trackingOptions = useMemo(() => ({ profile: "full-rate" as const, resolution: "720p" as const, delegate: "GPU" as const, handWorkerDelegate, experiments: experimentPreset.experiments, tasks: { face: true, hands: true, pose: true }, poseModel, parallelHands, poseGuidedHands, adaptiveHandConfidence, onFrame, onMetrics, onError }), [poseModel, handWorkerDelegate, experimentPreset, parallelHands, poseGuidedHands, adaptiveHandConfidence, onFrame, onMetrics, onError]);
   const tracking = useTracking(trackingOptions);
-  const changeBenchmarkProfile = (id: BenchmarkProfileId) => {
-    tracking?.dispose(); setTrackingRunning(false); setTrackingMetrics(null);
-    processorRef.current.resetCameraTracking(); latestRaw.current = null;
-    setBenchmarkProfileId(id);
-  };
 
   useEffect(() => { processorRef.current.setFiltered(filtered); }, [filtered]);
   useEffect(()=>{processorRef.current.setDofConstraintsEnabled(dofConstraintsEnabled);},[dofConstraintsEnabled]);
@@ -330,14 +325,13 @@ export default function AvatarRendererDevHarness() {
     <header><div><strong>DEV ONLY · LOCAL ONLY</strong><h1>P4-T10 Retargeting Diagnostics</h1></div><p>Ảnh bằng chứng chỉ được tải xuống máy, không upload raw frame.</p></header>
     {error && <pre className="dev-error" role="alert">{error}</pre>}
     <section className="dev-controls">
-      <fieldset disabled={benchmarkActive} className="benchmark-controls-lock">
       <button onClick={() => void toggleTracking()}>{trackingRunning ? "Stop tracking" : "Start tracking"}</button><button onClick={toggleRenderer}>{rendererRunning ? "Stop renderer" : "Start renderer"}</button><button onClick={reloadModel} disabled={modelLoading}>{modelLoading ? "Loading model…" : "Reload model"}</button><button onClick={() => { processorRef.current.calibrateFaceNeutral(); setFacialCalibration(processorRef.current.getFacialCalibration()); setUpperBodyCalibration(processorRef.current.getUpperBodyCalibration()); }}>Calibrate neutral face + upper body</button><span className={`facial-calibration-badge ${facialCalibration.state}`}>F1: {facialCalibration.state} · {facialCalibration.acceptedSamples}/{facialCalibration.requiredSamples} · {facialCalibration.collectionMode}</span><span className="eye-brow-badge">AR4: {upperBodyCalibration.state} · {upperBodyCalibration.acceptedPairs}/{upperBodyCalibration.requiredPairs} · {upperBodyCalibration.mode}</span><span className="eye-brow-badge">F2 blink L/R: {eyeBrowExpressions.blinkLeft.toFixed(2)}/{eyeBrowExpressions.blinkRight.toFixed(2)}{eyeBrowExpressions.unilateralCandidate ? ` · guard ${eyeBrowExpressions.unilateralCandidate}` : ""}</span>
       <button onClick={toggleFreeze} disabled={!frozen && !latestRaw.current}>{frozen ? "Unfreeze" : "Freeze current"}</button><button onClick={freezeAfterCountdown} disabled={frozen || freezeCountdown !== null || !latestRaw.current}>{freezeCountdown === null ? "Freeze in 5s" : `Freeze in ${freezeCountdown}s`}</button>
       {frozen&&<span role="status">Frame đang đóng băng</span>}
       <button className="evidence-capture-button" onClick={captureEvidenceAfterCountdown} disabled={evidenceCaptureCountdown !== null}>{evidenceCaptureCountdown === null ? "Chụp bằng chứng sau 5s" : `Chuẩn bị chụp: ${evidenceCaptureCountdown}s`}</button>
       {evidenceCaptureStatus && <span className="evidence-capture-status" role="status">{evidenceCaptureStatus}</span>}
       <label><input type="checkbox" checked={helpers} onChange={(e) => setHelpers(e.target.checked)} /> Helpers</label><label><input type="checkbox" checked={simulatedLoss} onChange={(e) => setSimulatedLoss(e.target.checked)} /> Simulate loss</label>
-      <span>Pose model: {poseModel} · benchmark {benchmarkProfileId}</span>
+      <label>Pose model <select value={poseModel} disabled={trackingStarting} onChange={(e) => { if (trackingRunning) { tracking?.stop(); setTrackingRunning(false); } setPoseModel(e.target.value as PoseModelVariant); }}><option value="full">full (chính xác hơn)</option><option value="lite">lite (nhẹ hơn)</option></select></label>
       <label>Avatar model <select value={avatarModelId} onChange={(event) => selectAvatarModel(event.target.value)}>{DEV_AVATAR_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}</select></label>
 
       <label>Zoom <input type="range" min="0.5" max="3" step="0.05" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {zoom.toFixed(2)}x</label>
@@ -345,20 +339,15 @@ export default function AvatarRendererDevHarness() {
       <label>Gaze mode <select value={gazeMode} onChange={(event) => setGazeMode(event.target.value as "faithful" | "cinematic")}><option value="faithful">faithful (mặc định)</option><option value="cinematic">cinematic (thử nghiệm)</option></select></label>
       <label>Camera attention <input type="range" min="0" max="1" step="0.05" value={gazeAttention} onChange={(event) => setGazeAttention(Number(event.target.value))} disabled={gazeMode !== "cinematic"} /> {gazeAttention.toFixed(2)}</label>
       <button onClick={() => { setZoom(1); setVerticalOffset(0); }}>Reset khung hình</button>
-      </fieldset>
     </section>
     {trackingStarting&&<p role="status">Đang khởi tạo tracking và nạp model…</p>}
-    <TrackingBenchmarkPanel profileId={benchmarkProfileId} onProfileChange={changeBenchmarkProfile} pipeline={tracking} metrics={trackingMetrics}
-      onActiveChange={setBenchmarkActive}
-      readinessError={trackingStarting ? "Đang khởi tạo model/camera." : !trackingRunning ? "Bấm Start tracking trước."
-        : modelLoading ? "Đợi avatar tải xong." : !rendererRunning ? "Bật renderer trước khi benchmark."
-        : frozen || freezeCountdown !== null || simulatedLoss || helpers || replayActiveRef.current || motionRecorderRef.current.active || evidenceCaptureCountdown !== null
-          ? "Tắt freeze/countdown, helpers, simulate loss, replay/recording và capture countdown trước khi benchmark."
-          : trackingMetrics?.runtimeConfig && (trackingMetrics.runtimeConfig.videoWidth !== 1280 || trackingMetrics.runtimeConfig.videoHeight !== 720) ? "Camera không đạt 1280×720; lượt benchmark này chưa đúng điều kiện." : null}
-      context={{ avatar: avatarModelId, avatarSource: getDevAvatarModel(avatarModelId)?.url ?? "", zoom, verticalOffset,
-        smoothing, gazeMode, gazeAttention, helpers, simulatedLoss, rendererRunning, userAgent: navigator.userAgent }} />
     <section className="dev-stage" ref={stageRef}><AvatarCanvas onReady={attachRenderer} onDispose={detachRenderer} onError={(reason) => setError(`WebGL: ${reason.message}`)} options={{ smoothing, onContextLost: (reason) => setError(reason.message) }} /><div className="dev-camera-preview"><video ref={videoRef} muted playsInline />{!trackingRunning && <p>Camera chưa bật<br /><small>Bấm Start tracking để dùng webcam</small></p>}</div></section>
-    <TrackingPerformancePanel metrics={trackingMetrics} context={{avatar:avatarModelId,rendererRunning,frozen,simulatedLoss,recordingActive:motionRecorderRef.current.active,replayActive:replayActiveRef.current}}/>
+    <TrackingExperimentControls delegate={handWorkerDelegate} strategy={experimentId} disabled={trackingStarting || trackingRunning}
+      onDelegateChange={value => { setHandWorkerDelegate(value); setTrackingMetrics(null); }} onStrategyChange={value => { setExperimentId(value); setTrackingMetrics(null); }} />
+    <CameraCadencePanel videoRef={videoRef} running={trackingRunning} mode="tracking-avatar" metrics={trackingMetrics}
+      onReset={() => tracking?.requestMeasurementReset() ?? false}
+      context={{strategy:experimentId,avatar:avatarModelId,rendererRunning,frozen,simulatedLoss,recordingActive:motionRecorderRef.current.active,replayActive:replayActiveRef.current,poseModel,parallelHands,poseGuidedHands,adaptiveHandConfidence}}/>
+    <TrackingPerformancePanel metrics={trackingMetrics} onResetMeasurement={() => tracking?.requestMeasurementReset() ?? false} context={{strategy:experimentId,avatar:avatarModelId,rendererRunning,frozen,simulatedLoss,recordingActive:motionRecorderRef.current.active,replayActive:replayActiveRef.current}}/>
     <section className="dev-panels">
 
       <article><h2>Realtime</h2><p>Avatar: <strong>{getDevAvatarModel(avatarModelId)?.label ?? avatarModelId}</strong>{modelLoading ? " · đang tải…" : ""}</p><p>Tracking/Pipeline: {number(trackingMetrics?.cameraFps)} / {number(trackingMetrics?.pipelineFps)} FPS</p><p>Renderer: {number(rendererMetrics?.fps)} FPS · p95 {number(rendererMetrics?.frameTimeP95Ms)}ms</p><p>Processor→draw: {number(rendererMetrics?.processorInputToDrawMs)}ms</p>

@@ -8,5 +8,11 @@
 .tracking-performance th,.tracking-performance td{padding:6px 10px;border-bottom:1px solid #334155;white-space:nowrap}
 .tracking-performance pre{max-height:320px;overflow:auto;font-size:12px}
 .tracking-performance-empty{max-width:1200px;margin:16px auto;color:inherit}
-.benchmark-controls-lock{display:contents}
-.tracking-performance textarea{display:block;width:min(100%,700px);min-height:70px;margin:8px 0;color:inherit;background:#24324a}
+.tracking-experiment-controls{max-width:1200px;margin:16px auto;padding:16px;border:1px solid #64748b;border-radius:10px}
+.tracking-experiment-controls label,.tracking-performance label{display:inline-flex;align-items:center;gap:8px;margin:8px 16px 8px 0;flex-wrap:wrap}
+.tracking-experiment-controls select,.tracking-performance select{max-width:100%;padding:8px;background:#24324a;color:#edf2ff;border:1px solid #64748b;border-radius:6px}
+.tracking-experiment-controls:disabled{opacity:.7}
+.tracking-experiment-controls p{line-height:1.5;margin-bottom:0}
+.tracking-performance{overflow-x:auto}
+.tracking-performance button{margin:4px 8px 4px 0}
+.tracking-performance [role=alert]{border-left:3px solid #eab308;padding-left:12px}

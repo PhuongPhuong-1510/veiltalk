@@ -1,0 +1,5 @@
+.camera-cadence-panel { margin: 16px 0; padding: 16px; border: 1px solid #405175; border-radius: 10px; background: #111827; color: #e5e7eb; }
+.camera-cadence-panel h2 { margin: 0 0 10px; font-size: 18px; }
+.camera-cadence-panel p { line-height: 1.5; }
+.camera-cadence-panel button, .camera-cadence-panel select { margin: 4px; padding: 8px 12px; border: 1px solid #64748b; border-radius: 6px; background: #182239; color: inherit; }
+.camera-cadence-panel button:disabled, .camera-cadence-panel select:disabled { opacity: .5; }

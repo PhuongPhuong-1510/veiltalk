@@ -1,6 +1,7 @@
 import type { ConfiguredDelegate, PoseModelVariant } from "./mediaPipeRuntime";
 import type { RawTrackingFrameV1 } from "./rawTrackingTypes";
-import type { HandInputMode, HandRoiReason } from "./handWorkerProtocol";
+import { TrackingObservationCollector, type TrackingObservationSnapshot } from "./trackingObservations";
+import type { TrackingExperiments } from "./trackingScheduler";
 
 export type MetricGroup = "face" | "hands" | "pose" | "pipeline";
 
@@ -42,20 +43,20 @@ export interface TrackingRuntimeConfig {
   videoWidth: number;
   videoHeight: number;
   cameraTrackFrameRate: number | null;
+  handWorkerDelegateRequested?: string;
+  experiments?: Required<TrackingExperiments> & { version: 1 };
 }
 
 /** Fixed-size numeric storage; sorting/copying happens only when UI requests a snapshot. */
 class TimingBuffer {
-  private readonly values: Float64Array;
-  private readonly capacity: number;
-  constructor(capacity = MAX_SAMPLES) { this.capacity = capacity; this.values = new Float64Array(capacity); }
+  private readonly values = new Float64Array(MAX_SAMPLES);
   private count = 0;
   private cursor = 0;
   push(value: number): void {
     if (!Number.isFinite(value) || value < 0) return;
     this.values[this.cursor] = value;
-    this.cursor = (this.cursor + 1) % this.capacity;
-    this.count = Math.min(this.capacity, this.count + 1);
+    this.cursor = (this.cursor + 1) % MAX_SAMPLES;
+    this.count = Math.min(MAX_SAMPLES, this.count + 1);
   }
   reset(): void { this.count = 0; this.cursor = 0; }
   snapshot(): TimingDistribution {
@@ -67,21 +68,6 @@ class TimingBuffer {
 }
 
 export interface TrackingMetricsSnapshot {
-  measurementId?: number;
-  measurementStartedAtMs?: number | null;
-  timingSamplesMax?: number;
-  measurementCounts?: Record<"videoCallbacks" | "pipelineFrames" | "face" | "hands" | "pose" | "trackingPublish" | "avatarApply", number>;
-  measurementPresentedFps?: number | null;
-  handDiagnostics?: {
-    scope: "cumulative-measurement";
-    hintCounts: { absent: number; fresh: number; stale: number; invalidAge: number };
-    hintFreshRatio: number | null;
-    hintStaleRatio: number | null;
-    roiUsageRatio: number | null;
-    fullFrameRatio: number | null;
-    roiReasonCounts: Partial<Record<HandRoiReason, number>>;
-    modes: Partial<Record<HandInputMode, { samples: number; leftTracked: number; rightTracked: number; neitherTracked: number; inferenceMs: TimingDistribution }>>;
-  };
   runDurationMs: number;
   cameraFps: number;
   pipelineFps: number;
@@ -118,6 +104,8 @@ export interface TrackingMetricsSnapshot {
   longTaskScope?: "cumulative-session" | "cumulative-measurement";
   longTaskSource?: "observer" | "main-inference-fallback";
   runtimeConfig?: TrackingRuntimeConfig;
+  observations?: TrackingObservationSnapshot;
+  measurement?: { id: number; startedAtMs: number | null; durationMs: number };
 }
 
 const WINDOW_MS = 10_000;
@@ -134,6 +122,8 @@ function distribution(values: number[]): DistributionMetric {
 }
 
 export class TrackingMetricsCollector {
+  readonly observations = new TrackingObservationCollector();
+  private measurementId = 0;
   private cameraTicks: number[] = [];
   private pipelineTicks: number[] = [];
   private inferenceTicks = { face: [] as number[], hands: [] as number[], pose: [] as number[] };
@@ -149,26 +139,15 @@ export class TrackingMetricsCollector {
   private runStartedAt: number | null = null;
   private preparations: number[] = [];
   private workerRoundTrips: number[] = [];
-  private timings = Object.fromEntries(TRACKING_TIMING_NAMES.map(name => [name, new TimingBuffer()])) as Record<TrackingTimingName, TimingBuffer>;
-  private timingCapacity = MAX_SAMPLES;
-  private measurementId = 0;
-  private measurementStartedAt: number | null = null;
-  private measurementCounts = this.emptyMeasurementCounts();
-  private firstPresented: { at: number; frames: number } | null = null;
-  private lastPresented: { at: number; frames: number } | null = null;
-  private hintCounts = { absent: 0, fresh: 0, stale: 0, invalidAge: 0 };
-  private roiReasonCounts: Partial<Record<HandRoiReason, number>> = {};
-  private handModes: Partial<Record<HandInputMode, { samples: number; leftTracked: number; rightTracked: number; neitherTracked: number; inference: TimingBuffer }>> = {};
+  private readonly timings = Object.fromEntries(TRACKING_TIMING_NAMES.map(name => [name, new TimingBuffer()])) as Record<TrackingTimingName, TimingBuffer>;
   private videoCallbackTicks: number[] = [];
   private avatarApplyTicks: number[] = [];
   private lastVideoCallbackMs: number | null = null;
   private presented: { at: number; frames: number }[] = [];
 
   reset(): void {
-    if (this.timingCapacity !== MAX_SAMPLES) {
-      this.timingCapacity = MAX_SAMPLES;
-      this.timings = Object.fromEntries(TRACKING_TIMING_NAMES.map(name => [name, new TimingBuffer()])) as Record<TrackingTimingName, TimingBuffer>;
-    }
+    this.observations.reset();
+    this.measurementId = 0;
     this.cameraTicks = [];
     this.pipelineTicks = [];
     this.inferenceTicks = { face: [], hands: [], pose: [] };
@@ -184,47 +163,23 @@ export class TrackingMetricsCollector {
     for (const name of TRACKING_TIMING_NAMES) this.timings[name].reset();
     this.videoCallbackTicks = []; this.avatarApplyTicks = []; this.presented = [];
     this.lastVideoCallbackMs = null;
-    this.measurementId = 0; this.measurementStartedAt = null;
-    this.measurementCounts = this.emptyMeasurementCounts();
-    this.firstPresented = null; this.lastPresented = null;
-    this.hintCounts = { absent: 0, fresh: 0, stale: 0, invalidAge: 0 };
-    this.roiReasonCounts = {}; this.handModes = {};
   }
 
-  /** DEV benchmark only: clear measurements, never detector state or sampling clocks. */
-  beginMeasurement(id: number, now: number): void {
+  /** Called at an accepted frame boundary, without touching model/tracker history. */
+  beginMeasurement(now: number): void {
+    const nextId = this.measurementId + 1;
     this.observer?.takeRecords();
     this.reset();
-    this.measurementId = id; this.measurementStartedAt = now; this.runStartedAt = now;
-    this.timingCapacity = 4096;
-    this.timings = Object.fromEntries(TRACKING_TIMING_NAMES.map(name => [name, new TimingBuffer(this.timingCapacity)])) as Record<TrackingTimingName, TimingBuffer>;
+    this.measurementId = nextId;
+    this.runStartedAt = now;
   }
-
-  recordHandHint(ageMs: number | null): void {
-    if (ageMs === null) this.hintCounts.absent++;
-    else if (!Number.isFinite(ageMs) || ageMs < 0) this.hintCounts.invalidAge++;
-    else if (ageMs > 120) this.hintCounts.stale++;
-    else this.hintCounts.fresh++;
-  }
-
-  recordHandInput(mode: HandInputMode, inferenceMs: number, frame: RawTrackingFrameV1, reason?: HandRoiReason): void {
-    const group = this.handModes[mode] ??= { samples: 0, leftTracked: 0, rightTracked: 0, neitherTracked: 0, inference: new TimingBuffer(this.timingCapacity) };
-    group.samples++;
-    const left = frame.leftHand.state === "tracked", right = frame.rightHand.state === "tracked";
-    if (left) group.leftTracked++;
-    if (right) group.rightTracked++;
-    if (!left && !right) group.neitherTracked++;
-    group.inference.push(inferenceMs);
-    if (reason) this.roiReasonCounts[reason] = (this.roiReasonCounts[reason] ?? 0) + 1;
-  }
-
-  private emptyMeasurementCounts() { return { videoCallbacks: 0, pipelineFrames: 0, face: 0, hands: 0, pose: 0, trackingPublish: 0, avatarApply: 0 }; }
 
   startLongTaskObserver(): void {
     if (typeof PerformanceObserver === "undefined") return;
     try {
       this.observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
+          if (this.runStartedAt !== null && entry.startTime < this.runStartedAt) continue;
           this.longTasks += 1;
           this.blockedMs += entry.duration;
         }
@@ -244,21 +199,17 @@ export class TrackingMetricsCollector {
   }
 
   recordCameraFrame(now: number): void {
-    this.measurementCounts.pipelineFrames++;
     this.runStartedAt ??= now;
     this.pushTick(this.cameraTicks, now);
   }
   recordTiming(name: TrackingTimingName, duration: number): void { this.timings[name].push(duration); }
   recordVideoCallback(now: number, presentedFrames?: number): void {
-    this.measurementCounts.videoCallbacks++;
     this.pushTick(this.videoCallbackTicks, now);
     if (this.lastVideoCallbackMs !== null) this.recordTiming("videoCallbackIntervalMs", now - this.lastVideoCallbackMs);
     this.lastVideoCallbackMs = now;
     if (presentedFrames !== undefined && Number.isFinite(presentedFrames)) {
       if (this.presented.length && presentedFrames < this.presented.at(-1)!.frames) this.presented = [];
       this.presented.push({ at: now, frames: presentedFrames });
-      if (!this.lastPresented || presentedFrames < this.lastPresented.frames) this.firstPresented = { at: now, frames: presentedFrames };
-      this.lastPresented = { at: now, frames: presentedFrames };
       while (this.presented.length > MAX_SAMPLES || (this.presented.length && this.presented[0].at < now - WINDOW_MS)) this.presented.shift();
     }
   }
@@ -266,14 +217,12 @@ export class TrackingMetricsCollector {
     this.recordTiming("motionProcessMs", timing.motionProcessMs);
     if (timing.avatarApplyMs !== undefined) this.recordTiming("avatarApplyMs", timing.avatarApplyMs);
     if (timing.avatarAppliedAtMs !== undefined) {
-      this.measurementCounts.avatarApply++;
       this.pushTick(this.avatarApplyTicks, timing.avatarAppliedAtMs);
       this.recordTiming("pipelineStartToAvatarApplyMs", timing.avatarAppliedAtMs - startedAt);
       if (callbackAt !== undefined) this.recordTiming("callbackToAvatarApplyMs", timing.avatarAppliedAtMs - callbackAt);
     }
   }
   recordInference(group: "face" | "hands" | "pose", now: number, duration: number, pureInferenceMs = duration): void {
-    this.measurementCounts[group]++;
     this.pushTick(this.inferenceTicks[group], now);
     this.push(this.durations[group], duration);
     this.recordTiming(`${group}InferenceMs`, pureInferenceMs);
@@ -284,7 +233,7 @@ export class TrackingMetricsCollector {
   }
 
   recordPipeline(now: number, duration: number, frame: RawTrackingFrameV1, mainThreadDuration = duration): void {
-    this.measurementCounts.trackingPublish++;
+    this.observations.accepted(frame, now);
     this.pushTick(this.pipelineTicks, now);
     this.push(this.durations.pipeline, duration);
     this.recordAge("face", frame.face.sampledAtMs, now);
@@ -316,20 +265,9 @@ export class TrackingMetricsCollector {
     const firstPresented = this.presented[0], lastPresented = this.presented.at(-1);
     const presentedFps = firstPresented && lastPresented && lastPresented.at > firstPresented.at
       ? (lastPresented.frames - firstPresented.frames) * 1000 / (lastPresented.at - firstPresented.at) : null;
-    const hintTotal = Object.values(this.hintCounts).reduce((a, b) => a + b, 0);
-    const modeTotal = Object.values(this.handModes).reduce((sum, d) => sum + d.samples, 0);
     return {
-      measurementId: this.measurementId, measurementStartedAtMs: this.measurementStartedAt,
-      timingSamplesMax: this.timingCapacity, measurementCounts: { ...this.measurementCounts },
-      measurementPresentedFps: this.firstPresented && this.lastPresented && this.lastPresented.at > this.firstPresented.at
-        ? (this.lastPresented.frames - this.firstPresented.frames) * 1000 / (this.lastPresented.at - this.firstPresented.at) : null,
-      handDiagnostics: { scope: "cumulative-measurement", hintCounts: { ...this.hintCounts }, roiReasonCounts: { ...this.roiReasonCounts },
-        hintFreshRatio: hintTotal ? this.hintCounts.fresh / hintTotal : null,
-        hintStaleRatio: hintTotal ? this.hintCounts.stale / hintTotal : null,
-        roiUsageRatio: modeTotal ? 1 - (this.handModes["full-frame"]?.samples ?? 0) / modeTotal : null,
-        fullFrameRatio: modeTotal ? (this.handModes["full-frame"]?.samples ?? 0) / modeTotal : null,
-        modes: Object.fromEntries(Object.entries(this.handModes).map(([mode, d]) => [mode, { samples: d.samples, leftTracked: d.leftTracked,
-          rightTracked: d.rightTracked, neitherTracked: d.neitherTracked, inferenceMs: d.inference.snapshot() }])) },
+      observations: this.observations.snapshot(now),
+      measurement: { id: this.measurementId, startedAtMs: this.runStartedAt, durationMs: this.runStartedAt === null ? 0 : Math.max(0, now - this.runStartedAt) },
       runDurationMs: this.runStartedAt === null ? 0 : Math.max(0, now - this.runStartedAt),
       cameraFps: fps(this.cameraTicks),
       pipelineFps: fps(this.pipelineTicks),

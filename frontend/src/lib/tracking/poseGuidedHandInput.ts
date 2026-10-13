@@ -22,8 +22,9 @@ const valid = (point: RawNormalizedLandmarkV1 | undefined) => !!point && [point.
   && point.visibility !== null && point.visibility >= .6 && point.x >= -.05 && point.x <= 1.05 && point.y >= -.05 && point.y <= 1.05;
 
 /** A plan uses only a recent, reliable Pose measurement; otherwise Hand sees the full frame. */
-export function planPoseGuidedHandInput(hint: HandPoseHint | null): HandInputPlan | null {
-  if (!hint || hint.pose.state !== "tracked" || hint.ageMs < 0 || hint.ageMs > 120 || !(hint.width > 0 && hint.height > 0)) return null;
+export function planPoseGuidedHandInput(hint: HandPoseHint | null, allowCachedGeometry = false): HandInputPlan | null {
+  if (!hint || (hint.pose.state !== "tracked" && !(allowCachedGeometry && hint.pose.state === "not-sampled"))
+    || !Number.isFinite(hint.ageMs) || hint.ageMs < 0 || hint.ageMs > 120 || !(hint.width > 0 && hint.height > 0)) return null;
   const points = hint.pose.landmarks;
   if (!points || ![11, 12].every(i => valid(points[i]))) return null;
   const width = hint.width, height = hint.height;

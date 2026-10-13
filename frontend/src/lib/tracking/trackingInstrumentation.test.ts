@@ -37,26 +37,25 @@ function setup(parallelHands = false) {
     frame: (mediaTime = 1, presentedFrames = 1) => callback?.(clock, { mediaTime, presentedFrames } as VideoFrameCallbackMetadata),
     snapshot: () => metrics.snapshot(clock, "GPU", "full"),
     setClock: (value: number) => { clock = value; },
-    finishHand: () => resolveHand({ result: empty, sampledAtMs: 100, inferenceMs: 14,
+    finishHand: (sampledAtMs = 100) => resolveHand({ result: empty, sampledAtMs, inferenceMs: 14,
       timings: { roiPreparationMs: 2, inferenceMs: 11, mappingMs: 1, workerTotalMs: 14 }, postMessageMs: .5 }) };
 }
 
 describe("Phase A pipeline instrumentation", () => {
-  it("applies a measurement reset at the next callback without resetting model clocks or rescheduling", async () => {
+  it("resets after an in-flight frame without restarting models or erasing source history", async () => {
     const t = setup(true); await t.pipeline.start(t.video); t.frame(); await flush();
-    const id = t.pipeline.requestMeasurementReset(); // Request while a worker owns the current bitmap.
-    expect(t.snapshot().measurementId).toBe(0);
-    expect(t.video.requestVideoFrameCallback).toHaveBeenCalledOnce();
+    expect(t.pipeline.requestMeasurementReset()).toBe(true);
     t.setClock(150); t.finishHand(); await flush();
-    expect(t.snapshot().measurementId).toBe(0); // Current frame stays in old measurement.
-    t.setClock(200); t.frame(2, 4); await flush();
-    expect(t.snapshot().measurementId).toBe(id);
-    expect(t.snapshot().measurementCounts?.pipelineFrames).toBe(1);
+    expect(t.snapshot().measurement?.id).toBe(0);
+    t.setClock(300); t.frame(2, 2); await flush();
+    expect(t.snapshot().measurement).toMatchObject({ id: 1, startedAtMs: 300 });
+    t.setClock(350); t.finishHand(300); await flush();
+    const report = t.snapshot();
+    expect(report.observations?.acceptedHandSamples).toBe(1);
+    expect(report.timings?.handsInferenceMs.count).toBe(1);
     expect(t.worker.initialize).toHaveBeenCalledOnce();
     expect(t.tasks.face.detectForVideo).toHaveBeenCalledTimes(2);
-    expect(t.tasks.pose.detectForVideo).toHaveBeenCalledTimes(2);
-    expect(t.video.requestVideoFrameCallback).toHaveBeenCalledTimes(2); // No backlog while second Hand is pending.
-    t.pipeline.dispose();
+    t.pipeline.stop(); expect(t.pipeline.requestMeasurementReset()).toBe(false); t.pipeline.dispose();
   });
   it("includes mapping, a 10ms onFrame and metrics handler in total without changing detector calls", async () => {
     const t = setup(); await t.pipeline.start(t.video); t.frame();

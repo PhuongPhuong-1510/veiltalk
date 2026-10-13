@@ -7,6 +7,8 @@ import { TrackingMetricsCollector, type AvatarFrameTiming, type TrackingMetricsS
 import { HandTrackingWorker } from "./handTrackingWorker";
 import type { HandTrackingExecutor, HandWorkerSample } from "./handWorkerProtocol";
 import { drawHandInput, HandSensitivitySelector, mapHandResultFromInput, planPoseGuidedHandInput, type HandPoseHint } from "./poseGuidedHandInput";
+import { BoundedPoseScheduler, resolveTrackingExperiments, type TrackingExperiments } from "./trackingScheduler";
+import { describeHandHint, handRegionCoverage, HandRoiRecovery, type HandInputDiagnostics, type HandRoiReason } from "./handRoiPolicy";
 
 export type TrackingProfile = "full-rate" | "staggered";
 export type TrackingPipelineState = "idle" | "starting" | "running" | "stopped" | "disposed" | "error";
@@ -17,11 +19,13 @@ export interface TrackingPipelineOptions {
   poseIntervalMs?: number;
   resolution?: CameraResolution;
   delegate?: DelegateSelection;
+  handWorkerDelegate?: DelegateSelection;
   tasks?: TrackingTaskSelection;
   poseModel?: PoseModelVariant;
   parallelHands?: boolean;
   poseGuidedHands?: boolean;
   adaptiveHandConfidence?: boolean;
+  experiments?: TrackingExperiments;
   onFrame: (frame: RawTrackingFrameV1) => AvatarFrameTiming | void;
   onMetrics?: (metrics: TrackingMetricsSnapshot) => void;
   onError?: (error: unknown) => void;
@@ -43,7 +47,7 @@ const defaultDependencies = (options: TrackingPipelineOptions): TrackingPipeline
     camera: new CameraController(options.resolution),
     runtime: new MediaPipeRuntime(undefined, options.delegate, { ...tasks, hands: tasks.hands && !parallel }, options.poseModel),
     metrics: new TrackingMetricsCollector(),
-    handWorker: parallel ? new HandTrackingWorker(new URL(`${import.meta.env.BASE_URL}mediapipe/`, document.baseURI).href, options.delegate, undefined, 350, options.adaptiveHandConfidence) : undefined,
+    handWorker: parallel ? new HandTrackingWorker(new URL(`${import.meta.env.BASE_URL}mediapipe/`, document.baseURI).href, options.handWorkerDelegate ?? options.delegate, undefined, 350, options.adaptiveHandConfidence, options.experiments) : undefined,
     captureFrame: (source) => createImageBitmap(source),
   };
 };
@@ -72,14 +76,20 @@ export class TrackingPipeline {
   private handInputMode: "full-frame" | "single" | "combined" | "split" = "full-frame";
   private handConfidenceMode: "normal" | "sensitive" = "normal";
   private handRoiMisses = 0;
-  private nextMeasurementId = 0;
-  private pendingMeasurementId: number | null = null;
+  private readonly handRecovery = new HandRoiRecovery();
+  private handDiagnostics: HandInputDiagnostics | undefined;
+  private callbackEpoch = 0;
+  private processingToken: symbol | null = null;
+  private readonly poseScheduler = new BoundedPoseScheduler();
+  private readonly experiments: ReturnType<typeof resolveTrackingExperiments>;
+  private measurementResetPending = false;
 
   constructor(
     options: TrackingPipelineOptions,
     dependencies?: TrackingPipelineDependencies,
   ) {
     this.options = options;
+    this.experiments = resolveTrackingExperiments(options.experiments);
     this.dependencies = dependencies ?? defaultDependencies(options);
     this.now = options.now ?? (() => performance.now());
   }
@@ -87,18 +97,9 @@ export class TrackingPipeline {
   get state(): TrackingPipelineState { return this.stateValue; }
   get cameraSettings(): MediaTrackSettings | null { return this.dependencies.camera.settings; }
 
-  /** Applied between frames; changes measurements only, never tracking state/scheduling. */
-  requestMeasurementReset(): number {
-    if (this.stateValue !== "running") throw new Error("Bật tracking trước khi đo benchmark.");
-    this.pendingMeasurementId = ++this.nextMeasurementId;
-    return this.pendingMeasurementId;
-  }
-
-  private applyMeasurementReset(at: number): boolean {
-    if (this.pendingMeasurementId === null) return false;
-    this.dependencies.metrics.beginMeasurement(this.pendingMeasurementId, at);
-    this.workerDroppedSamples = 0;
-    this.pendingMeasurementId = null;
+  requestMeasurementReset(): boolean {
+    if (this.stateValue !== "running") return false;
+    this.measurementResetPending = true;
     return true;
   }
 
@@ -146,7 +147,10 @@ export class TrackingPipeline {
       this.sensitivity.reset();
       this.handInputMode = "full-frame"; this.handConfidenceMode = "normal";
       this.handRoiMisses = 0;
+      this.handRecovery.reset(); this.handDiagnostics = undefined;
+      this.poseScheduler.reset();
       this.dependencies.metrics.reset();
+      this.measurementResetPending = false;
       this.lastMetricsEmitMs = -Infinity;
       this.stateValue = "running";
       this.dependencies.metrics.startLongTaskObserver();
@@ -163,7 +167,6 @@ export class TrackingPipeline {
   stop(): void {
     if (this.stateValue === "disposed") return;
     ++this.generation;
-    this.pendingMeasurementId = null;
     this.dependencies.handWorker?.dispose();
     this.workerEnabled = false;
     this.cancelScheduledCallback();
@@ -171,6 +174,7 @@ export class TrackingPipeline {
     this.dependencies.camera.stop();
     this.video = null;
     this.previousFrame = undefined;
+    this.measurementResetPending = false;
     this.sensitivity.reset(); this.handCanvas = null;
     this.handRoiMisses = 0;
     this.stateValue = "stopped";
@@ -185,25 +189,28 @@ export class TrackingPipeline {
 
   private scheduleNext(generation: number): void {
     const video = this.video;
-    if (!video || generation !== this.generation || this.stateValue !== "running") return;
+    if (!video || generation !== this.generation || this.stateValue !== "running" || this.callbackId !== null) return;
+    const epoch = ++this.callbackEpoch;
     if (typeof video.requestVideoFrameCallback === "function") {
       this.callbackKind = "video";
       const scheduledAt = this.now();
       this.callbackId = video.requestVideoFrameCallback((_now, metadata) => {
+        if (epoch !== this.callbackEpoch || generation !== this.generation || video !== this.video) return;
         this.callbackId = null;
         const callbackAt = this.now();
         if (generation === this.generation && this.stateValue === "running") {
-          const measurementReset = this.applyMeasurementReset(callbackAt);
           this.dependencies.metrics.recordVideoCallback?.(callbackAt, metadata.presentedFrames);
-          // Registration of this first callback predates the measurement boundary.
-          if (!measurementReset) this.dependencies.metrics.recordTiming?.("awaitNextVideoCallbackMs", callbackAt - scheduledAt);
+          this.dependencies.metrics.recordTiming?.("awaitNextVideoCallbackMs", callbackAt - scheduledAt);
         }
+        if (this.experiments.callbackAhead) this.scheduleNext(generation);
         void this.processFrame(metadata.mediaTime * 1000, generation, callbackAt);
       });
     } else {
       this.callbackKind = "animation";
       this.callbackId = requestAnimationFrame(() => {
+        if (epoch !== this.callbackEpoch || generation !== this.generation || video !== this.video) return;
         this.callbackId = null;
+        if (this.experiments.callbackAhead) this.scheduleNext(generation);
         void this.processFrame(video.currentTime * 1000, generation);
       });
     }
@@ -212,11 +219,21 @@ export class TrackingPipeline {
   private async processFrame(videoTimestampMs: number, generation: number, callbackAt?: number): Promise<void> {
     const startedAt = this.now();
     if (generation !== this.generation || this.stateValue !== "running" || !this.video) return;
-    if (callbackAt === undefined) this.applyMeasurementReset(startedAt);
-    if (videoTimestampMs <= this.lastVideoTimestampMs) {
+    // Drop busy callbacks outright: never retain metadata and read a newer video
+    // image later under an older timestamp. The next callback supplies its own image.
+    if (this.processingToken !== null || !Number.isFinite(videoTimestampMs) || videoTimestampMs <= this.lastVideoTimestampMs) {
+      this.dependencies.metrics.observations?.callbackDrop(this.processingToken !== null ? "busy" : "duplicate");
       this.scheduleNext(generation);
       return;
     }
+    if (this.measurementResetPending) {
+      this.dependencies.metrics.beginMeasurement(startedAt);
+      this.workerDroppedSamples = 0;
+      this.lastMetricsEmitMs = -Infinity;
+      this.measurementResetPending = false;
+    }
+    const processingToken = Symbol();
+    this.processingToken = processingToken;
     this.lastVideoTimestampMs = videoTimestampMs;
     const video = this.video;
     // Model được giữ qua stop/start, vì vậy timestamp đưa vào MediaPipe cũng phải
@@ -230,7 +247,6 @@ export class TrackingPipeline {
     let preparationMs = 0, mainThreadMs = 0, roundTripMs = 0;
     let capturing = false;
     let published = false;
-    let handObservation: HandWorkerSample | null = null;
     let workerJob: Promise<{ sample: HandWorkerSample; elapsed: number } | { error: unknown }> | null = null;
     try {
       const results: MediaPipeFrameResults = {};
@@ -244,9 +260,9 @@ export class TrackingPipeline {
       const poseHint: HandPoseHint | null = (this.options.poseGuidedHands || this.options.adaptiveHandConfidence) && previous && previous.pose.sampledAtMs !== null
         && previous.videoWidth === video.videoWidth && previous.videoHeight === video.videoHeight
         ? { pose: previous.pose, width: video.videoWidth, height: video.videoHeight, ageMs: startedAt - previous.pose.sampledAtMs } : null;
-      const handPlan = this.options.poseGuidedHands || this.options.adaptiveHandConfidence ? planPoseGuidedHandInput(poseHint) : null;
+      // Worker owns its plan; don't calculate and discard the same geometry on main.
+      const handPlan = !this.workerEnabled && (this.options.poseGuidedHands || this.options.adaptiveHandConfidence) ? planPoseGuidedHandInput(poseHint, this.experiments.cachedPoseHint) : null;
       if (poseHint) this.dependencies.metrics.recordTiming?.("poseHintAgeMs", poseHint.ageMs);
-      if (sampleHands && (this.workerEnabled || this.dependencies.runtime.tasks.hands)) this.dependencies.metrics.recordHandHint?.(poseHint?.ageMs ?? null);
       // A single immutable capture feeds both threads. Transfer a copy to Hand,
       // then run Face/Pose while it is processing. Only one frame is in flight.
       if (this.workerEnabled && sampleHands) {
@@ -283,26 +299,44 @@ export class TrackingPipeline {
       }
 
       if (!this.workerEnabled && tasks.hands && sampleHands) {
+        const handPreparationAt = this.now();
         const mode = this.options.adaptiveHandConfidence ? this.sensitivity.select(handPlan, startedAt) : "normal";
         const handTask = this.dependencies.runtime.getHandTask?.(mode === "sensitive") ?? tasks.hands;
         let handSource: HTMLVideoElement | ImageBitmap | OffscreenCanvas | HTMLCanvasElement = source;
         let usedPlan = null;
-        if (this.options.poseGuidedHands && handPlan && this.handRoiMisses < 2) {
+        let roiReason: HandRoiReason = !this.options.poseGuidedHands ? "disabled" : !handPlan ? "no-plan"
+          : this.experiments.handRoiRecovery ? this.handRecovery.reason(handPlan, startedAt) : this.handRoiMisses < 2 ? "roi" : "miss-limit";
+        if (roiReason === "roi" && handPlan) {
           try {
             this.handCanvas ??= typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(512, 512) : document.createElement("canvas");
             drawHandInput(source, handPlan, this.handCanvas);
             handSource = this.handCanvas; usedPlan = handPlan;
-          } catch { handSource = source; }
+          } catch { handSource = source; roiReason = "draw-failed"; }
         }
-        const rawHands = this.measure("hands", () => handTask.detectForVideo(handSource, mediaPipeTimestampMs));
+        const handInferenceAt = this.now();
+        const rawHands = handTask.detectForVideo(handSource, mediaPipeTimestampMs);
+        const handInferenceEndedAt = this.now();
+        this.dependencies.metrics.recordInference("hands", handInferenceEndedAt, handInferenceEndedAt - handInferenceAt);
+        const handMappingAt = this.now();
         results.hands = usedPlan ? mapHandResultFromInput(rawHands, usedPlan) : rawHands;
+        const handMappingEndedAt = this.now();
         this.handRoiMisses = usedPlan ? results.hands.landmarks.length ? 0 : this.handRoiMisses + 1 : 0;
         this.handInputMode = usedPlan?.layout ?? "full-frame";
         this.handConfidenceMode = mode === "sensitive" && this.dependencies.runtime.hasSensitiveHands ? "sensitive" : "normal";
+        const coveredSides = handRegionCoverage(results.hands, handPlan);
+        this.handRecovery.observe(usedPlan !== null, handPlan, coveredSides, startedAt);
+        this.handDiagnostics = { hintStatus: describeHandHint(poseHint, handPlan, this.experiments.cachedPoseHint), roiReason,
+          expectedSides: handPlan?.regions.map(region => region.side) ?? [], coveredSides };
+        this.dependencies.metrics.observations?.execution(this.handInputMode, this.handConfidenceMode, true, results.hands,
+          { roiPreparationMs: handInferenceAt - handPreparationAt, inferenceMs: handInferenceEndedAt - handInferenceAt,
+            mappingMs: handMappingEndedAt - handMappingAt, workerTotalMs: 0 }, this.handDiagnostics);
         results.sampledAtMs.hands = startedAt;
         this.lastHandSampleMs = results.sampledAtMs.hands;
       }
-      if (tasks.pose && (fullRate || startedAt - this.lastPoseSampleMs >= (this.options.poseIntervalMs ?? 66.7))) {
+      const samplePose = this.experiments.boundedPose
+        ? this.poseScheduler.shouldSample(startedAt, previous?.pose, this.now() - startedAt)
+        : fullRate || startedAt - this.lastPoseSampleMs >= (this.options.poseIntervalMs ?? 66.7);
+      if (tasks.pose && samplePose) {
         results.pose = this.measure("pose", () => tasks.pose!.detectForVideo(source, mediaPipeTimestampMs));
         results.sampledAtMs.pose = startedAt;
         this.lastPoseSampleMs = results.sampledAtMs.pose;
@@ -332,11 +366,14 @@ export class TrackingPipeline {
         if (outcome.sample.postMessageMs !== undefined) this.dependencies.metrics.recordTiming?.("workerPostMessageMs", outcome.sample.postMessageMs);
         this.handInputMode = outcome.sample.inputMode ?? "full-frame";
         this.handConfidenceMode = outcome.sample.confidenceMode ?? "normal";
+        this.handDiagnostics = outcome.sample.diagnostics;
         this.dependencies.metrics.recordInference("hands", this.now(), outcome.sample.inferenceMs, workerTiming?.inferenceMs);
         this.lastHandSampleMs = startedAt;
-        if (outcome.sample.sampledAtMs === startedAt && this.now() - startedAt <= 150) {
+        const accepted = outcome.sample.sampledAtMs === startedAt && this.now() - startedAt >= 0 && this.now() - startedAt <= 150;
+        this.dependencies.metrics.observations?.execution(this.handInputMode, this.handConfidenceMode, accepted,
+          outcome.sample.result, workerTiming, this.handDiagnostics);
+        if (accepted) {
           results.hands = outcome.sample.result;
-          handObservation = outcome.sample;
           results.sampledAtMs.hands = outcome.sample.sampledAtMs;
         } else this.workerDroppedSamples++;
       }
@@ -344,8 +381,6 @@ export class TrackingPipeline {
       const mappingStartedAt = this.now();
       const frame = mapRawTrackingFrame(videoTimestampMs, results, this.previousFrame);
       const completedAt = this.now();
-      if (handObservation) this.dependencies.metrics.recordHandInput?.(handObservation.inputMode ?? "full-frame",
-        handObservation.timings?.inferenceMs ?? handObservation.inferenceMs, frame, handObservation.roiReason);
       this.dependencies.metrics.recordTiming?.("mapRawTrackingFrameMs", completedAt - mappingStartedAt);
       this.dependencies.metrics.recordTiming?.("trackingPublishMs", completedAt - startedAt);
       published = true;
@@ -377,6 +412,8 @@ export class TrackingPipeline {
             poseModel: this.dependencies.runtime.selectedPoseModel ?? null,
             videoWidth: video.videoWidth, videoHeight: video.videoHeight,
             cameraTrackFrameRate: this.cameraSettings?.frameRate ?? null,
+            handWorkerDelegateRequested: this.options.handWorkerDelegate ?? "inherit",
+            experiments: this.experiments,
           },
         });
       }
@@ -395,14 +432,20 @@ export class TrackingPipeline {
       return;
     } finally {
       snapshot?.close();
+      if (this.processingToken === processingToken) this.processingToken = null;
       // Final wall-clock measurement includes mapping, onFrame, diagnostics and bitmap
       // cleanup. UI snapshots emitted above see this sample at the next metrics tick.
-      if (published && generation === this.generation) this.dependencies.metrics.recordTiming?.("totalProcessFrameMs", this.now() - startedAt);
+      if (published && generation === this.generation) {
+        const duration = this.now() - startedAt;
+        this.dependencies.metrics.recordTiming?.("totalProcessFrameMs", duration);
+        this.poseScheduler.observeCompletion(duration);
+      }
     }
     this.scheduleNext(generation);
   }
 
   private async fallbackHands(error: unknown): Promise<void> {
+    this.dependencies.metrics.observations?.workerError();
     this.workerEnabled = false;
     this.workerFallback = error instanceof Error ? error.message : String(error);
     this.dependencies.handWorker?.dispose();
@@ -425,6 +468,7 @@ export class TrackingPipeline {
   }
 
   private cancelScheduledCallback(): void {
+    ++this.callbackEpoch;
     if (this.callbackId === null) return;
     if (this.callbackKind === "video" && this.video?.cancelVideoFrameCallback) {
       this.video.cancelVideoFrameCallback(this.callbackId);
