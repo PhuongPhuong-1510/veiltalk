@@ -4,12 +4,22 @@ vi.mock("./mediaPipeRuntime", () => ({ MediaPipeRuntime: class { constructor(...
 vi.mock("./handTrackingWorker", () => ({ HandTrackingWorker: class { constructor(...args: unknown[]) { mocks.worker(...args); } } }));
 vi.mock("./cameraController", () => ({ CameraController: class { constructor(...args: unknown[]) { mocks.camera(...args); } } }));
 import { TrackingPipeline, type TrackingPipelineOptions } from "./trackingPipeline";
+import { AVATAR_TRACKING_CONFIG } from "./avatarTrackingConfig";
+import { resolveTrackingExperiments } from "./trackingScheduler";
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); });
 function create(options: Partial<TrackingPipelineOptions> = {}) {
   vi.stubGlobal("document", { baseURI: "https://local.test/" });
   return new TrackingPipeline({ parallelHands: true, delegate: "GPU", onFrame: vi.fn(), ...options });
 }
 describe("tracking dependency configuration", () => {
+  it("uses GPU for avatar tracking and registers video callbacks ahead", () => {
+    create(AVATAR_TRACKING_CONFIG);
+    expect(mocks.runtime.mock.calls[0][1]).toBe("GPU");
+    expect(mocks.worker.mock.calls[0][1]).toBe("GPU");
+    expect(resolveTrackingExperiments(AVATAR_TRACKING_CONFIG.experiments)).toMatchObject({
+      callbackAhead: true, boundedPose: false, cachedPoseHint: false, handRoiRecovery: false,
+    });
+  });
   it.each([undefined, "GPU", "CPU", "AUTO"] as const)("inherits the main delegate %s without an override", delegate => {
     create({ delegate });
     expect(mocks.runtime.mock.calls[0][1]).toBe(delegate);

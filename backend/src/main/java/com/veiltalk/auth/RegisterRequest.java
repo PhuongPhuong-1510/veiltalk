@@ -20,6 +20,14 @@ public record RegisterRequest(
 
 		@JsonProperty("display_name")
 		@NotBlank
+		@ValidTextControls
 		@Size(max = 100)
-		String displayName) {
+		String displayName,
+
+		@NotBlank
+		@Size(max = 30)
+		String username,
+
+		@JsonProperty("username_searchable")
+		Boolean usernameSearchable) {
 }

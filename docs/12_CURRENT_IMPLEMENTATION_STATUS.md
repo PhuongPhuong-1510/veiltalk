@@ -336,20 +336,26 @@ Hiện `/avatar/customize` vẫn là `TaskPlaceholder`.
 - [ ] Gọi `GET /conversations`.
 - [ ] Cursor pagination.
 - [ ] Hiển thị last message và thời gian.
+- [ ] Responsive shell: sidebar desktop/tablet, bottom navigation mobile.
+- [ ] Header có `display_name`, lọc hội thoại hiện có và CTA sang SCR-11.
+- [ ] Skeleton trang đầu, loader trang tiếp theo, error/retry và offline banner giữ dữ liệu cũ.
 - [ ] Empty state và generic mask khi chưa có avatar.
-- [ ] Swipe action “Ẩn”.
+- [ ] Chỉ dùng avatar preview tĩnh; không render VRM theo từng row và không gọi avatar API kiểu N+1.
+- [ ] Swipe/menu action “Ẩn” local theo `conversation.id + updated_at`; tự hiện lại khi có tin mới.
 - [ ] Không hiển thị online/offline sai khi chưa có Presence Service.
+- [ ] Không hiển thị badge số chưa đọc khi API chưa có `unread_count`; chỉ dùng emphasis có thể suy ra an toàn từ last message.
+- [ ] Điều hướng row tới `/conversations/{conversationId}`; không nhúng message list vào Home.
 
-Hiện `/home` vẫn là `TaskPlaceholder`.
+**Design lock 2026-11-02:** phạm vi và trạng thái UX đã chốt tại `docs/05_UI_UX.md` mục 5.8. API hiện chỉ có `other_user.avatar_url` và chưa có `unread_count`/presence; generic mask là fallback bắt buộc cho tới khi contract được mở rộng. Hiện `/home` vẫn là `TaskPlaceholder`, chưa bắt đầu implementation P4-T12.
 
 ### 6.4. P4-T13 — Tìm người dùng
 
-- [ ] Search input auto-focus.
-- [ ] Gọi `POST /users/search`.
-- [ ] Giữ thông báo anti-enumeration giống nhau cho không tồn tại/chưa discoverable.
-- [ ] Countdown khi backend trả 429.
-- [ ] Lưu local history tối đa năm email.
-- [ ] Tạo/mở conversation từ kết quả tìm kiếm.
+- [x] Search input auto-focus; một input phân loại username/email.
+- [x] Giữ exact-email `POST /users/search` và thêm exact/prefix `POST /users/search/usernames`; không tìm `display_name`.
+- [x] Giữ anti-enumeration của email và tách consent `username_searchable`.
+- [x] Debounce 350ms, abort/stale-response guard và countdown theo `Retry-After`; không cache result list.
+- [x] Lưu local history tối đa năm query theo user, xóa khi logout.
+- [x] Tạo/mở conversation từ kết quả tìm kiếm.
 
 ### 6.5. P4-T14 — Chat realtime
 

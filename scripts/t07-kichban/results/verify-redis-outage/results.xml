@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="scripts\t07-kichban\auth-conv.test.cjs" time="0.094115" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\auth-conv.test.cjs"/>
+	<testcase name="scripts\t07-kichban\message.test.cjs" time="0.100179" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\message.test.cjs"/>
+	<testcase name="scripts\t07-kichban\realtime.test.cjs" time="0.100903" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\realtime.test.cjs"/>
+	<testcase name="T07-AUTH-009" time="4.797810" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 204, got 401, error=UNAUTHORIZED&#10;&#10;401 !== 204&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 204, got 401, error=UNAUTHORIZED&#10;&#10;401 !== 204">
+[Error [ERR_TEST_FAILURE]: HTTP expected 204, got 401, error=UNAUTHORIZED
+
+401 !== 204
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 204, got 401, error=UNAUTHORIZED
+  
+  401 !== 204
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:34:10)
+      at ok (C:\project\veiltalk\scripts\t04-api\support.cjs:40:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs:171:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 401,
+    expected: 204,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-FAIL-003" time="4.367691" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="scripts\t07-kichban\signaling-harness.test.cjs" time="0.117741" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\signaling-harness.test.cjs"/>
+	<testcase name="scripts\t07-kichban\video.test.cjs" time="0.083465" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\video.test.cjs"/>
+	<!-- tests 7 -->
+	<!-- suites 0 -->
+	<!-- pass 6 -->
+	<!-- fail 1 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 9770.9036 -->
+</testsuites>

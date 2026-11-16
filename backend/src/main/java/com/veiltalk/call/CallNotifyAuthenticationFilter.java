@@ -6,8 +6,9 @@ import java.security.MessageDigest;
 
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.veiltalk.auth.InternalSecretPolicy;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,10 +25,7 @@ public class CallNotifyAuthenticationFilter extends OncePerRequestFilter {
 	private final byte[] expectedAuthorization;
 
 	public CallNotifyAuthenticationFilter(CallNotifyProperties properties) {
-		String secret = properties.secret();
-		if (!StringUtils.hasText(secret)) {
-			throw new IllegalStateException("INTERNAL_CALL_NOTIFY_SECRET phải được cấu hình và không được rỗng");
-		}
+		String secret = InternalSecretPolicy.requireStrongSecret(properties.secret(), "INTERNAL_CALL_NOTIFY_SECRET");
 		this.expectedAuthorization = ("Bearer " + secret).getBytes(StandardCharsets.UTF_8);
 	}
 

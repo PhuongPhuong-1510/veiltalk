@@ -1,0 +1,8 @@
+{
+  "caseId": "SUPPLY-003",
+  "checkedAt": "2026-10-28T08:12:13.376Z",
+  "pomSha256": "0b7357eeea77fc13bc663a2f9db5ea460ee8bac3f78578aefc6744cd640fc192",
+  "mavenTreeSha256": "912d0b51a555def7a72b21f0e03a00ce82e2484d78925984c4ba09befa09187b",
+  "frontendLockSha256": "a39c565cd87f05fe6f33f6e44f5c300b1becd5d7789d1d04b4f44dbf92a1adc5",
+  "signalingLockSha256": "cd4294b49c3d03486cb1b9975f8cbf39f3274621713f9032f4ea1127c3b04f09"
+}

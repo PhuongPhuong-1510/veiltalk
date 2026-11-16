@@ -9,6 +9,9 @@ import com.veiltalk.auth.User;
 import com.veiltalk.auth.UserRepository;
 import com.veiltalk.auth.UserTokenRevocationService;
 import com.veiltalk.video.VideoAccountCleanupService;
+import com.veiltalk.avatar.AvatarProfileRepository;
+import com.veiltalk.avatar.AvatarPortraitCleanupJob;
+import com.veiltalk.avatar.AvatarPortraitCleanupJobRepository;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,18 +28,24 @@ public class UserAccountService {
 	private final PasswordEncoder passwordEncoder;
 	private final UserTokenRevocationService userTokenRevocationService;
 	private final VideoAccountCleanupService videoAccountCleanupService;
+	private final AvatarProfileRepository avatarProfiles;
+	private final AvatarPortraitCleanupJobRepository avatarCleanupJobs;
 
 	public UserAccountService(
 			UserRepository userRepository,
 			RefreshTokenRepository refreshTokenRepository,
 			PasswordEncoder passwordEncoder,
 			UserTokenRevocationService userTokenRevocationService,
-			VideoAccountCleanupService videoAccountCleanupService) {
+			VideoAccountCleanupService videoAccountCleanupService,
+			AvatarProfileRepository avatarProfiles,
+			AvatarPortraitCleanupJobRepository avatarCleanupJobs) {
 		this.userRepository = userRepository;
 		this.refreshTokenRepository = refreshTokenRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.userTokenRevocationService = userTokenRevocationService;
 		this.videoAccountCleanupService = videoAccountCleanupService;
+		this.avatarProfiles = avatarProfiles;
+		this.avatarCleanupJobs = avatarCleanupJobs;
 	}
 
 	@Transactional
@@ -52,6 +61,15 @@ public class UserAccountService {
 		refreshTokenRepository.revokeAllActiveByUserId(authenticatedUserId, revokedAt);
 		userRepository.saveAndFlush(user);
 		userTokenRevocationService.revokeAllIssuedTokens(authenticatedUserId, revokedAt);
+		avatarProfiles.findByUserId(authenticatedUserId).ifPresent(profile -> {
+			String objectKey = profile.getPortraitObjectKey();
+			if (objectKey != null && !objectKey.isBlank()) {
+				avatarCleanupJobs.save(AvatarPortraitCleanupJob.after(objectKey, revokedAt.plusSeconds(86_400)));
+				profile.setPortraitObjectKey(null);
+				profile.setPortraitVersion(null);
+				avatarProfiles.save(profile);
+			}
+		});
 
 		// P2-T24: abort mọi phiên quay video còn dở. Chạy SAU khi soft-delete/revoke đã ghi
 		// nhận ở trên — service này tự nuốt lỗi và dùng transaction riêng nên không kéo theo

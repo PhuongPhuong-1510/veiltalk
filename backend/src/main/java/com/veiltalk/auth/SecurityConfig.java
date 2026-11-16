@@ -24,6 +24,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.DispatcherType;
 
 import com.veiltalk.call.CallNotifyAuthenticationFilter;
 import com.veiltalk.video.VideoWebhookAuthenticationFilter;
@@ -61,8 +62,10 @@ public class SecurityConfig {
 					response.getWriter().write(UNAUTHORIZED_RESPONSE);
 				}))
 				.authorizeHttpRequests(authorize -> authorize
+						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 						.requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
 						.requestMatchers(HttpMethod.GET, "/avatars/models").permitAll()
+						.requestMatchers(HttpMethod.GET, "/avatars/*/portrait").permitAll()
 						.requestMatchers("/auth/**", "/actuator/health/**", "/internal/**", "/ws/messaging").permitAll()
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.anyRequest().authenticated())

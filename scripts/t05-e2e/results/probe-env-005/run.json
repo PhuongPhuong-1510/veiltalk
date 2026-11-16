@@ -1,0 +1,43 @@
+{
+  "runId": "veiltalk-e2e-1792415228191-715fe4",
+  "date": "2026-10-19T13:08:00.100Z",
+  "exitCode": 1,
+  "resources": {
+    "containers": [
+      "veiltalk-e2e-1792415228191-715fe4-postgres",
+      "veiltalk-e2e-1792415228191-715fe4-redis",
+      "veiltalk-e2e-1792415228191-715fe4-minio"
+    ],
+    "postgresMarker": "veiltalk-e2e-1792415228191-715fe4"
+  },
+  "services": [
+    "Spring Boot JAR",
+    "Node signaling",
+    "PostgreSQL",
+    "Redis",
+    "MinIO with webhook"
+  ],
+  "limits": [
+    "No browser/WebRTC media",
+    "No load test",
+    "No external network/NAT test"
+  ],
+  "cleanup": {
+    "verified": true,
+    "error": null
+  },
+  "devIsolation": {
+    "verified": true,
+    "error": null,
+    "before": {
+      "ids": [
+        "73d55707c404f4fbfc4debdd9375965374e9b54da662186ada799621172c5fb6",
+        "a45efafb0af6bb4087f52736992d77b35ce9a2ea25720194c964d8fb85fd606f",
+        "e107ea5fc7f012a47c264d64b706da253da8ffe8588fada3c50cb0226e51ec63"
+      ],
+      "databaseHash": "74bcf4fac21f45b74a77404759d7a2859262f506b91af0a815fe28ec24e2e741",
+      "redisHash": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "minioHash": "e065269993305de17cf6577a953a2fdf6e89a53d9051c806d6c25b2058072b3a"
+    }
+  }
+}

@@ -6,5 +6,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record CallNotifyRequest(
 		@JsonProperty("caller_id") UUID callerId,
-		@JsonProperty("callee_id") UUID calleeId) {
+		@JsonProperty("callee_id") UUID calleeId,
+		@JsonProperty("call_id") UUID callId) {
 }

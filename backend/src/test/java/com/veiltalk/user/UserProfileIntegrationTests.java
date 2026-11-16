@@ -91,16 +91,15 @@ class UserProfileIntegrationTests {
 	}
 
 	@Test
-	void clearsAvatarUrlWhenExplicitNullIsProvided() throws Exception {
+	void rejectsAvatarUrlUpdatesOutsideAvatarEditor() throws Exception {
 		mockMvc.perform(authenticatedPut("""
 					{ "avatar_url": null }
 					"""))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.avatar_url").doesNotExist())
-				.andExpect(jsonPath("$.display_name").value("Profile user"));
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
 
 		assertThat(userRepository.findByIdAndDeletedAtIsNull(user.getId()).orElseThrow().getAvatarUrl())
-				.isNull();
+				.isEqualTo("https://cdn.example.com/old.png");
 	}
 
 	@Test

@@ -5,7 +5,9 @@ import java.util.UUID;
 import com.veiltalk.auth.UnauthorizedException;
 import com.veiltalk.auth.User;
 import com.veiltalk.auth.UserRepository;
+import com.veiltalk.auth.ValidationException;
 import com.veiltalk.avatar.AvatarProfileRepository;
+import com.veiltalk.avatar.AvatarPortraitResolver;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,12 +19,15 @@ public class UserProfileService {
 
 	private final UserRepository userRepository;
 	private final AvatarProfileRepository avatarProfileRepository;
+	private final AvatarPortraitResolver avatarPortraitResolver;
 
 	public UserProfileService(
 			UserRepository userRepository,
-			AvatarProfileRepository avatarProfileRepository) {
+			AvatarProfileRepository avatarProfileRepository,
+			AvatarPortraitResolver avatarPortraitResolver) {
 		this.userRepository = userRepository;
 		this.avatarProfileRepository = avatarProfileRepository;
+		this.avatarPortraitResolver = avatarPortraitResolver;
 	}
 
 	@Transactional(readOnly = true)
@@ -35,11 +40,11 @@ public class UserProfileService {
 			UUID authenticatedUserId,
 			UserProfileUpdateRequest request) {
 		User user = requireActiveUser(authenticatedUserId);
+		if (request.isAvatarUrlProvided()) {
+			throw new ValidationException("avatar_url is managed by the avatar editor");
+		}
 		if (request.isDisplayNameProvided()) {
 			user.setDisplayName(request.getDisplayName());
-		}
-		if (request.isAvatarUrlProvided()) {
-			user.setAvatarUrl(request.getAvatarUrl());
 		}
 		userRepository.saveAndFlush(user);
 		return toResponse(user);
@@ -57,6 +62,12 @@ public class UserProfileService {
 		User user = requireActiveUser(authenticatedUserId);
 		if (request.getDiscoverable() != null) {
 			user.setDiscoverable(request.getDiscoverable());
+		}
+		if (request.getUsernameSearchable() != null) {
+			if (request.getUsernameSearchable() && user.getUsername() == null) {
+				throw new UsernameRequiredException();
+			}
+			user.setUsernameSearchable(request.getUsernameSearchable());
 		}
 		if (request.getEmailNotifications() != null) {
 			user.setEmailNotifications(request.getEmailNotifications());
@@ -77,8 +88,9 @@ public class UserProfileService {
 		return new UserProfileResponse(
 				user.getId(),
 				user.getEmail(),
+				user.getUsername(),
 				user.getDisplayName(),
-				user.getAvatarUrl(),
+				avatarPortraitResolver.resolve(user.getId(), user.getAvatarUrl()),
 				user.getRole().getDatabaseValue(),
 				avatarProfileRepository.existsByUserId(user.getId()),
 				user.getCreatedAt());
@@ -87,6 +99,7 @@ public class UserProfileService {
 	private UserSettingsResponse toSettingsResponse(User user) {
 		return new UserSettingsResponse(
 				user.isDiscoverable(),
+				user.isUsernameSearchable(),
 				user.isEmailNotifications(),
 				user.getTheme().getDatabaseValue());
 	}

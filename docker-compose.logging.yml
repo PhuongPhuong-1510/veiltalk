@@ -1,0 +1,26 @@
+# Linux production overlay: docker compose -f docker-compose.yml -f docker-compose.logging.yml up -d
+# Requires the host rsyslog and logrotate configuration under ops/logging/.
+x-veiltalk-logging: &veiltalk-logging
+  driver: syslog
+  options:
+    syslog-address: "unixgram:///dev/log"
+    tag: "veiltalk-{{.Name}}"
+
+services:
+  postgres:
+    logging: *veiltalk-logging
+  redis:
+    logging: *veiltalk-logging
+  minio:
+    logging: *veiltalk-logging
+  backend:
+    logging: *veiltalk-logging
+  signaling:
+    logging: *veiltalk-logging
+  frontend:
+    logging: *veiltalk-logging
+  nginx:
+    logging: *veiltalk-logging
+    volumes:
+      - ./ops/logging/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ops/logging/nginx-safe-access.conf:/etc/nginx/conf.d/99-veiltalk-safe-access.conf:ro

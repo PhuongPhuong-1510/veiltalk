@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="scripts\t06-seciurity\boundaries.test.cjs" time="0.160938" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\boundaries.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\config-security.test.cjs" time="0.116210" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\config-security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\critical.test.cjs" time="0.155662" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\critical.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\cross-security.test.cjs" time="0.156335" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\cross-security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\extended.test.cjs" time="0.163162" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\extended.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\observability.test.cjs" time="0.158087" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\observability.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\ownership.test.cjs" time="0.155397" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\ownership.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\security.test.cjs" time="0.155309" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\signaling-security.test.cjs" time="0.153827" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\signaling-security.test.cjs"/>
+	<testcase name="VID-020 false container or codec never becomes READY" time="5.024470" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<!-- tests 10 -->
+	<!-- suites 0 -->
+	<!-- pass 10 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 6592.6762 -->
+</testsuites>

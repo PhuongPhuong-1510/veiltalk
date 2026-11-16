@@ -128,6 +128,14 @@ describe("messagingWS", () => {
     expect(MockWebSocket.instances).toHaveLength(1);
   });
 
+  it("listener đăng ký sau khi socket đã mở vẫn nhận ngay trạng thái open", () => {
+    ws.connectMessagingWS();
+    MockWebSocket.instances[0].triggerOpen();
+    const handler = vi.fn();
+    ws.onStatusChange(handler);
+    expect(handler).toHaveBeenCalledWith("open");
+  });
+
   it("connect không tạo socket thứ hai khi socket còn đang CONNECTING (idempotent)", () => {
     ws.connectMessagingWS();
     expect(MockWebSocket.instances[0].readyState).toBe(MockWebSocket.CONNECTING);
@@ -144,6 +152,19 @@ describe("messagingWS", () => {
     MockWebSocket.instances[0].triggerOpen();
     MockWebSocket.instances[0].triggerMessage({ type: "NEW_MESSAGE", data: { id: "m1" } });
     expect(handler).toHaveBeenCalledWith({ id: "m1" });
+  });
+
+  it("TYPING và TYPING_STOP được chuyển tới handler", () => {
+    const typing = vi.fn(), stopped = vi.fn();
+    ws.onMessage("TYPING", typing);
+    ws.onMessage("TYPING_STOP", stopped);
+    ws.connectMessagingWS();
+    const socket = MockWebSocket.instances[0];
+    socket.triggerOpen();
+    socket.triggerMessage({ type: "TYPING", data: { conversation_id: "c1" } });
+    socket.triggerMessage({ type: "TYPING_STOP", data: { conversation_id: "c1" } });
+    expect(typing).toHaveBeenCalledWith({ conversation_id: "c1" });
+    expect(stopped).toHaveBeenCalledWith({ conversation_id: "c1" });
   });
 
   it("onMessage unsubscribe -> handler không còn được gọi", () => {

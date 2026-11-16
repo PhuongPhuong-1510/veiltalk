@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="scripts\t06-seciurity\boundaries.test.cjs" time="0.157082" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\boundaries.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\config-security.test.cjs" time="0.114591" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\config-security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\critical.test.cjs" time="0.153921" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\critical.test.cjs"/>
+	<testcase name="INT-008 notify validates participants and signaling binds caller to authenticated socket" time="2.057893" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-008 messaging WS caps twenty attempts per IP and five live sessions per user" time="1.192764" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="scripts\t06-seciurity\observability.test.cjs" time="0.150974" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\observability.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\ownership.test.cjs" time="0.150911" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\ownership.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\security.test.cjs" time="0.153772" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\signaling-security.test.cjs" time="0.148198" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\signaling-security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\video-security.test.cjs" time="0.154120" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\video-security.test.cjs"/>
+	<!-- tests 10 -->
+	<!-- suites 0 -->
+	<!-- pass 10 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 65018.2016 -->
+</testsuites>

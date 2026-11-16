@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="ABUSE-006 login failure pair and IP limits are temporary, isolated and neutral" time="3.307545" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-007 successful and failed registration limits are separate" time="2.306253" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<!-- tests 2 -->
+	<!-- suites 0 -->
+	<!-- pass 2 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 5796.2938 -->
+</testsuites>

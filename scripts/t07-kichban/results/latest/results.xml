@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="T07-AUTH-004" time="0.904377" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-AUTH-005" time="0.253428" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 401, got 200, error=none&#10;&#10;200 !== 401&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 401, got 200, error=none&#10;&#10;200 !== 401">
+[Error [ERR_TEST_FAILURE]: HTTP expected 401, got 200, error=none
+
+200 !== 401
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 401, got 200, error=none
+  
+  200 !== 401
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:34:10)
+      at ok (C:\project\veiltalk\scripts\t04-api\support.cjs:40:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\auth-conv.test.cjs:33:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 401,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-AUTH-006" time="0.372484" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-AUTH-007" time="0.260103" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-AUTH-008" time="0.498399" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-AUTH-011" time="1.239286" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-AUTH-012" time="0.414058" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CONV-001" time="0.381664" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CONV-002" time="0.350278" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CONV-003" time="0.426060" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CONV-004" time="0.737252" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CONV-008" time="0.584261" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-001" time="1.259866" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-002" time="0.452403" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-003" time="0.508843" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-004" time="0.632367" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-007" time="0.440719" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-009" time="0.441053" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-010" time="1.760361" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-011" time="0.409050" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-013" time="0.744605" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-014" time="0.629753" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-015" time="0.597204" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-TX-006" time="0.598652" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-003" time="1.140102" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-005" time="0.302156" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-006" time="0.466703" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-009" time="0.582664" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-010" time="0.618929" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-001" time="0.388957" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-002" time="0.340892" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-003" time="1.735104" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-005" time="2.305217" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-006" time="2.112477" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-008" time="0.957452" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-010" time="1.070842" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-016" time="1.707450" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-001" time="0.386281" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-002" time="0.152778" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-003" time="0.542856" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-004" time="0.463822" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-005" time="0.323895" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-007" time="0.292156" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-013" time="4.283153" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Missing WS CALL_ANSWER; received ; close=open">
+		<failure type="testCodeFailure" message="Missing WS CALL_ANSWER; received ; close=open">
+[Error [ERR_TEST_FAILURE]: Missing WS CALL_ANSWER; received ; close=open] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: Error: Missing WS CALL_ANSWER; received ; close=open
+      at Socket.take (C:\project\veiltalk\scripts\t04-api\support.cjs:154:11)
+      at async TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\realtime.test.cjs:288:22)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-AUTH-002" time="0.134700" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-AUTH-003" time="0.145120" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-AUTH-001" time="0.385990" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-AUTH-010" time="4.711627" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CONV-005" time="1.539849" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CONV-006" time="1.609015" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CONV-007" time="0.321524" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-005" time="1.310550" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-008" time="0.291005" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-012" time="0.458828" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-MSG-016" time="0.819679" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-004" time="0.431564" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-008" time="1.514791" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-011" time="0.572986" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-PUB-012" time="0.471712" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-009" time="1.105766" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-011" time="0.387875" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-014" time="0.337467" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-WS-015" time="1.608025" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-008" time="0.321574" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-010" time="0.261838" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-014" time="0.290885" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-008" time="0.761153" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-009" time="0.346862" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-010" time="1.195101" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-011" time="1.020893" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-014" time="0.487046" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-017" time="0.544180" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-020" time="0.413833" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-LOCK-006" time="5.725643" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-LOCK-008" time="0.990833" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-LOCK-009" time="6.013228" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-LOCK-010" time="0.342071" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-LOCK-011" time="0.407765" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-LOCK-012" time="0.999055" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-FAIL-001" time="4.531977" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-REC-010" time="0.600228" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-006" time="0.708495" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-009" time="0.168884" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Callee received a duplicate offer when registration crossed notify completion&#10;&#10;1 !== 0&#10;">
+		<failure type="testCodeFailure" message="Callee received a duplicate offer when registration crossed notify completion&#10;&#10;1 !== 0">
+[Error [ERR_TEST_FAILURE]: Callee received a duplicate offer when registration crossed notify completion
+
+1 !== 0
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Callee received a duplicate offer when registration crossed notify completion
+  
+  1 !== 0
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\signaling-harness.test.cjs:92:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-CALL-011" time="0.044575" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-CALL-012" time="0.030314" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-001" time="0.732491" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-002" time="0.254190" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="The losing terminal operation must return 409; statuses=404,204&#10;&#10;0 !== 1&#10;">
+		<failure type="testCodeFailure" message="The losing terminal operation must return 409; statuses=404,204&#10;&#10;0 !== 1">
+[Error [ERR_TEST_FAILURE]: The losing terminal operation must return 409; statuses=404,204
+
+0 !== 1
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The losing terminal operation must return 409; statuses=404,204
+  
+  0 !== 1
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\video.test.cjs:27:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-VID-003" time="0.502641" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Deleting a recording/processing video leaked its upload session&#10;&#10;'1' !== '0'&#10;">
+		<failure type="testCodeFailure" message="Deleting a recording/processing video leaked its upload session&#10;&#10;'1' !== '0'">
+[Error [ERR_TEST_FAILURE]: Deleting a recording/processing video leaked its upload session
+
+'1' !== '0'
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Deleting a recording/processing video leaked its upload session
+  
+  '1' !== '0'
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\video.test.cjs:42:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '1',
+    expected: '0',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-VID-004" time="0.477618" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-005" time="0.214833" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Part 3 was reserved before part 2 bytes and its real ETag existed in MinIO; initial statuses=200,400, final=200&#10;&#10;200 !== 400&#10;">
+		<failure type="testCodeFailure" message="Part 3 was reserved before part 2 bytes and its real ETag existed in MinIO; initial statuses=200,400, final=200&#10;&#10;200 !== 400">
+[Error [ERR_TEST_FAILURE]: Part 3 was reserved before part 2 bytes and its real ETag existed in MinIO; initial statuses=200,400, final=200
+
+200 !== 400
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Part 3 was reserved before part 2 bytes and its real ETag existed in MinIO; initial statuses=200,400, final=200
+  
+  200 !== 400
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\video.test.cjs:78:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-VID-006" time="0.789839" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-012" time="0.750606" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-013" time="0.489785" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-018" time="0.604756" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T07-VID-022" time="2.456816" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<!-- tests 95 -->
+	<!-- suites 0 -->
+	<!-- pass 89 -->
+	<!-- fail 6 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 87346.6143 -->
+</testsuites>

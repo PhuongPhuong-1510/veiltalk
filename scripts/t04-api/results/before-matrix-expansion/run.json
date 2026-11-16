@@ -1,0 +1,17 @@
+{
+  "runId": "veiltalk-e2e-1792387253232-fb8788",
+  "date": "2026-10-19T05:23:28.155Z",
+  "exitCode": 1,
+  "services": [
+    "Spring Boot JAR",
+    "Node signaling",
+    "PostgreSQL",
+    "Redis",
+    "MinIO with webhook"
+  ],
+  "limits": [
+    "No browser/WebRTC media",
+    "No load test",
+    "No external network/NAT test"
+  ]
+}

@@ -15,7 +15,7 @@ function createCallNotifyClient({ backendUrl, secret, timeoutMs = 2500, fetchImp
     throw new Error("secret is required to create the call notify client");
   }
 
-  async function notify(callerId, calleeId) {
+  async function notify(callerId, calleeId, callId) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -25,7 +25,7 @@ function createCallNotifyClient({ backendUrl, secret, timeoutMs = 2500, fetchImp
           "Content-Type": "application/json",
           Authorization: `Bearer ${secret}`,
         },
-        body: JSON.stringify({ caller_id: callerId, callee_id: calleeId }),
+        body: JSON.stringify({ caller_id: callerId, callee_id: calleeId, call_id: callId }),
         signal: controller.signal,
       });
       return response.ok ? "notified" : "failed";

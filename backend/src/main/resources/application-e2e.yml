@@ -1,0 +1,9 @@
+# Existing T04/T05 suites register many accounts through one loopback IP.
+# Keep their fixtures isolated from the production thresholds. T06 abuse runs
+# override these values explicitly to exercise the production policy.
+auth:
+  abuse:
+    login-pair-limit: ${AUTH_LOGIN_PAIR_LIMIT:1000}
+    login-ip-limit: ${AUTH_LOGIN_IP_LIMIT:1000}
+    register-success-limit: ${AUTH_REGISTER_SUCCESS_LIMIT:1000}
+    register-failure-limit: ${AUTH_REGISTER_FAILURE_LIMIT:1000}

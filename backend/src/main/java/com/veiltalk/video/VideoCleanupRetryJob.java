@@ -93,7 +93,9 @@ public class VideoCleanupRetryJob {
 			switch (job.getOperation()) {
 				case ABORT_MULTIPART -> {
 					multipartStorage.abortMultipartUpload(job.getStoragePath(), job.getUploadId());
-					videoRepository.failAndSoftDeleteRecording(job.getVideoId(), clock.instant());
+					if (job.getVideoId() != null) {
+						videoRepository.failAndSoftDeleteRecording(job.getVideoId(), clock.instant());
+					}
 				}
 				case REMOVE_OBJECT -> multipartStorage.removeObject(job.getStoragePath());
 			}

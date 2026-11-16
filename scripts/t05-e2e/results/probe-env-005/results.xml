@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="T05-ENV-001" time="1.614809" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ENV-005" time="0.001607" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Intentional T05 runner failure probe">
+		<failure type="testCodeFailure" message="Intentional T05 runner failure probe">
+[Error [ERR_TEST_FAILURE]: Intentional T05 runner failure probe] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Intentional T05 runner failure probe
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t05-e2e\environment.test.cjs:26:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'fail',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<!-- tests 2 -->
+	<!-- suites 0 -->
+	<!-- pass 1 -->
+	<!-- fail 1 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 1815.7093 -->
+	<testcase name="T05-ENV-004" />
+	<testcase name="T05-ENV-002" />
+	<testcase name="T05-ENV-006" />
+</testsuites>

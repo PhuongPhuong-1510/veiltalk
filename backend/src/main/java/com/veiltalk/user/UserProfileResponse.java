@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record UserProfileResponse(
 		UUID id,
 		String email,
+		String username,
 		@JsonProperty("display_name") String displayName,
 		@JsonProperty("avatar_url") String avatarUrl,
 		String role,

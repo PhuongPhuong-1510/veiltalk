@@ -1,6 +1,6 @@
 import type { RawPoseSampleV1 } from "./rawTrackingTypes";
 
-/** Experimental controls are opt-in; production callers omit this object. */
+/** Avatar tracking enables callbackAhead; the remaining variants stay opt-in for regression checks. */
 export interface TrackingExperiments {
   callbackAhead?: boolean;
   boundedPose?: boolean;

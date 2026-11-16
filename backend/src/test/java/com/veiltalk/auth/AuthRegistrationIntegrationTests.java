@@ -43,6 +43,7 @@ class AuthRegistrationIntegrationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.user.id").isNotEmpty())
 				.andExpect(jsonPath("$.user.email").value("tc01@example.com"))
+				.andExpect(jsonPath("$.user.username").value("tc01"))
 				.andExpect(jsonPath("$.user.display_name").value("TC 01"))
 				.andExpect(jsonPath("$.user.role").value("user"))
 				.andExpect(jsonPath("$.user.created_at").isNotEmpty())
@@ -53,6 +54,8 @@ class AuthRegistrationIntegrationTests {
 
 		User savedUser = userRepository.findByEmailAndDeletedAtIsNull("tc01@example.com").orElseThrow();
 		assertThat(savedUser.getPasswordHash()).isNotEqualTo("Secure123");
+		assertThat(savedUser.getUsername()).isEqualTo("tc01");
+		assertThat(savedUser.isUsernameSearchable()).isFalse();
 		assertThat(passwordEncoder.matches("Secure123", savedUser.getPasswordHash())).isTrue();
 
 		String refreshToken = com.jayway.jsonpath.JsonPath.read(
@@ -108,17 +111,54 @@ class AuthRegistrationIntegrationTests {
 				.hasSize(2);
 	}
 
+	@Test
+	void normalizesUsernameAndPersistsExplicitSearchConsent() throws Exception {
+		mockMvc.perform(registerRequest("normalized@example.com", "Secure123", "Normalized", "  Mixed.Name  ", true))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.user.username").value("mixed.name"));
+
+		User saved = userRepository.findByUsername("mixed.name").orElseThrow();
+		assertThat(saved.isUsernameSearchable()).isTrue();
+	}
+
+	@Test
+	void rejectsDuplicateAndReservedUsernames() throws Exception {
+		mockMvc.perform(registerRequest("first@example.com", "Secure123", "First", "shared_name", false))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(registerRequest("second@example.com", "Secure123", "Second", "SHARED_NAME", false))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code").value("USERNAME_TAKEN"));
+
+		mockMvc.perform(registerRequest("reserved@example.com", "Secure123", "Reserved", "admin", false))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+	}
+
 	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder registerRequest(
 			String email,
 			String password,
 			String displayName) {
+		String username = email.substring(0, email.indexOf('@')).replaceAll("[^a-zA-Z0-9]", "");
+		if (username.length() < 3) username = username + "user";
+		return registerRequest(email, password, displayName, username, false);
+	}
+
+	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder registerRequest(
+			String email,
+			String password,
+			String displayName,
+			String username,
+			boolean usernameSearchable) {
 		String body = """
 				{
 				  "email": "%s",
 				  "password": "%s",
-				  "display_name": "%s"
+				  "display_name": "%s",
+				  "username": "%s",
+				  "username_searchable": %s
 				}
-				""".formatted(email, password, displayName);
+				""".formatted(email, password, displayName, username, usernameSearchable);
 		return post("/auth/register")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body);

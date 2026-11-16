@@ -50,6 +50,10 @@ Tài liệu này đặc tả chi tiết toàn bộ REST API của hệ thống V
 
 - CORS: chỉ cho phép origin của client domain — nhất quán với NFR-32 và SAD mục 9.1.
 
+- Request body không hỗ trợ nén. `Content-Encoding` vắng mặt hoặc là `identity` được chấp nhận; encoding khác bị từ chối với HTTP 415 trước khi chạy nghiệp vụ.
+- JSON request có key trùng tên ở cùng một object bị từ chối HTTP 400 trước khi thực hiện nghiệp vụ; áp dụng cả khi key trùng là `user_id`, `model_id`, `upload_id`, `type` hoặc token.
+- `display_name` từ chối ký tự điều khiển Unicode bằng HTTP 400. Nội dung tin nhắn cho phép tab, LF và CRLF; U+0000 và các control character khác bị từ chối HTTP 400, không ghi dữ liệu.
+
 ### 1.3. Tài liệu liên quan
 
 - SRS v1.0 — yêu cầu chức năng FR-01 đến FR-22.
@@ -136,6 +140,8 @@ Request Body
 | **email**        | string   | Có           | Địa chỉ email — phải là email hợp lệ, chưa được đăng ký |
 | **password**     | string   | Có           | Mật khẩu — tối thiểu 8 ký tự, ít nhất 1 chữ hoa và 1 số |
 | **display_name** | string   | Có           | Tên hiển thị — 1-100 ký tự                              |
+| **username**     | string   | Có           | Định danh duy nhất 3–30 ký tự; backend trim/lowercase; chỉ gồm `a-z`, `0-9`, `.` và `_` |
+| **username_searchable** | boolean | Không | Cho phép người khác tìm bằng username; mặc định `false` |
 
 Response 201 Created
 
@@ -148,6 +154,9 @@ HTTP Status Codes
 | **201**         | Created     | Đăng ký thành công, tài khoản được tạo                                                                                 |
 | **400**         | Bad Request | Email không hợp lệ, mật khẩu không đủ mạnh, display_name trống                                                         |
 | **409**         | Conflict    | Email đang thuộc một tài khoản chưa bị xóa (`deleted_at IS NULL`)                                                     |
+| **429**         | Too Many Requests | Vượt giới hạn đăng ký thành công hoặc yêu cầu đăng ký thất bại theo IP; có `Retry-After` |
+
+Chính sách production MVP: tối đa 5 đăng ký **thành công**/IP/giờ và 30 yêu cầu đăng ký thất bại/IP/giờ. Yêu cầu thất bại không tiêu tốn hạn mức thành công. Bộ đếm Redis tự hết hạn; các ngưỡng và cửa sổ cấu hình được (xem deployment). Backend chỉ tin `X-Forwarded-For` khi request đến từ proxy được cấu hình tin cậy và header chứa một IP hợp lệ.
 
 Email của tài khoản đã soft delete không chặn đăng ký mới. Lần đăng ký sau tạo một user độc lập
 với UUID mới; không khôi phục hoặc liên kết dữ liệu của tài khoản cũ. Hành vi này đồng bộ với
@@ -180,6 +189,9 @@ HTTP Status Codes
 |-----------------|--------------|--------------------------------------------------------------------------------------|
 | **200**         | OK           | Đăng nhập thành công                                                                 |
 | **401**         | Unauthorized | Email hoặc mật khẩu không đúng — cùng một response body, không tiết lộ field nào sai |
+| **429**         | Too Many Requests | Đã có 5 lần đăng nhập thất bại/cặp email-IP hoặc 30 lần thất bại/IP trong 15 phút; có `Retry-After` |
+
+Giới hạn login dùng cửa sổ trượt Redis, tự hết hạn và không khóa tài khoản vĩnh viễn. Lỗi đăng nhập của email tồn tại và không tồn tại trả cùng thông điệp 401 trước khi vượt ngưỡng. Một IP bị giới hạn không làm chặn người dùng đăng nhập từ IP khác; proxy dùng chung IP có thể gây khóa nhầm tạm thời nên cần theo dõi 429 và điều chỉnh ngưỡng theo môi trường.
 
 ### 3.3. POST /auth/refresh
 
@@ -275,6 +287,7 @@ Request Body
 | **Field**               | **Kiểu** | **Bắt buộc** | **Mô tả**                                                                                                                                        |
 |-------------------------|----------|--------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
 | **discoverable**        | boolean  | Không        | true = cho phép người khác tìm thấy qua email; false = ẩn (mặc định)                                                                             |
+| **username_searchable** | boolean  | Không        | true = cho phép tìm bằng username; độc lập với quyền tìm qua email. Tài khoản chưa có username không thể bật |
 | **email_notifications** | boolean  | Không        | Bật/tắt thông báo email                                                                                                                          |
 | **theme**               | string   | Không        | 'dark' \| 'light' \| 'system' — preference lưu server-side để đồng bộ cross-device, không dùng localStorage (nhất quán với UI/UX Design mục 7.3) |
 
@@ -342,6 +355,16 @@ HTTP Status Codes
 | **400**         | Bad Request       | Email không đúng định dạng                                                                   |
 | **401**         | Unauthorized      | Token không hợp lệ                                                                           |
 | **429**         | Too Many Requests | Vượt rate limit 10 req/phút; header Retry-After ghi số giây cần chờ                          |
+
+### 4.7. POST /users/search/usernames
+
+Tìm user theo username chính xác hoặc prefix. Không tìm theo `display_name`, không fuzzy match và không trả email. Chỉ user còn hoạt động và đã bật `username_searchable` mới xuất hiện; requester không xuất hiện trong kết quả.
+
+Request: `{ "query": "@minh", "limit": 10 }`. Sau khi bỏ `@`, trim và lowercase, query phải dài 3–30 ký tự. `limit` không bắt buộc, mặc định 10 và tối đa 10.
+
+Response: `{ "data": [{ "id": "uuid", "username": "minh", "display_name": "Minh", "avatar_url": null }], "meta": { "limit": 10, "truncated": false } }`.
+
+Kết quả exact đứng trước prefix, sau đó ổn định theo `username`, `id`. Backend lấy tối đa `limit + 1` để xác định `truncated`, không chạy `COUNT(*)`. Rate limit dùng token bucket 30 request/phút/user, burst 10; 429 luôn có JSON error envelope và `Retry-After`.
 
 ## 5. Nhóm Avatar
 
@@ -453,6 +476,14 @@ Query Parameters
 Response 200 OK
 
 { "data": \[ { "id": "uuid", "other_user": { "id": "uuid", "display_name": "Nguyễn Văn B", "avatar_url": null }, "last_message": { "content": "Xin chào!", "sender_id": "uuid", "client_timestamp": "2026-06-21T10:30:00Z", "status": "delivered" }, "updated_at": "2026-06-21T10:30:00Z" } \], "next_cursor": "eyJpZCI6InV1aWQiLCJ0IjoiMTcyMCJ9", "has_more": true }
+
+**Ghi chú tích hợp SCR-10 (Home):**
+
+- `other_user.avatar_url` hiện là URL ảnh tĩnh, chưa đại diện đầy đủ cho avatar VRM đã chọn trong `avatar_profiles`.
+- Home không được gọi `GET /avatars/{userId}` cho từng row rồi dựng VRM vì tạo N+1 request và nhiều WebGL context.
+- Khi chưa có pipeline sinh preview tĩnh, client dùng generic mask VeilTalk. Hướng mở rộng ưu tiên là bổ sung `avatar_preview_url` vào `other_user` hoặc đồng bộ một preview tĩnh đáng tin cậy vào `avatar_url` khi avatar thay đổi.
+- Response hiện chưa có `unread_count`; client không được suy diễn badge số lượng. Nếu sản phẩm cần badge số, backend phải bổ sung field và định nghĩa cách tính theo người nhận.
+- Presence không thuộc response này. Không dùng `updated_at` để suy đoán online/offline.
 
 ### 6.3. GET /conversations/{id}
 
@@ -588,6 +619,10 @@ Request Body
 | **chunk_size_bytes**     | integer  | Có           | Kích thước mỗi chunk (bytes) — tối thiểu 5MB theo MinIO multipart requirement, khuyến nghị 10MB |
 | **format**               | string   | Không        | Định dạng file, mặc định 'mp4' (NFR-18)                                                         |
 
+`format` được lưu như client khai báo trong metadata. Khi tạo object key trên MinIO, backend thay ký tự ngoài `[A-Za-z0-9]` bằng `_` để dữ liệu client không tạo thêm đoạn đường dẫn hoặc thoát khỏi namespace `videos/{uuid}/`.
+
+Mỗi tài khoản có tối đa 3 phiên multipart `recording` đang mở. Phiên không có hoạt động cấp chunk trong 24 giờ hết hạn; tác vụ kiểm tra mỗi giờ hủy multipart trên MinIO, đánh dấu metadata thất bại/xóa mềm và dọn Redis. Giới hạn, TTL và chu kỳ cleanup cấu hình bằng `VIDEO_ACTIVE_UPLOAD_LIMIT`, `VIDEO_UPLOAD_SESSION_TTL_SECONDS`, `VIDEO_RECORDING_CLEANUP_INTERVAL_SECONDS`. Video `ready` không thuộc đối tượng cleanup này.
+
 Response 201 Created
 
 { "id": "uuid", "title": "Demo avatar 21/06", "status": "recording", "upload_id": "minio-multipart-upload-id", "first_chunk_url": "https://minio.internal/veiltalk/videos/uuid/part1?X-Amz-Signature=...", "part_number": 1, "created_at": "2026-06-21T10:00:00Z" }
@@ -600,6 +635,7 @@ HTTP Status Codes
 | **400**         | Bad Request          | estimated_size_bytes hoặc chunk_size_bytes không hợp lệ           |
 | **507**         | Insufficient Storage | Dung lượng tài khoản không đủ để chứa ước tính video này (NFR-19) |
 | **401**         | Unauthorized         | Token không hợp lệ                                                |
+| **429**         | Too Many Requests    | Đã có 3 phiên multipart đang mở; có `Retry-After`                 |
 
 ### 7.3. POST /videos/{id}/chunks
 
@@ -689,13 +725,13 @@ Request Header
 Authorization: Bearer <MINIO_WEBHOOK_SECRET>
 ```
 
-Backend so sánh constant-time toàn bộ giá trị `Bearer <configured-secret>`. Header thiếu, sai scheme, sai secret, JWT Bearer hợp lệ hoặc có ký tự thừa đều trả cùng `401 UNAUTHORIZED`; header và secret không được ghi log hay đưa vào response. `MINIO_WEBHOOK_SECRET` bắt buộc có giá trị, nếu thiếu/rỗng thì Backend fail-fast khi khởi động. Shared secret tĩnh không chống replay về mặt mật mã; conditional state transition idempotent giới hạn tác hại replay. HMAC body kèm timestamp/nonce hoặc mTLS là hardening ngoài MVP.
+Backend so sánh constant-time toàn bộ giá trị `Bearer <configured-secret>`. Header thiếu, sai scheme, sai secret, JWT Bearer hợp lệ hoặc có ký tự thừa đều trả cùng `401 UNAUTHORIZED`; header và secret không được ghi log hay đưa vào response. `MINIO_WEBHOOK_SECRET` phải có ít nhất 32 byte UTF-8; nếu thiếu/quá ngắn thì Backend fail-fast khi khởi động. Secret phải được sinh từ 32 byte ngẫu nhiên trở lên (ví dụ `openssl rand -hex 32`). Shared secret tĩnh không chống replay về mặt mật mã; conditional state transition idempotent giới hạn tác hại replay. HMAC body kèm timestamp/nonce hoặc mTLS là hardening ngoài MVP.
 
 Request từ MinIO (tự động; cấu trúc đã đối chiếu với MinIO `RELEASE.2025-09-07T16-13-09Z`)
 
 { "EventName": "s3:ObjectCreated:CompleteMultipartUpload", "Records": \[{ "eventName": "s3:ObjectCreated:CompleteMultipartUpload", "s3": { "bucket": { "name": "veiltalk" }, "object": { "key": "videos%2Fuuid%2Fsource.mp4", "size": 15728640, "eTag": "abc123" } } }\] }
 
-Backend validate cấu trúc toàn bộ `Records` trước khi update, URL-decode object key đúng một lần, kiểm event chính xác `s3:ObjectCreated:CompleteMultipartUpload` và bucket khớp cấu hình. Sau đó tìm video bằng exact `storage_path` và update nguyên tử `processing → ready` chỉ khi `deleted_at IS NULL` và `file_size_bytes = object.size` (T22 đã lưu kích thước thật).
+Backend validate cấu trúc toàn bộ `Records` trước khi update, URL-decode object key đúng một lần, kiểm event chính xác `s3:ObjectCreated:CompleteMultipartUpload` và bucket khớp cấu hình. Sau đó tìm video bằng exact `storage_path`, đối chiếu kích thước và chạy `ffprobe` trên object hoàn chỉnh. Chỉ media phát được với container/codec hợp lệ mới được chuyển nguyên tử `processing → ready` khi `deleted_at IS NULL` và `file_size_bytes = object.size` (T22 đã lưu kích thước thật). MP4 chấp nhận video H.264 và audio AAC; WebM chấp nhận video VP8/VP9/AV1 và audio Opus/Vorbis. Phải có video stream, ít nhất một frame đọc được và duration dương. Media sai chuyển `failed`, object được xóa hoặc đưa vào hàng đợi retry, không tính quota READY và không cấp `view_url`. Nhánh reconcile khi Complete trả lỗi và tác vụ timeout cũng kiểm định media trước READY.
 
 - JSON/record sai cấu trúc → `400 VALIDATION_ERROR`, không partial update.
 - Thiếu/sai Authorization → `401 UNAUTHORIZED` với cùng response trung lập.
@@ -706,7 +742,7 @@ Backend validate cấu trúc toàn bộ `Records` trước khi update, URL-decod
 
 ### 7.7. GET /videos/{id}
 
-Lấy chi tiết một video kèm presigned URL để phát. URL này có thời hạn 1 giờ.
+Lấy chi tiết một video kèm presigned URL để phát. URL mặc định có thời hạn 1 giờ; `VIDEO_VIEW_URL_EXPIRY_SECONDS` cho phép đặt TTL ngắn trong môi trường kiểm thử hạn dùng chữ ký.
 
 Response 200 OK — video ready
 
@@ -828,6 +864,8 @@ Xác thực
 
 - Origin của client phải nằm trong `CORS_ALLOWED_ORIGINS`; không chấp nhận wildcard.
 
+- Sau xác thực, Redis giới hạn 20 lần bắt tay mới/IP trong 60 giây và tối đa 5 kết nối đang mở/user. Vượt ngưỡng trả HTTP 429 trước upgrade. Lease của kết nối được gia hạn khi nhận heartbeat `PONG`, xóa khi đóng và tự hết hạn sau 120 giây nếu backend dừng đột ngột. IP chuyển tiếp chỉ được tin khi request đến từ proxy trong `AUTH_TRUSTED_PROXY_IPS`; các ngưỡng và TTL cấu hình bằng `MESSAGING_WS_CONNECTION_*`.
+
 - Access token trong query là dữ liệu nhạy cảm. Backend và reverse proxy không được ghi
   nguyên query URI vào log. Production bắt buộc dùng `wss://`.
 
@@ -853,7 +891,7 @@ Message từ server → client
 
 { "type": "MESSAGE_STATUS_UPDATE", "data": { "id": "uuid", "status": "delivered" } }
 
-{ "type": "CALL_INCOMING", "data": { "caller_id": "uuid", "caller_display_name": "Nguyễn Văn A", "call_session_id": "uuid" } // B nhận message này qua Messaging WS → hiện SCR-15 (incoming call screen) // → B kết nối Signaling WS → gửi CALL_ANSWER hoặc CALL_REJECT }
+{ "type": "CALL_INCOMING", "data": { "caller_id": "uuid", "caller_display_name": "Nguyễn Văn A", "call_session_id": "uuid", "call_id": "uuid" } // B nhận qua Messaging WS rồi mở Signaling WS và trả lời bằng cùng call_id }
 
 *Lưu ý về CALL_INCOMING: đây là cơ chế giải quyết vấn đề 'B biết có cuộc gọi đến bằng cách nào'. B luôn duy trì kết nối Messaging WebSocket (thường trực) → khi A gọi, Signaling Server relay CALL_OFFER đến A và đồng thời Backend gửi CALL_INCOMING qua Messaging WS đến B → B kết nối Signaling WS để xử lý cuộc gọi. Điều này giải thích tại sao hai WebSocket phải tồn tại song song (SAD mục 4.1.4).*
 
@@ -875,9 +913,13 @@ Conversation không tồn tại, đã soft-delete hoặc sender không phải th
 tới user còn lại, không gửi lại chính sender, không lưu database và không replay khi reconnect.
 
 JSON hỏng, thiếu/sai kiểu `data.conversation_id` trả `ERROR` code `VALIDATION_ERROR`; type
-không hỗ trợ trả `UNSUPPORTED_EVENT`. Hai vi phạm đầu giữ connection. Vi phạm lần thứ ba
-vẫn nhận `ERROR` rồi connection đóng code 1008. Bộ đếm thuộc từng connection và không ảnh
-hưởng tab/thiết bị khác.
+không hỗ trợ trả `UNSUPPORTED_EVENT`. Trong cửa sổ 60 giây, hai vi phạm cấu trúc/schema đầu
+giữ connection; vi phạm thứ ba vẫn nhận `ERROR` rồi connection đóng code 1008. Bộ đếm thuộc
+từng connection, tự loại vi phạm đã quá cửa sổ và không ảnh hưởng tab/thiết bị khác. Ngưỡng
+và cửa sổ cấu hình bằng `MESSAGING_WS_CONTRACT_VIOLATION_LIMIT` (mặc định 3) và
+`MESSAGING_WS_CONTRACT_VIOLATION_WINDOW_SECONDS` (mặc định 60). Vi phạm phân quyền typing
+nhận `FORBIDDEN` ngay, không chờ hoặc tiêu thụ ngưỡng vi phạm schema. Payload quá giới hạn
+`messaging.websocket.max-text-message-size` được xử lý riêng ở tầng WebSocket container.
 
 Mỗi `PONG` hợp lệ đặt lại bộ đếm heartbeat. Nếu không nhận `PONG` cho hai lần `PING`
 liên tiếp, server đóng connection bằng code 4003 (xấp xỉ 60 giây với chu kỳ mặc định).
@@ -925,6 +967,12 @@ Message types
 
 Relay: Server gắn thêm `from_user_id` (userId của người gửi, lấy từ JWT đã xác thực ở handshake) vào message trước khi relay, để phía nhận biết message đến từ ai. Message có `type` không thuộc bảng trên hoặc thiếu `target_user_id` bị Server bỏ qua (không phản hồi lỗi).
 
+Mỗi lần gọi có `call_id` UUID mới do caller tạo trong `CALL_OFFER`. Signaling chuyển ID này qua internal notify, `CALL_INCOMING` và offer được relay. Mọi `CALL_ANSWER`, `ICE_CANDIDATE`, `CALL_REJECT`, `CALL_END` phải mang cùng `call_id`; sai hoặc thiếu ID trả `ERROR/INVALID_CALL_SESSION` và không relay. UUID đã dùng gần đây không được dùng lại. `call_session_id` vẫn là ID xác định theo cặp user để tương thích; nó không đại diện cho một lần gọi riêng.
+
+Mỗi user chỉ ở một cuộc gọi tại một thời điểm, cả `pending` lẫn `active`. Khi caller hoặc callee đã bận, offer mới bị từ chối bằng `ERROR/TARGET_BUSY`; phiên trước và `call_id` của nó không đổi. Sau `CALL_REJECT`, `CALL_END`, timeout hoặc ngắt kết nối, user có thể nhận cuộc gọi mới. Offer đồng thời phải được cấp chỗ trước bước notify bất đồng bộ để chỉ một offer thắng.
+
+Sau khi HTTP logout thành công, token đó không được relay thêm sự kiện signaling. Signaling kiểm tra thu hồi trước mỗi frame được bảo vệ và đóng socket cũ bằng code `4001` trong tối đa 10 giây; kiểm tra định kỳ hiện chạy mỗi giây. Việc đóng signaling không chứng minh WebRTC media đã ngắt.
+
 Lỗi target offline: nếu `target_user_id` không có kết nối Signaling WebSocket nào đang mở, Server gửi lại cho sender:
 
 ```json
@@ -939,17 +987,17 @@ Rate limiting: tối đa 20 kết nối WebSocket mới/địa chỉ IP/phút (S
 
 Cầu nối Signaling Server → Backend để đẩy `CALL_INCOMING` (mục 10.1) qua Messaging WebSocket của callee.
 
-Xác thực: header `Authorization: Bearer <INTERNAL_CALL_NOTIFY_SECRET>` (cùng cơ chế shared-secret constant-time-compare như `/internal/videos/webhook` — mục MinIO webhook). Sai/thiếu secret trả `401 UNAUTHORIZED`. Lưu ý: endpoint này được bảo vệ bằng **credential** (shared secret), **không phải** network isolation — port 8080 của backend được publish ra host trong `docker-compose.yml`, nên bất kỳ ai biết `INTERNAL_CALL_NOTIFY_SECRET` đều có thể gọi được, không chỉ Signaling Server. Production nên bổ sung network isolation (ví dụ chỉ container signaling mới route được tới `/internal/**`, qua network riêng hoặc reverse proxy chặn theo path + nguồn) — xem mục việc tồn đọng trong `docs/09_ROADMAP_AND_TASKS.md`.
+Xác thực: header `Authorization: Bearer <INTERNAL_CALL_NOTIFY_SECRET>` (cùng cơ chế shared-secret constant-time-compare như `/internal/videos/webhook` — mục MinIO webhook). Secret phải được sinh ngẫu nhiên và chứa ít nhất 32 byte UTF-8; thiếu/quá ngắn làm Backend từ chối khởi động. Sai/thiếu secret trong request trả `401 UNAUTHORIZED`. Lưu ý: endpoint này được bảo vệ bằng **credential** (shared secret), **không phải** network isolation — port 8080 của backend được publish ra host trong `docker-compose.yml`, nên bất kỳ ai biết `INTERNAL_CALL_NOTIFY_SECRET` đều có thể gọi được, không chỉ Signaling Server. Production nên bổ sung network isolation (ví dụ chỉ container signaling mới route được tới `/internal/**`, qua network riêng hoặc reverse proxy chặn theo path + nguồn) — xem mục việc tồn đọng trong `docs/09_ROADMAP_AND_TASKS.md`.
 
 Request body:
 
 ```json
-{ "caller_id": "uuid", "callee_id": "uuid" }
+{ "caller_id": "uuid", "callee_id": "uuid", "call_id": "uuid" }
 ```
 
 Response:
 
-- `204 No Content` — callee hợp lệ (tồn tại, chưa xoá mềm). Backend đã publish `CALL_INCOMING` (kèm `caller_display_name` tra từ `caller_id`, và `call_session_id` sinh xác định — xem dưới) tới `messaging:user:{callee_id}` qua Redis; mọi Backend instance subscribe kênh này sẽ đẩy tiếp qua Messaging WebSocket cho mọi tab/thiết bị của callee đang mở.
+- `204 No Content` — callee hợp lệ (tồn tại, chưa xoá mềm). Backend đã publish `CALL_INCOMING` (kèm `caller_display_name`, `call_session_id` và `call_id` từ request) tới `messaging:user:{callee_id}` qua Redis.
 - `404 Not Found` — callee (hoặc caller) không tồn tại/đã xoá mềm. Backend không publish gì. Vì signaling là caller nội bộ tin cậy (không phải client), 404 ở đây **không** vi phạm nguyên tắc chống dò tài khoản — nguyên tắc đó chỉ áp khi signaling trả lời lại cho client A (mục 10.2, `TARGET_OFFLINE`).
 
 `call_session_id`: sinh **xác định** (deterministic) từ cặp `(caller_id, callee_id)` đã chuẩn hoá thứ tự (giống cách `conversation_id` chuẩn hoá cặp user trong `ConversationService`, nhưng khác ở chỗ `call_session_id` **không** lưu DB hay giữ Map riêng — tính lại mỗi lần cần). Cùng một cặp user luôn ra cùng `call_session_id`, bất kể ai gọi ai trước.

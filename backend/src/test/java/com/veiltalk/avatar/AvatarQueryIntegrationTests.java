@@ -55,27 +55,26 @@ class AvatarQueryIntegrationTests {
 		avatarOwner = createUser("owner");
 		userWithoutAvatar = createUser("no-avatar");
 		accessToken = jwtService.generateAccessToken(requester.getId(), requester.getRole());
-		createAvatar(avatarOwner, "avatar_model_02", Map.of(
-				"hair_color", "#112233",
-				"outfit", "street_01"));
+		createAvatar(avatarOwner, "reference-avatar-3", Map.of(
+				"colors", Map.of("hair", "#112233", "outfit", "#445566")));
 	}
 
 	@Test
 	void getsOwnAvatarWithFullProfileFields() throws Exception {
 		AvatarProfile ownAvatar = createAvatar(
 				requester,
-				"avatar_model_01",
-				Map.of("hair_color", "#445566"));
+				"reference-avatar-2",
+				Map.of("colors", Map.of("hair", "#445566")));
 		entityManager.clear();
 
 		mockMvc.perform(authenticatedGet("/avatars/me"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.id").value(ownAvatar.getId().toString()))
 				.andExpect(jsonPath("$.user_id").value(requester.getId().toString()))
-				.andExpect(jsonPath("$.model_id").value("avatar_model_01"))
+				.andExpect(jsonPath("$.model_id").value("reference-avatar-2"))
 				.andExpect(jsonPath("$.model_url")
-						.value("https://cdn.veiltalk.example.com/models/avatar_model_01.glb"))
-				.andExpect(jsonPath("$.customizations.hair_color").value("#445566"))
+						.value("/models/avatars/reference-avatar-2.vrm"))
+				.andExpect(jsonPath("$.customizations.colors.hair").value("#445566"))
 				.andExpect(jsonPath("$.created_at").exists())
 				.andExpect(jsonPath("$.updated_at").exists());
 	}
@@ -85,10 +84,10 @@ class AvatarQueryIntegrationTests {
 		mockMvc.perform(authenticatedGet("/avatars/" + avatarOwner.getId()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.user_id").value(avatarOwner.getId().toString()))
-				.andExpect(jsonPath("$.model_id").value("avatar_model_02"))
+				.andExpect(jsonPath("$.model_id").value("reference-avatar-3"))
 				.andExpect(jsonPath("$.model_url")
-						.value("https://cdn.veiltalk.example.com/models/avatar_model_02.glb"))
-				.andExpect(jsonPath("$.customizations.hair_color").value("#112233"))
+						.value("/models/avatars/reference-avatar-3.vrm"))
+				.andExpect(jsonPath("$.customizations.colors.hair").value("#112233"))
 				.andExpect(jsonPath("$.email").doesNotExist())
 				.andExpect(jsonPath("$.role").doesNotExist())
 				.andExpect(jsonPath("$.id").doesNotExist())
@@ -145,7 +144,7 @@ class AvatarQueryIntegrationTests {
 		AvatarProfile profile = new AvatarProfile();
 		profile.setUserId(user.getId());
 		profile.setModelId(modelId);
-		profile.setModelUrl("https://cdn.veiltalk.example.com/models/" + modelId + ".glb");
+		profile.setModelUrl("/models/avatars/" + modelId + ".vrm");
 		profile.setCustomizations(customizations);
 		return avatarProfileRepository.saveAndFlush(profile);
 	}

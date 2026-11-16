@@ -8,6 +8,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.ListPartsResponse;
@@ -21,19 +23,22 @@ import io.minio.messages.Part;
 @Component
 public class MinioMultipartStorage implements VideoMultipartStorage {
 
-	// Hạn presigned GET URL để phát video ready — cố định 1 giờ theo API Design mục 7.7,
-	// không cấu hình được (khác presignedUrlExpirySeconds vốn dùng cho part PUT lúc quay).
-	private static final int VIEW_URL_EXPIRY_SECONDS = 3600;
+	// Mặc định một giờ theo API; test có thể đặt TTL ngắn để kiểm tra chữ ký hết hạn.
+	@Value("${video.view-url-expiry-seconds:3600}")
+	private int viewUrlExpirySeconds = 3600;
 
 	private final MinioAsyncClient minioAsyncClient;
+	private final MinioAsyncClient presignMinioAsyncClient;
 	private final MinioProperties minioProperties;
 	private final VideoProperties videoProperties;
 
 	MinioMultipartStorage(
 			MinioAsyncClient minioAsyncClient,
+			@Qualifier("presignMinioAsyncClient") MinioAsyncClient presignMinioAsyncClient,
 			MinioProperties minioProperties,
 			VideoProperties videoProperties) {
 		this.minioAsyncClient = minioAsyncClient;
+		this.presignMinioAsyncClient = presignMinioAsyncClient;
 		this.minioProperties = minioProperties;
 		this.videoProperties = videoProperties;
 	}
@@ -63,7 +68,7 @@ public class MinioMultipartStorage implements VideoMultipartStorage {
 		try {
 			// uploadId + partNumber trong query là bắt buộc để MinIO ghi nhận đây là part
 			// của phiên multipart, dùng chung objectKey với lúc createMultipartUpload.
-			return minioAsyncClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+			return presignMinioAsyncClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
 					.method(Method.PUT)
 					.bucket(minioProperties.bucket())
 					.object(objectKey)
@@ -80,11 +85,11 @@ public class MinioMultipartStorage implements VideoMultipartStorage {
 	@Override
 	public String presignGetUrl(String objectKey) {
 		try {
-			return minioAsyncClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+			return presignMinioAsyncClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
 					.method(Method.GET)
 					.bucket(minioProperties.bucket())
 					.object(objectKey)
-					.expiry(VIEW_URL_EXPIRY_SECONDS, TimeUnit.SECONDS)
+					.expiry(viewUrlExpirySeconds, TimeUnit.SECONDS)
 					.build());
 		} catch (Exception exception) {
 			throw new VideoStorageException("Không thể tạo presigned URL để phát video", exception);

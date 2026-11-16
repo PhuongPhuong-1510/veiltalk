@@ -1,10 +1,22 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
+  jackson:
+    parser:
+      strict-duplicate-detection: true
+  config:
+    # Support running from the repository root (IDE) or backend/ (Maven).
+    import:
+      - "optional:file:../.env[.properties]"
+      - "optional:file:./.env[.properties]"
   application:
     name: backend
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:veiltalk}
     username: ${DB_USER:veiltalk_user}
-    password: ${DB_PASSWORD}
+    password: ${VEILTALK_DB_PASSWORD:${DB_PASSWORD:}}
   flyway:
     locations: classpath:db/migration
     baseline-on-migrate: false
@@ -34,10 +46,26 @@ jwt:
   access-expiry: ${JWT_ACCESS_EXPIRY:900}
   refresh-expiry: ${JWT_REFRESH_EXPIRY:604800}
 
+auth:
+  abuse:
+    login-pair-limit: ${AUTH_LOGIN_PAIR_LIMIT:5}
+    login-ip-limit: ${AUTH_LOGIN_IP_LIMIT:30}
+    login-window-seconds: ${AUTH_LOGIN_WINDOW_SECONDS:900}
+    register-success-limit: ${AUTH_REGISTER_SUCCESS_LIMIT:5}
+    register-failure-limit: ${AUTH_REGISTER_FAILURE_LIMIT:30}
+    register-window-seconds: ${AUTH_REGISTER_WINDOW_SECONDS:3600}
+    trusted-proxy-ips: ${AUTH_TRUSTED_PROXY_IPS:}
+
 messaging:
   websocket:
     # 4000 ký tự content có thể chiếm khoảng 24 KiB khi JSON phải escape toàn bộ.
     max-text-message-size: 32768
+    contract-violation-limit: ${MESSAGING_WS_CONTRACT_VIOLATION_LIMIT:3}
+    contract-violation-window-seconds: ${MESSAGING_WS_CONTRACT_VIOLATION_WINDOW_SECONDS:60}
+    connection-ip-limit: ${MESSAGING_WS_CONNECTION_IP_LIMIT:20}
+    connection-user-limit: ${MESSAGING_WS_CONNECTION_USER_LIMIT:5}
+    connection-window-seconds: ${MESSAGING_WS_CONNECTION_WINDOW_SECONDS:60}
+    connection-lease-seconds: ${MESSAGING_WS_CONNECTION_LEASE_SECONDS:120}
     heartbeat-interval-ms: 30000
     send-time-limit-ms: 10000
     send-buffer-size-bytes: 262144
@@ -48,6 +76,7 @@ call:
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  public-endpoint: ${MINIO_PUBLIC_ENDPOINT:}
   access-key: ${MINIO_ACCESS_KEY:}
   secret-key: ${MINIO_SECRET_KEY:}
   bucket: ${MINIO_BUCKET:veiltalk}
@@ -57,11 +86,16 @@ minio:
 video:
   # Dung lượng lưu trữ video tối đa mỗi tài khoản (NFR-19). Mặc định 2GB.
   storage-limit-bytes: ${VIDEO_STORAGE_LIMIT_BYTES:2147483648}
-  # Vòng đời phiên multipart trong Redis. Mặc định 6h — đủ dài cho một phiên quay,
+  # Vòng đời phiên multipart trong Redis. Mặc định 24h — đủ dài cho một phiên quay,
   # refresh mỗi lần cấp chunk; phiên bỏ dở sẽ tự hết hạn.
-  upload-session-ttl-seconds: ${VIDEO_UPLOAD_SESSION_TTL_SECONDS:21600}
+  upload-session-ttl-seconds: ${VIDEO_UPLOAD_SESSION_TTL_SECONDS:86400}
+  active-upload-limit: ${VIDEO_ACTIVE_UPLOAD_LIMIT:3}
+  recording-cleanup-interval-seconds: ${VIDEO_RECORDING_CLEANUP_INTERVAL_SECONDS:3600}
+  ffprobe-path: ${VIDEO_FFPROBE_PATH:ffprobe}
+  ffprobe-timeout-seconds: ${VIDEO_FFPROBE_TIMEOUT_SECONDS:30}
   # TTL của presigned PUT URL (mục 7.3). Dùng chung cho lúc ký URL và giá trị expires_in.
   presigned-url-expiry-seconds: ${VIDEO_PRESIGNED_URL_EXPIRY_SECONDS:3600}
+  view-url-expiry-seconds: ${VIDEO_VIEW_URL_EXPIRY_SECONDS:3600}
   lock-ttl-millis: ${VIDEO_LOCK_TTL_MILLIS:30000}
   lock-acquire-timeout-millis: ${VIDEO_LOCK_ACQUIRE_TIMEOUT_MILLIS:5000}
   processing-timeout-seconds: ${VIDEO_PROCESSING_TIMEOUT_SECONDS:600}

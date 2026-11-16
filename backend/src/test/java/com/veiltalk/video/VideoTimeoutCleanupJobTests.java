@@ -66,6 +66,8 @@ class VideoTimeoutCleanupJobTests {
 		VideoRepository repository = Mockito.mock(VideoRepository.class);
 		VideoMultipartStorage storage = Mockito.mock(VideoMultipartStorage.class);
 		VideoUploadSessionStore sessions = Mockito.mock(VideoUploadSessionStore.class);
+		VideoMediaValidator mediaValidator = Mockito.mock(VideoMediaValidator.class);
+		given(mediaValidator.isPlayable(storagePath, "webm", 10L)).willReturn(true);
 		RedisDistributedLock lock = Mockito.mock(RedisDistributedLock.class);
 		RedisDistributedLock.LockHandle lockHandle = Mockito.mock(
 				RedisDistributedLock.LockHandle.class);
@@ -77,12 +79,13 @@ class VideoTimeoutCleanupJobTests {
 		video.setId(UUID.randomUUID());
 		video.setStoragePath(storagePath);
 		video.setStatus(VideoStatus.PROCESSING);
+		video.setFormat("webm");
 		video.setFileSizeBytes(10L);
 		given(repository.findTimedOutProcessing(now.minusSeconds(600)))
 				.willReturn(List.of(video));
 		given(lock.acquire("video:operation-lock:" + video.getId())).willReturn(lockHandle);
 		VideoTimeoutCleanupJob job = new VideoTimeoutCleanupJob(
-				repository, storage, sessions, cleanupJobRepository, properties, lock,
+				repository, storage, sessions, cleanupJobRepository, properties, lock, mediaValidator,
 				Clock.fixed(now, ZoneOffset.UTC));
 		return new Fixture(repository, storage, sessions, video, job);
 	}

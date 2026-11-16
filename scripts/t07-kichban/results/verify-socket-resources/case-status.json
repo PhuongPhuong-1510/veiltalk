@@ -1,0 +1,1440 @@
+{
+  "runId": "veiltalk-e2e-1793207874298-f86645",
+  "evidenceSafe": true,
+  "executed": 2,
+  "missingEvidence": 176,
+  "totals": {
+    "FAIL": 176,
+    "PASS": 2
+  },
+  "classificationTotals": {
+    "FAIL_TEST": 176,
+    "PASS": 2
+  },
+  "cases": [
+    {
+      "id": "T07-ENV-001",
+      "title": "Chỉ thao tác lên container của run hiện tại",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-002",
+      "title": "Dọn dịch vụ sau PASS",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-003",
+      "title": "Dọn sau FAIL assertion",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-004",
+      "title": "Trường hợp runner bị kill cứng",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-005",
+      "title": "Khôi phục snapshot sau tiêm lỗi",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-006",
+      "title": "Không nhầm lỗi hạ tầng với lỗi sản phẩm",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-007",
+      "title": "Đồng bộ bằng tín hiệu thay sleep cứng",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-008",
+      "title": "Kiểm soát trễ và timeout test",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-009",
+      "title": "Mỗi test chạy độc lập và ngẫu nhiên thứ tự",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-ENV-010",
+      "title": "Ghi nhận phiên bản và môi trường tái lập",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-001",
+      "title": "Logout đồng thời nhiều HTTP request đang xử lý",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-002",
+      "title": "Logout và mở messaging WebSocket cùng thời điểm",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-003",
+      "title": "Logout và mở signaling WebSocket cùng thời điểm",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-004",
+      "title": "Hai refresh đồng thời trên cùng một refresh token",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-005",
+      "title": "Logout đồng thời refresh",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-006",
+      "title": "Nhiều login đồng thời cùng tài khoản",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-007",
+      "title": "Đăng ký cùng email đồng thời",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-008",
+      "title": "Thu hồi toàn bộ token khi xóa tài khoản cùng lúc dùng API",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-009",
+      "title": "Redis thu hồi token bị gián đoạn khi logout",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-010",
+      "title": "Race token hết hạn và WS heartbeat",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-011",
+      "title": "Tài khoản xóa trong khi refresh và handshake",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-AUTH-012",
+      "title": "Thử cùng lúc nhiều phiên login/logout độc lập",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-001",
+      "title": "A và B cùng tạo hội thoại A–B",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-002",
+      "title": "Nhiều request tạo cùng cặp hội thoại",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-003",
+      "title": "Tạo hội thoại khi B bị xóa",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-004",
+      "title": "Cập nhật updated_at bởi tin nhắn đồng thời",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-005",
+      "title": "Cursor khi danh sách hội thoại đang thay đổi",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-006",
+      "title": "Cursor ở biên timestamp bằng nhau",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-007",
+      "title": "Xóa tài khoản khi đang đọc danh sách",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-008",
+      "title": "Tạo cặp hội thoại độc lập đồng thời",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CONV-009",
+      "title": "Đọc chi tiết trong khi tạo hội thoại",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-001",
+      "title": "Bốn request giống nhau cùng UUID — regression E05",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-002",
+      "title": "Nhiều UUID khác nhau cùng lúc",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-003",
+      "title": "Cùng UUID nhưng người gửi khác",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-004",
+      "title": "Cùng UUID nhưng hội thoại khác",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-005",
+      "title": "Retry sau mất response HTTP nhưng DB đã commit",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-006",
+      "title": "Retry sau transaction rollback",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-007",
+      "title": "Timestamp hợp lệ khi nhiều thread gửi cùng lúc",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-008",
+      "title": "Biên timestamp ±5 phút khi request bị chờ",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-009",
+      "title": "Update read và delivered đồng thời",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-010",
+      "title": "Update read nhiều lần đồng thời",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-011",
+      "title": "Sender thử cập nhật trạng thái cạnh recipient",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-012",
+      "title": "Cập nhật trạng thái đồng thời với xóa tài khoản",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-013",
+      "title": "Phân trang lịch sử khi tin mới đến",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-014",
+      "title": "Phân trang tin với timestamp trùng",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-015",
+      "title": "Nhiều cuộc trò chuyện gửi đồng thời",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MSG-016",
+      "title": "Client hủy request khi server vẫn đang xử lý",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-001",
+      "title": "Không phát NEW_MESSAGE trước DB commit",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-002",
+      "title": "Rollback INSERT không phát event",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-003",
+      "title": "Rollback status không phát MESSAGE_STATUS_UPDATE",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-004",
+      "title": "DB commit thành công nhưng Redis publish lỗi",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-005",
+      "title": "Redis publish chậm sau commit",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-006",
+      "title": "Giao dịch nhận message và chạm conversation atomic",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-007",
+      "title": "Read committed không thấy dữ liệu chưa commit",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-008",
+      "title": "Không giữ transaction khi chờ dịch vụ chậm vô hạn",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-009",
+      "title": "Tạo video: MinIO OK, Redis create session FAIL",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-010",
+      "title": "Tạo video: MinIO OK, PostgreSQL INSERT FAIL",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-011",
+      "title": "Xóa tài khoản thất bại giữa cleanup video",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-TX-012",
+      "title": "Sự kiện post-commit không tự cấp quyền transaction mới",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-001",
+      "title": "Gửi tin khi Redis Pub/Sub tạm mất",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-002",
+      "title": "Subscriber mất kết nối khi publish",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-003",
+      "title": "Tin trùng do retry HTTP không gửi lại event",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-004",
+      "title": "Sự kiện và response lệch thời điểm",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-005",
+      "title": "Publish có payload Unicode và metadata chính xác",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-006",
+      "title": "Một người nhận có nhiều socket",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-007",
+      "title": "Một socket gửi lỗi không hỏng tất cả receivers",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-008",
+      "title": "Subscriber restart rồi nhận các event mới",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-009",
+      "title": "Đồng thời publish từ nhiều hội thoại",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-010",
+      "title": "Payload Pub/Sub không hợp lệ",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-PUB-011",
+      "title": "Redis subscriber backlog khi receiver chậm",
+      "priority": "P2",
+      "status": "PASS",
+      "reason": null,
+      "classification": "PASS"
+    },
+    {
+      "id": "T07-PUB-012",
+      "title": "Publish status update hai người nhận",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-001",
+      "title": "Đóng một trong nhiều socket không xóa socket khác",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-002",
+      "title": "Terminate đột ngột không leak session",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-003",
+      "title": "WebSocket token đã thu hồi trong phiên mở",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-004",
+      "title": "Slow consumer vượt giới hạn buffer",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-005",
+      "title": "Heartbeat PING/PONG hoạt động bình thường",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-006",
+      "title": "Client im lặng không phản hồi PING",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-007",
+      "title": "Redis lỗi khi heartbeat kiểm tra thu hồi",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-008",
+      "title": "Nhiều client đồng thời reconnect",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-009",
+      "title": "WS handshake và logout tranh nhau",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-010",
+      "title": "WS gửi TYPING đồng thời nhiều tab",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-011",
+      "title": "Socket B đang đóng giữa fanout",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-012",
+      "title": "Scheduler shutdown và restart backend",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-013",
+      "title": "Client PONG trễ sát timeout",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-014",
+      "title": "Fragmented/large WS frame giới hạn",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-WS-015",
+      "title": "Lặp 100 chu kỳ kết nối/đóng không tăng vô hạn",
+      "priority": "P2",
+      "status": "PASS",
+      "reason": null,
+      "classification": "PASS"
+    },
+    {
+      "id": "T07-WS-016",
+      "title": "Gửi sự kiện vào session thuộc user khác khi reconnect",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-001",
+      "title": "Người nhận signaling muộn — regression E09",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-002",
+      "title": "Logout token vẫn mở signaling — regression E10",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-003",
+      "title": "Hai CALL_OFFER đồng thời A→B",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-004",
+      "title": "A và B gọi nhau đồng thời",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-005",
+      "title": "CALL_END đến cùng lúc cả hai đầu",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-006",
+      "title": "CALL_ANSWER đến sát timeout 30 giây",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-007",
+      "title": "Caller rớt socket sau CALL_OFFER",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-008",
+      "title": "Callee rớt socket giữa ANSWER và ICE",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-009",
+      "title": "Offer đến trong lúc callee vừa đăng ký signaling",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-010",
+      "title": "CALL_REJECT đồng thời CALL_END",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-011",
+      "title": "Restart Node signaling khi có pending call",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-012",
+      "title": "Spring call notify tạm không hoạt động",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-013",
+      "title": "Nhiều socket signaling cùng tài khoản",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-CALL-014",
+      "title": "ICE đến sau CALL_END",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-001",
+      "title": "Hai finalize đồng thời trên cùng upload",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-002",
+      "title": "Finalize và abort đồng thời cùng video",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-003",
+      "title": "Finalize và delete đồng thời",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-004",
+      "title": "Hai chunk-next đồng thời với part_number giống nhau",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-005",
+      "title": "Hai chunk-next khác part_number đến đảo thứ tự",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-006",
+      "title": "Webhook Complete đến 2 lần giống nhau",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-007",
+      "title": "Webhook đến trước response finalize",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-008",
+      "title": "Webhook muộn sau abort",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-009",
+      "title": "Webhook muộn sau delete video",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-010",
+      "title": "Khởi tạo video concurrent gần quota",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-011",
+      "title": "Finalize hai video cùng user chạm quota",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-012",
+      "title": "Hai người khác nhau finalize song song",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-013",
+      "title": "Finalize khi Redis upload session hết hạn",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-014",
+      "title": "Finalize khi part ETag thay đổi giữa các bước",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-015",
+      "title": "MinIO complete thành công nhưng webhook không đến",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-016",
+      "title": "MinIO complete lỗi sau khi đặt PROCESSING",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-017",
+      "title": "Presigned URL PUT đang chạy khi user abort",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-018",
+      "title": "Delete READY đồng thời GET view URL",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-019",
+      "title": "MinIO multipart orphan sau init lỗi",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-020",
+      "title": "Đổi title khi status đổi PROCESSING → READY",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-021",
+      "title": "Upload nhiều phần khi MinIO trả ETag không ổn định",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-VID-022",
+      "title": "Nhiều video nhỏ tạo và abort liên tiếp",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-001",
+      "title": "Hai thao tác cùng video không cùng giữ lock",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-002",
+      "title": "Release lock cũ không xóa khóa chủ mới",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-003",
+      "title": "Renew từ owner cũ không gia hạn khóa mới",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-004",
+      "title": "Mất lock renewal giữa thao tác dài",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-005",
+      "title": "Redis chết khi đang giữ lock",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-006",
+      "title": "Lock acquire timeout chính xác",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-007",
+      "title": "Ngắt thread trong lúc chờ lock",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-008",
+      "title": "Quota lock cùng user ngăn overcommit",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-009",
+      "title": "Lock khác user không cạnh tranh không cần thiết",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-010",
+      "title": "Atomic Redis upload session update tranh nhau",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-011",
+      "title": "Message status pessimistic row lock",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-LOCK-012",
+      "title": "Hàng loạt contention ngắn không để lock treo",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-001",
+      "title": "PostgreSQL không khả dụng khi login",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-002",
+      "title": "PostgreSQL mất giữa gửi tin",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-003",
+      "title": "Redis không khả dụng khi JWT kiểm tra revoke",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-004",
+      "title": "Redis mất khi lưu phiên upload",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-005",
+      "title": "MinIO không khả dụng trong create upload",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-006",
+      "title": "MinIO lỗi giữa complete multipart",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-007",
+      "title": "Redis subscriber mất nhưng Redis key ops còn hoạt động",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-008",
+      "title": "Backend không tới được Node signaling",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-009",
+      "title": "Node signaling gọi internal notify timeout",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-010",
+      "title": "Mạng MinIO có độ trễ lớn nhưng chưa chết",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-011",
+      "title": "Database pool hết connection tạm thời",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-012",
+      "title": "Redis rate limit key không có TTL sau crash giữa INCR–EXPIRE",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-FAIL-013",
+      "title": "DNS/hostname của phụ thuộc thay đổi giữa request",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-001",
+      "title": "Restart backend sau message đã commit",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-002",
+      "title": "Restart backend trước commit message",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-003",
+      "title": "Restart backend khi video PROCESSING",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-004",
+      "title": "Cleanup job thất bại khi xóa object",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-005",
+      "title": "Restart giữa retry cleanup job",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-006",
+      "title": "Timeout cleanup bắt video PROCESSING quá hạn",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-007",
+      "title": "Cleanup scheduler không chạy trùng khi restart",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-008",
+      "title": "Poison cleanup job không chặn jobs sau",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-009",
+      "title": "Backoff retry tăng đúng và có giới hạn",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-010",
+      "title": "Account deletion có video đang upload",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-011",
+      "title": "Orphan MinIO multipart có thể được liệt kê và xử lý",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-REC-012",
+      "title": "Khôi phục sau reboot Docker Engine của lab",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MULTI-001",
+      "title": "Redis Pub/Sub fanout hai Spring instances",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MULTI-002",
+      "title": "Client reconnect qua instance khác",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MULTI-003",
+      "title": "Video finalize qua hai Java instances",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MULTI-004",
+      "title": "Scheduled cleanup jobs chạy ở cả hai instances",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MULTI-005",
+      "title": "Signaling A và B nằm hai Node instances",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MULTI-006",
+      "title": "Một Node signaling instance chết giữa cuộc gọi",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MULTI-007",
+      "title": "Load balancer không đưa WebSocket tới instance chết",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-MULTI-008",
+      "title": "Session tokens giữa nhiều backend instances",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-001",
+      "title": "Mỗi test có oracle trạng thái cuối",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-002",
+      "title": "Phân loại lỗi product/test/environment/contract",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-003",
+      "title": "Phát hiện và chặn false PASS do thiếu event",
+      "priority": "P0",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-004",
+      "title": "Evidence timeline bằng monotonic clock",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-005",
+      "title": "Test race lặp nhiều vòng có cùng seed",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-006",
+      "title": "Fault injection có điểm đặt chính xác",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-007",
+      "title": "Không rò secret qua artifact fault log",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-008",
+      "title": "Không có resource drift sau suite",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-009",
+      "title": "Tạo báo cáo giới hạn đã biết cho T08",
+      "priority": "P1",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    },
+    {
+      "id": "T07-OBS-010",
+      "title": "Đối chiếu kết quả E09/E10 lịch sử",
+      "priority": "P2",
+      "status": "FAIL",
+      "reason": "TEST_NOT_EXECUTED: Test ID was not selected or produced no JUnit result",
+      "classification": "FAIL_TEST"
+    }
+  ]
+}

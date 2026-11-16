@@ -26,6 +26,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.socket.WebSocketHandler;
 
 import com.veiltalk.auth.JwtBlacklistService;
+import com.veiltalk.auth.AuthClientIpResolver;
 import com.veiltalk.auth.JwtClaims;
 import com.veiltalk.auth.JwtService;
 import com.veiltalk.auth.User;
@@ -54,6 +55,12 @@ class WebSocketAuthHandshakeInterceptorTests {
 	private UserRepository userRepository;
 
 	@Mock
+	private AuthClientIpResolver clientIpResolver;
+
+	@Mock
+	private MessagingConnectionLimiter connectionLimiter;
+
+	@Mock
 	private WebSocketHandler webSocketHandler;
 
 	private WebSocketAuthHandshakeInterceptor interceptor;
@@ -64,7 +71,9 @@ class WebSocketAuthHandshakeInterceptorTests {
 				jwtService,
 				jwtBlacklistService,
 				userTokenRevocationService,
-				userRepository);
+				userRepository,
+				clientIpResolver,
+				connectionLimiter);
 	}
 
 	@Test
@@ -72,6 +81,9 @@ class WebSocketAuthHandshakeInterceptorTests {
 		JwtClaims claims = accessClaims();
 		when(jwtService.extractClaims("valid-token")).thenReturn(claims);
 		when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(new User()));
+		when(clientIpResolver.resolve(any(ServerHttpRequest.class))).thenReturn("127.0.0.1");
+		when(connectionLimiter.reserve(any(), any(), any()))
+				.thenReturn(MessagingConnectionLimiter.Result.ALLOWED);
 		Map<String, Object> attributes = new HashMap<>();
 		MockHttpServletResponse servletResponse = new MockHttpServletResponse();
 

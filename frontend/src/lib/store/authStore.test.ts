@@ -138,6 +138,28 @@ describe("authStore", () => {
     expect(sessionStorage.getItem("veiltalk_refresh_token")).toBeNull();
   });
 
+  it("gửi yêu cầu logout khi access token vẫn còn trong store", async () => {
+    authApiMock.login.mockResolvedValueOnce({ user, tokens });
+    await useAuthStore.getState().login("a@b.com", "pw");
+    authApiMock.logout.mockImplementationOnce(async () => {
+      expect(useAuthStore.getState().accessToken).toBe("access-1");
+      expect(sessionStorage.getItem("veiltalk_refresh_token")).toBe("refresh-1");
+    });
+
+    await useAuthStore.getState().logout();
+
+    expect(authApiMock.logout).toHaveBeenCalledWith("refresh-1");
+    expect(useAuthStore.getState().status).toBe("unauthenticated");
+  });
+
+  it("đánh dấu hoàn tất avatar trong auth state sau khi lưu wizard", () => {
+    useAuthStore.setState({ user: { ...user, has_avatar: false }, status: "authenticated" });
+
+    useAuthStore.getState().markAvatarSetupComplete();
+
+    expect(useAuthStore.getState().user?.has_avatar).toBe(true);
+  });
+
   it("onAuthFailure từ client.ts (401 -> refresh cũng 401) clear toàn bộ state qua hook thật", async () => {
     vi.doUnmock("../api");
     vi.resetModules();

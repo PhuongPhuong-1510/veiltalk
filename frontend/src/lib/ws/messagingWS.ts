@@ -1,7 +1,8 @@
 import { refreshAccessToken } from "../api";
 import { useAuthStore } from "../store/authStore";
 
-const BASE_WS_URL = (import.meta.env.VITE_WS_BASE_URL ?? "ws://localhost:8080").replace(/^http/, "ws");
+const BASE_WS_URL = (import.meta.env.VITE_WS_BASE_URL
+  ?? (import.meta.env.DEV ? "ws://localhost:8080" : window.location.origin)).replace(/^http/, "ws");
 
 // Close code do server chủ động đóng vì lý do "không tự phục hồi" — không nên
 // reconnect. 1006/1011/1001/4002/4003 đều thuộc nhóm "mất kết nối cần khôi
@@ -24,6 +25,8 @@ const KNOWN_SERVER_TYPES = new Set([
   "NEW_MESSAGE",
   "MESSAGE_STATUS_UPDATE",
   "CALL_INCOMING",
+  "TYPING",
+  "TYPING_STOP",
   "PING",
   "ERROR",
 ]);
@@ -37,11 +40,13 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 let manuallyClosed = false;
 let unsubscribeAuth: (() => void) | null = null;
+let currentStatus: ConnectionStatus = "closed";
 
 const messageHandlers = new Map<string, Set<MessageHandler>>();
 const statusHandlers = new Set<StatusHandler>();
 
 function emitStatus(status: ConnectionStatus): void {
+  currentStatus = status;
   for (const handler of statusHandlers) {
     handler(status);
   }
@@ -233,6 +238,7 @@ export function onMessage(type: string, handler: MessageHandler): () => void {
 
 export function onStatusChange(handler: StatusHandler): () => void {
   statusHandlers.add(handler);
+  handler(currentStatus);
   return () => {
     statusHandlers.delete(handler);
   };

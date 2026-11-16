@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CameraResolution } from "../../lib/tracking/cameraController";
-import type { ConfiguredDelegate, DelegateSelection, TrackingTaskSelection } from "../../lib/tracking/mediaPipeRuntime";
+import type { DelegateSelection, TrackingTaskSelection } from "../../lib/tracking/mediaPipeRuntime";
 import type { RawTrackingFrameV1 } from "../../lib/tracking/rawTrackingTypes";
 import type { TrackingMetricsSnapshot } from "../../lib/tracking/trackingMetrics";
 import { useTracking } from "../../lib/tracking/useTracking";
@@ -8,8 +8,7 @@ import type { TrackingPipelineState, TrackingProfile } from "../../lib/tracking/
 import "./trackingDevHarness.css";
 import { CameraController } from "../../lib/tracking/cameraController";
 import { CameraCadencePanel } from "./CameraCadencePanel";
-import { TrackingExperimentControls } from "./TrackingExperimentControls";
-import { TRACKING_EXPERIMENT_PRESETS } from "./trackingExperimentPresets";
+import { AVATAR_TRACKING_CONFIG } from "../../lib/tracking/avatarTrackingConfig";
 
 const emptyMetrics: TrackingMetricsSnapshot = {
   runDurationMs: 0,
@@ -52,9 +51,6 @@ export default function TrackingDevHarness() {
   const [taskMode, setTaskMode] = useState<"camera" | "all" | "face" | "hands" | "pose">("camera");
   const cameraOnly = useRef<CameraController | null>(null);
   const session = useRef(0);
-  const [strategy, setStrategy] = useState("callback-ahead-v1");
-  const [handDelegate, setHandDelegate] = useState<ConfiguredDelegate | undefined>("GPU");
-  const preset = TRACKING_EXPERIMENT_PRESETS.find(p => p.id === strategy)!;
   const [previewVisible, setPreviewVisible] = useState(true);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [pipelineState, setPipelineState] = useState<TrackingPipelineState>("idle");
@@ -78,8 +74,8 @@ export default function TrackingDevHarness() {
   }), [taskMode]);
   const trackingOptions = useMemo(() => ({ profile, resolution, delegate, tasks, onFrame, onMetrics, onError,
     poseModel: "full" as const, parallelHands: true, poseGuidedHands: true, adaptiveHandConfidence: true,
-    handWorkerDelegate: handDelegate, experiments: preset.experiments,
-  }), [profile, resolution, delegate, tasks, onFrame, onMetrics, onError, handDelegate, preset]);
+    handWorkerDelegate: delegate, experiments: AVATAR_TRACKING_CONFIG.experiments,
+  }), [profile, resolution, delegate, tasks, onFrame, onMetrics, onError]);
   const pipeline = useTracking(trackingOptions);
 
   useEffect(() => () => { session.current++; cameraOnly.current?.stop(); }, []);
@@ -176,9 +172,8 @@ export default function TrackingDevHarness() {
         <span>Video: <b>{actualVideoSize}</b> · Camera khai báo: <b>{actualCameraFps} FPS</b> (không phải FPS đo được) · Overlay: <b>{overlayVisible ? "ON" : "OFF"}</b></span>
       </section>
 
-      <TrackingExperimentControls delegate={handDelegate} strategy={strategy} disabled={taskMode === "camera" || pipelineState === "running" || pipelineState === "starting"} onDelegateChange={setHandDelegate} onStrategyChange={setStrategy}/>
       <CameraCadencePanel videoRef={videoRef} running={pipelineState === "running"} mode={taskMode === "camera" ? "camera-only" : "tracking-only"}
-        context={{ strategy: taskMode === "camera" ? "none" : strategy, tasks: taskMode, resolution, delegate, handDelegate: handDelegate ?? "inherit", profile, poseModel: "full", parallelHands: true, poseGuidedHands: true, adaptiveHandConfidence: true, previewVisible, overlayVisible, rendererRunning: false }}
+        context={{ strategy: taskMode === "camera" ? "none" : "callback-ahead-v1", tasks: taskMode, resolution, delegate, handDelegate: delegate, profile, poseModel: "full", parallelHands: true, poseGuidedHands: true, adaptiveHandConfidence: true, previewVisible, overlayVisible, rendererRunning: false }}
         metrics={taskMode === "camera" ? null : metrics} onReset={() => pipeline?.requestMeasurementReset() ?? false}/>
       <p>So sánh: Camera only → All three (GPU, Callback ahead, Full-rate, 720p, overlay OFF) → <a href="/dev/avatar-renderer">trang avatar</a> với cùng cấu hình. Stop camera trước khi đổi trang. Pose model ở trang này: Full.</p>
 

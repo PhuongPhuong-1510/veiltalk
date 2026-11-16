@@ -56,7 +56,8 @@ class VideoFinalizeCompensationTests {
 		given(storage.listParts(objectKey, "upload-id")).willReturn(actualParts);
 
 		VideoService service = new VideoService(
-				repository, storage, sessions, properties, entityManager, lock);
+				repository, storage, sessions, properties, entityManager, lock,
+				mock(VideoMediaValidator.class), mock(VideoCleanupTransactionSupport.class));
 
 		assertThatThrownBy(() -> service.finalizeUpload(userId, videoId,
 				new FinalizeVideoRequest("upload-id", requestParts, 12)))

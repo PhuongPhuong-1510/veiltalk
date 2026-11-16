@@ -1,0 +1,35 @@
+{
+  "runId": "veiltalk-e2e-1793196716423-7cf046",
+  "date": "2026-10-28T14:12:23.673Z",
+  "exitCode": 1,
+  "resources": {
+    "containers": [
+      "veiltalk-e2e-1793196716423-7cf046-postgres",
+      "veiltalk-e2e-1793196716423-7cf046-redis",
+      "veiltalk-e2e-1793196716423-7cf046-minio"
+    ],
+    "postgresMarker": "veiltalk-e2e-1793196716423-7cf046"
+  },
+  "services": [
+    "Spring Boot JAR",
+    "Node signaling",
+    "PostgreSQL",
+    "Redis",
+    "MinIO with webhook"
+  ],
+  "limits": [
+    "No browser/WebRTC media",
+    "No load test",
+    "No external network/NAT test"
+  ],
+  "cleanup": {
+    "verified": true
+  },
+  "devIsolation": {
+    "verified": true
+  },
+  "artifactScan": {
+    "verified": true,
+    "flaggedFiles": []
+  }
+}

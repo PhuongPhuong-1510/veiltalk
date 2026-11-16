@@ -82,6 +82,10 @@ public class JwtService {
 		return createToken(claims);
 	}
 
+	public long accessExpirySeconds() {
+		return accessExpirySeconds;
+	}
+
 	public String generateRefreshToken() {
 		Instant issuedAt = clock.instant();
 		return createToken(baseClaims(REFRESH_TOKEN_TYPE, issuedAt, refreshExpirySeconds));

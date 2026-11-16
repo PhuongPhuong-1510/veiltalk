@@ -1,10 +1,16 @@
 import { request } from "../client";
 import type { Tokens, User } from "../types";
 
-export function register(email: string, password: string, displayName: string) {
+export function register(
+  email: string,
+  password: string,
+  displayName: string,
+  username: string,
+  usernameSearchable: boolean,
+) {
   return request<{ user: User; tokens: Tokens }>("/auth/register", {
     method: "POST",
-    body: { email, password, display_name: displayName },
+    body: { email, password, display_name: displayName, username, username_searchable: usernameSearchable },
   });
 }
 

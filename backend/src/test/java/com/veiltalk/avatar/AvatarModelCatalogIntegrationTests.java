@@ -22,10 +22,12 @@ class AvatarModelCatalogIntegrationTests {
 	private AvatarModelCatalogService catalogService;
 
 	@Test
-	void tc10ReturnsPublicCatalogWithAtLeastSixCompleteModels() throws Exception {
+	void tc10ReturnsTheTenLocalVrmModels() throws Exception {
 		mockMvc.perform(get("/avatars/models"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.models.length()").value(org.hamcrest.Matchers.greaterThanOrEqualTo(6)))
+				.andExpect(jsonPath("$.models.length()").value(10))
+				.andExpect(jsonPath("$.models[0].id").value("reference-avatar-2"))
+				.andExpect(jsonPath("$.models[9].id").value("reference-avatar-11"))
 				.andExpect(jsonPath("$.models[*].id").exists())
 				.andExpect(jsonPath("$.models[*].name").exists())
 				.andExpect(jsonPath("$.models[*].model_url").exists())
@@ -35,7 +37,7 @@ class AvatarModelCatalogIntegrationTests {
 				.andExpect(jsonPath("$.models[*].model_id").doesNotExist());
 
 		assertThat(catalogService.getModels())
-				.hasSizeGreaterThanOrEqualTo(6)
+				.hasSize(10)
 				.allSatisfy(model -> {
 					assertThat(model.id()).isNotBlank();
 					assertThat(model.name()).isNotBlank();

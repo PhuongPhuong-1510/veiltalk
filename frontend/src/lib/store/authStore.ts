@@ -28,6 +28,12 @@ function persistRefreshToken(token: string | null): void {
   }
 }
 
+function clearSearchHistory(userId: string | undefined): void {
+  if (userId && typeof localStorage !== "undefined") {
+    localStorage.removeItem(`veiltalk-user-search-history:${userId}`);
+  }
+}
+
 export type AuthStatus = "idle" | "authenticated" | "unauthenticated";
 
 interface AuthState {
@@ -37,9 +43,17 @@ interface AuthState {
   isLoading: boolean;
 
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    displayName: string,
+    username: string,
+    usernameSearchable: boolean,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
+  markAvatarSetupComplete: () => void;
+  setUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => {
@@ -48,6 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     getRefreshToken: () => refreshTokenRef,
     onTokensRefreshed: (accessToken) => set({ accessToken }),
     onAuthFailure: () => {
+      clearSearchHistory(get().user?.id);
       persistRefreshToken(null);
       set({ user: null, accessToken: null, status: "unauthenticated" });
     },
@@ -65,16 +80,31 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const { user, tokens } = await authApi.login(email, password);
         persistRefreshToken(tokens.refresh_token);
         set({ user, accessToken: tokens.access_token, status: "authenticated", isLoading: false });
+        // Login responses can come from an older session snapshot. Refresh the
+        // profile so an existing user's selected 3D-character portrait is shown
+        // immediately on Home/Profile instead of falling back to an initial.
+        try {
+          const refreshedUser = await usersApi.getMe();
+          if (refreshedUser) set({ user: refreshedUser });
+        } catch {
+          // The authenticated session is still valid; keep the login payload.
+        }
       } catch (error) {
         set({ isLoading: false });
         throw error;
       }
     },
 
-    async register(email, password, displayName) {
+    async register(email, password, displayName, username, usernameSearchable) {
       set({ isLoading: true });
       try {
-        const { user, tokens } = await authApi.register(email, password, displayName);
+        const { user, tokens } = await authApi.register(
+          email,
+          password,
+          displayName,
+          username,
+          usernameSearchable,
+        );
         persistRefreshToken(tokens.refresh_token);
         set({ user, accessToken: tokens.access_token, status: "authenticated", isLoading: false });
       } catch (error) {
@@ -84,9 +114,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     async logout() {
+      const userId = get().user?.id;
       const token = refreshTokenRef;
-      persistRefreshToken(null);
-      set({ user: null, accessToken: null, status: "unauthenticated" });
       if (token) {
         try {
           await authApi.logout(token);
@@ -94,6 +123,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
           // best-effort: user đã đăng xuất phía client dù API lỗi mạng/hết hạn
         }
       }
+      persistRefreshToken(null);
+      clearSearchHistory(userId);
+      set({ user: null, accessToken: null, status: "unauthenticated" });
     },
 
     async restoreSession() {
@@ -112,6 +144,15 @@ export const useAuthStore = create<AuthState>((set, get) => {
         persistRefreshToken(null);
         set({ user: null, accessToken: null, status: "unauthenticated" });
       }
+    },
+
+    markAvatarSetupComplete() {
+      set((state) => ({
+        user: state.user ? { ...state.user, has_avatar: true } : null,
+      }));
+    },
+    setUser(user) {
+      set({ user });
     },
   };
 });

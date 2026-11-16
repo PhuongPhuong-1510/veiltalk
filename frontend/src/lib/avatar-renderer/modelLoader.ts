@@ -126,7 +126,11 @@ export function createRigProfile(modelGeneration: number, fingerprint: string, b
     leftUpperArm: { parent: "leftShoulder", child: "leftLowerArm", parentMode: "fixed-rest", controlledParentJoint: null }, leftLowerArm: { parent: "leftUpperArm", child: "leftHand", parentMode: "controlled", controlledParentJoint: "leftUpperArm" },
     rightUpperArm: { parent: "rightShoulder", child: "rightLowerArm", parentMode: "fixed-rest", controlledParentJoint: null }, rightLowerArm: { parent: "rightUpperArm", child: "rightHand", parentMode: "controlled", controlledParentJoint: "rightUpperArm" },
   };
-  const leftShoulder = bones.leftShoulder, rightShoulder = bones.rightShoulder, chest = bones.chest, neck = bones.neck;
+  // VRM 0.x permits `chest` to be omitted. Use the closest available torso
+  // reference so otherwise complete arm rigs (for example avatar 10) remain usable.
+  const leftShoulder = bones.leftShoulder, rightShoulder = bones.rightShoulder;
+  const chest = bones.chest ?? bones.upperChest ?? bones.spine;
+  const neck = bones.neck;
   if (!leftShoulder || !rightShoulder || !chest || !neck) return null;
   [leftShoulder, rightShoulder, chest, neck].forEach((bone) => bone.updateWorldMatrix(true, false));
   const torsoRight = leftShoulder.getWorldPosition(new Vector3()).sub(rightShoulder.getWorldPosition(new Vector3())).normalize();

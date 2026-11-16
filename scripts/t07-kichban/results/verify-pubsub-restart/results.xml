@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="scripts\t07-kichban\auth-conv.test.cjs" time="0.098188" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\auth-conv.test.cjs"/>
+	<testcase name="scripts\t07-kichban\message.test.cjs" time="0.089515" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\message.test.cjs"/>
+	<testcase name="scripts\t07-kichban\realtime.test.cjs" time="0.086817" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\realtime.test.cjs"/>
+	<testcase name="T07-PUB-008" time="2.209989" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="scripts\t07-kichban\video.test.cjs" time="0.090172" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\video.test.cjs"/>
+	<!-- tests 5 -->
+	<!-- suites 0 -->
+	<!-- pass 5 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 2690.1497 -->
+</testsuites>

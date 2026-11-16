@@ -22,6 +22,6 @@ class VideoWebhookAuthenticationFilterTests {
 				"access",
 				"secret",
 				"veiltalk",
-				new MinioProperties.Webhook(webhookSecret));
+				new MinioProperties.Webhook(webhookSecret), null);
 	}
 }

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="BFLA-001 user JWT cannot call internal notify or emit a call event" time="1.588287" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-002 user JWT cannot call video webhook or change status and quota" time="1.362011" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-003 missing, wrong and blank internal secrets have no side effect" time="2.324617" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-004 public avatar catalog does not grant access to private APIs" time="0.263224" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-005 profile update cannot elevate role" time="0.683743" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-006 profile update cannot change identity or deletion fields" time="0.824978" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-007 message body cannot forge sender or server fields" time="0.799504" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-008 video creation cannot forge owner, status or quota" time="1.035472" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-001 missing messaging token is refused during handshake" time="0.007928" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-002 empty, duplicate and invalid messaging tokens are refused" time="0.177023" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-003 altered messaging token signature is refused" time="0.173677" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-004 logged-out token cannot start messaging session" time="0.223692" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-005 deleted account token cannot start messaging session" time="0.385308" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-006 allowed Origin opens and disallowed Origin is refused" time="0.202455" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-002 user access credential cannot substitute for notify secret" time="0.838932" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-003 wrong notify secret cannot emit a call event" time="0.855521" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-004 webhook without Authorization cannot mutate video status" time="0.882386" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-005 user JWT cannot substitute for webhook secret" time="0.853787" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-006 notify and webhook secrets cannot be used interchangeably" time="1.386339" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-009 authenticated forged webhook cannot make missing object READY" time="0.923286" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-010 malformed internal body and wrong secret do not reveal internals" time="0.034215" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-001 malformed JSON on a protected route cannot create data" time="0.826763" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-002 server-owned profile and video fields cannot be mass assigned" time="1.094936" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-003 safe SQL metacharacters in search cannot disclose private accounts" time="0.861342" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-004 malformed cursor and object ID cannot read outsider data" time="0.577083" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CONFIG-001 foreign Origin receives no CORS grant on preflight or actual response" time="0.173177" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CONFIG-004 weak internal shared secrets prevent backend startup" time="18.387920" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\config-security.test.cjs"/>
+	<testcase name="AUTH-003 protected HTTP routes require Authorization and have no write side effect" time="1.315572" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-009 expired signed JWT is rejected by HTTP and both WebSockets" time="0.278948" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-002 absent, malformed and changed-signature token cannot signal" time="0.257397" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-003 refresh token cannot authenticate signaling" time="0.217740" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-001 outsider cannot obtain owner download URL or read unsigned object" time="1.186363" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-002 outsider cannot reserve a part in owner multipart upload" time="0.977437" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-003 outsider cannot finalize owner multipart with actual part metadata" time="1.140946" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-004 outsider cannot abort owner multipart or remove session" time="1.007745" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-005 changed presigned part signature is rejected without creating a part" time="0.811691" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-007 forged completion webhook without secret cannot mark video READY" time="0.838861" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-008 wrong shared secret and user JWT cannot mark video READY" time="0.874753" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-009 valid-secret webhook for another or missing object cannot mark READY" time="1.166691" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-011 wrong MinIO ETag cannot finalize or consume owner upload session" time="1.069363" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-012 duplicate, missing or out-of-order parts cannot finalize" time="1.536143" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-001 user search is capped at ten requests per minute" time="0.646322" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-001 logout revokes the same access on HTTP, messaging and signaling" time="0.581423" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-002 outsider cannot interact with private conversation through HTTP or WS" time="1.721787" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-003 user JWT and forged signaling event cannot create internal call notify" time="1.048554" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-004 outsider cannot change video metadata, multipart or object access" time="1.803026" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-005 account deletion revokes HTTP, refresh and both realtime channels" time="1.378642" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-006 revoking one login leaves another device usable across channels" time="1.413959" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-009 late callee gets correct pending offer while outsider stays isolated" time="1.159137" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-007 internal credentials require exact bytes, with no secret in errors" time="0.964531" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-008 notify validates participants and signaling binds caller to authenticated socket" time="1.238225" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-012 replayed webhook after video deletion cannot restore READY" time="1.421377" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-016 valid refresh JWT without DB record cannot mint access" time="0.759691" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-017 logout with another user refresh token cannot revoke either session" time="0.895161" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-019 signed access JWT missing each required claim is rejected" time="0.250079" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-020 signed JWT with future iat or nonincreasing exp is rejected" time="0.243719" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-021 oversized and malformed JWT fail without disrupting valid access" time="0.232645" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-023 client Date header cannot revive an expired signed token" time="0.222938" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-009 method override cannot enter internal handlers or emit a call" time="1.397227" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-010 unsigned role change in JWT cannot grant admin identity" time="0.397815" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-011 response-only video fields cannot update owner, status or timestamps" time="0.801626" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-012 wrong or blank password cannot delete account or revoke token" time="0.816366" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-013 unregistered methods and lookalike internal paths have no privileged effect" time="0.913038" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BFLA-014 CORS preflight does not grant authorization to actual request" time="0.219392" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-011 malformed JSON and missing type cause protocol errors without DB writes" time="0.906010" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-010 open messaging socket stops receiving after signed token expiry" time="4.767564" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-013 oversized frame closes its socket without affecting another user" time="0.464001" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-015 forged PONG fields do not grant conversation access" time="1.026877" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-016 revoking one login token does not close another token socket" time="1.417860" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-017 rejected handshake does not write full JWT into backend log" time="0.276338" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-018 heartbeat PONG cannot preserve revoked socket access" time="1.882254" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-019 outsider reconnect receives no buffered private event" time="1.092266" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-005 null, object and array values cannot create malformed messages" time="0.851464" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-006 deeply nested or long invalid field is bounded and leaves DB unchanged" time="0.861790" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-010 CRLF in display name cannot inject response headers" time="0.200127" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-009 video format cannot add path traversal segments to object key" time="1.331985" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-011 unsupported content types cannot create a conversation" time="0.793465" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-012 method override cannot turn a read into an authorized write" time="0.800354" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-014 validation, missing object and conflict errors hide internals" time="0.222556" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-015 extreme page limits and malformed cursors cannot bypass caps" time="0.244695" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-016 unsupported Content-Encoding cannot run protected business action" time="0.809369" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-007 Unicode survives while invalid control characters are rejected without writes" time="1.099434" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-013 duplicate sensitive JSON keys return 400 before any mutation" time="1.651970" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-002 search rate limit for one account does not block another" time="12.600497" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-003 client metrics second event inside three seconds is rate limited" time="0.211555" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-008 messaging WS caps twenty attempts per IP and five live sessions per user" time="1.015944" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-004 changing X-Forwarded-For cannot bypass per-user search limit" time="0.434178" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-005 search limit expires and allows valid requests again" time="62.895179" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\extended.test.cjs"/>
+	<testcase name="ABUSE-009 repeated invalid WS events close only the offending socket" time="0.496509" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-010 over-quota admission is per user and does not create video" time="0.864411" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="ABUSE-012 one invalid WS client does not break another user session" time="0.575358" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-010 authentication and realtime channels fail closed while Redis is unavailable" time="8.284118" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CONFIG-002 messaging handshake refuses foreign Origin with a valid token" time="0.229196" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CONFIG-007 actuator exposes health but not env, beans, metrics or heapdump" time="0.060198" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="LOG-002 password stays hashed in DB and absent from responses and service logs" time="0.535741" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="LOG-003 presigned URL query is absent from errors and service logs" time="0.240381" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="LOG-004 internal call secret is not echoed on successful or rejected notify" time="0.427078" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="LOG-006 metrics request does not print token or arbitrary personal content" time="0.293709" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="LOG-007 forbidden and missing video errors reveal no owner detail" time="1.217291" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="LOG-011 health response contains status only and no environment secrets" time="0.013360" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-005 message ID from another conversation cannot be updated" time="1.637099" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-012 mixed owner video ID and foreign upload ID cannot control either session" time="1.680902" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-013 cursor from a private conversation does not reveal its messages elsewhere" time="0.799327" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-014 public avatar returns only public fields" time="0.434410" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-015 deleted video cannot be read, renamed or deleted again" time="0.955941" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-016 outsider cannot send TYPING or TYPING_STOP to private conversation" time="1.194816" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-017 random and foreign IDs reveal no private content or side effects" time="1.132175" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-018 supplied user IDs cannot take ownership across message, video and avatar" time="1.093243" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INPUT-008 HTML and script remain inert text in display_name and messages" time="0.951700" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CONFIG-008 unknown and invalid requests do not expose stack traces or internals" time="0.203366" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="LOG-001 access and refresh tokens never appear in service logs" time="0.487950" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="LOG-005 error responses hide SQL, implementation classes and filesystem paths" time="0.265050" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-007 validation failures across messaging and video leak no credentials or private payload" time="0.555811" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CROSS-008 CORS does not replace authentication or object authorization" time="0.526479" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-001 registration stores a BCrypt hash and returns no password hash" time="0.461927" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-002 wrong and unknown credentials share a neutral error and create no refresh token" time="1.222157" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-014 deleted account loses HTTP, refresh and WebSocket access" time="1.248350" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-015 logout revokes refresh record and reuse is denied" time="0.658346" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-018 malformed Bearer headers cannot authenticate" time="0.255695" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-024 separate logins create distinct token IDs and refresh records" time="0.772683" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-004 changed JWT signature cannot authenticate or mutate data" time="0.644595" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-005 changed JWT payload cannot authenticate" time="0.167212" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-006 unsigned JWT cannot authenticate" time="0.188863" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-007 refresh token is rejected as access on HTTP and WebSocket" time="0.218652" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-008 access token cannot replace refresh token" time="0.644122" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-010 logout revokes HTTP access without creating a conversation" time="0.840471" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-011 revoked access cannot open new messaging WebSocket" time="0.184892" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-012 and SIG-001 revoked access cannot signal after logout" time="0.874930" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-013 logout of one user does not revoke another" time="0.419664" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-001 outsider cannot read conversation detail" time="0.965756" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-002 outsider cannot read conversation messages" time="1.003114" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-003 outsider cannot create a message or notify participants" time="2.304767" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-004 outsider cannot change message status or emit status events" time="2.130262" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-006 outsider cannot reserve an upload chunk for the owner" time="1.120919" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-007 outsider cannot finalize owner upload" time="1.087459" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-008 outsider cannot abort owner upload" time="1.083133" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-009 outsider cannot read a ready video or receive a view URL" time="1.458598" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="BOLA-010 and BOLA-011 outsider cannot delete or rename owner video" time="1.552205" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-007 outsider cannot spoof typing identity into a conversation" time="1.659446" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-008 outsider receives no private message event" time="1.196126" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-009 already-open messaging socket loses access after logout" time="1.946273" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-012 client cannot publish server-only events" time="1.414941" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSM-014 schema violations expire per socket; third within window closes 1008" time="3.028726" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-005 and SIG-006 outsider cannot answer, send ICE, or end another call" time="1.054338" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-004 caller identity comes from authenticated socket" time="0.499153" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-007 late callee receives the authenticated pending offer" time="1.105939" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-021 already-open signaling socket cannot relay after logout" time="1.399044" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-001 notify without secret cannot emit CALL_INCOMING" time="0.873407" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-008 pending offer is delivered only to its intended callee" time="1.041802" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-009 ICE for outsider target is not relayed outside active call" time="1.009577" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-010 second offer while pending does not start another call" time="0.983751" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-011 answer before offer cannot create a call session" time="0.795004" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-012 ICE and answer after call end cannot revive the old session" time="0.908500" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-013 outsider with known call ID cannot end or hijack session" time="1.013399" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-014 deleted account loses open and new signaling access" time="1.015182" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-015 signaling caps connection attempts per IP without blocking another IP" time="0.670912" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-016 token signed with another key is rejected by signaling" time="0.185454" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-017 signaling log does not contain JWT from failed or successful sockets" time="0.277246" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-018 expired pending offer is not replayed to a late callee" time="40.232821" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-019 simultaneous calls do not exchange SDP or ICE across pairs" time="0.744609" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-020 call notify reveals metadata only to callee, never SDP to outsider" time="1.100145" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-013 outsider responses contain no owner download URL, key or upload ID" time="1.375001" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-014 aborted upload rejects its old presigned PUT URL" time="0.730781" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-015 presigned URL cannot be retargeted to another object or part" time="1.490594" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-016 independently created video sessions use distinct object keys" time="0.838415" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-018 duplicate completion webhook is idempotent for quota and status" time="1.674006" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-019 delayed webhook after deletion cannot resurrect video or quota" time="1.520819" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-021 MinIO credentials are absent from video JSON, errors and service logs" time="0.284491" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-022 outsider delete cannot remove owner object or metadata" time="1.285063" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-023 recording video has no downloadable view URL" time="0.219696" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-020 false container or codec never becomes READY" time="3.552623" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-024 client cannot set video size, status or storage path in JSON" time="0.661415" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-025 Origin header does not replace webhook shared secret" time="0.917967" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-026 test service logs do not persist full presigned query signatures" time="0.201383" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<!-- tests 174 -->
+	<!-- suites 0 -->
+	<!-- pass 174 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 461666.1844 -->
+
+	<testcase name="LOG-009 JUnit and runner artifacts contain no raw credentials" classname="post-run-security"/>
+</testsuites>

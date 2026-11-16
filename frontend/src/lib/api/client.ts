@@ -1,6 +1,14 @@
 import { ApiError, type ErrorEnvelope } from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL
+  ?? (import.meta.env.DEV ? "http://localhost:8080" : window.location.origin);
+
+export function resolveMediaUrl(value?: string | null): string | null {
+  if (!value) return null;
+  if (/^(?:https?:|blob:|data:)/i.test(value)) return value;
+  if (value.startsWith("/avatars/")) return new URL(value, BASE_URL).toString();
+  return value;
+}
 
 const NO_REFRESH_PATHS = ["/auth/login", "/auth/register", "/auth/refresh"];
 
@@ -63,6 +71,7 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
+  signal?: AbortSignal;
 }
 
 function buildUrl(path: string, query?: RequestOptions["query"]): string {
@@ -78,16 +87,31 @@ function buildUrl(path: string, query?: RequestOptions["query"]): string {
 }
 
 async function parseErrorBody(response: Response): Promise<ApiError> {
+  const retryAfterValue = response.headers.get("Retry-After");
+  const retryAfterSeconds = retryAfterValue === null ? undefined : Number.parseInt(retryAfterValue, 10);
   try {
     const body: ErrorEnvelope = await response.json();
-    return new ApiError(response.status, body.error.code, body.error.message, body.error.details);
+    return new ApiError(
+      response.status,
+      body.error.code,
+      body.error.message,
+      body.error.details,
+      Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
+    );
   } catch {
-    return new ApiError(response.status, "UNKNOWN", "Lỗi không xác định từ server");
+    return new ApiError(
+      response.status,
+      "UNKNOWN",
+      "Lỗi không xác định từ server",
+      undefined,
+      Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
+    );
   }
 }
 
 async function doFetch(path: string, options: RequestOptions): Promise<Response> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers: Record<string, string> = isFormData ? {} : { "Content-Type": "application/json" };
   const accessToken = authHooks.getAccessToken();
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
@@ -96,7 +120,10 @@ async function doFetch(path: string, options: RequestOptions): Promise<Response>
   return fetch(buildUrl(path, options.query), {
     method: options.method ?? "GET",
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body: options.body !== undefined
+      ? isFormData ? options.body as FormData : JSON.stringify(options.body)
+      : undefined,
+    signal: options.signal,
   });
 }
 
@@ -104,7 +131,8 @@ export async function request<T>(path: string, options: RequestOptions = {}, _re
   let response: Response;
   try {
     response = await doFetch(path, options);
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new ApiError(0, "NETWORK_ERROR", "Không thể kết nối tới server");
   }
 
@@ -117,9 +145,10 @@ export async function request<T>(path: string, options: RequestOptions = {}, _re
     throw await parseErrorBody(response);
   }
 
-  if (response.status === 204) {
+  if (response.status === 204 || response.headers.get("Content-Length") === "0") {
     return undefined as T;
   }
 
-  return response.json() as Promise<T>;
+  const body = await response.text();
+  return (body ? JSON.parse(body) : undefined) as T;
 }

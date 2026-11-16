@@ -2,6 +2,7 @@ package com.veiltalk.video;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,10 +23,18 @@ public class VideoWebhookService {
 
 	private final VideoRepository videoRepository;
 	private final MinioProperties minioProperties;
+	private final VideoMediaValidator mediaValidator;
+	private final VideoMultipartStorage multipartStorage;
+	private final VideoCleanupJobRepository cleanupJobs;
 
-	public VideoWebhookService(VideoRepository videoRepository, MinioProperties minioProperties) {
+	public VideoWebhookService(VideoRepository videoRepository, MinioProperties minioProperties,
+			VideoMediaValidator mediaValidator, VideoMultipartStorage multipartStorage,
+			VideoCleanupJobRepository cleanupJobs) {
 		this.videoRepository = videoRepository;
 		this.minioProperties = minioProperties;
+		this.mediaValidator = mediaValidator;
+		this.multipartStorage = multipartStorage;
+		this.cleanupJobs = cleanupJobs;
 	}
 
 	@Transactional
@@ -82,6 +91,24 @@ public class VideoWebhookService {
 			return;
 		}
 
+		var candidate = videoRepository.findFirstByStoragePath(record.storagePath());
+		if (candidate.isEmpty() || candidate.get().getStatus() != VideoStatus.PROCESSING
+				|| candidate.get().getDeletedAt() != null) return;
+		Video video = candidate.get();
+		if (video.getFileSizeBytes() == record.fileSizeBytes()
+				&& !mediaValidator.isPlayable(record.storagePath(), video.getFormat(), record.fileSizeBytes())) {
+			LOGGER.warn("VIDEO_MEDIA_INVALID videoId={}", video.getId());
+			if (videoRepository.failProcessing(video.getId()) == 1) {
+				try {
+					multipartStorage.removeObject(video.getStoragePath());
+				} catch (RuntimeException exception) {
+					cleanupJobs.save(VideoCleanupJob.removeObject(
+							video.getId(), video.getStoragePath(), Instant.now()));
+					LOGGER.error("VIDEO_MEDIA_DELETE_RETRY videoId={}", video.getId());
+				}
+			}
+			return;
+		}
 		int updated = videoRepository.markReadyFromWebhook(record.storagePath(), record.fileSizeBytes());
 		if (updated == 1) {
 			return;
@@ -90,12 +117,12 @@ public class VideoWebhookService {
 			throw new IllegalStateException("Nhiều video trùng storage_path");
 		}
 
-		videoRepository.findFirstByStoragePath(record.storagePath()).ifPresentOrElse(video -> {
-			if (video.getStatus() == VideoStatus.PROCESSING
-					&& video.getDeletedAt() == null
-					&& video.getFileSizeBytes() != record.fileSizeBytes()) {
+		videoRepository.findFirstByStoragePath(record.storagePath()).ifPresentOrElse(found -> {
+			if (found.getStatus() == VideoStatus.PROCESSING
+					&& found.getDeletedAt() == null
+					&& found.getFileSizeBytes() != record.fileSizeBytes()) {
 				LOGGER.warn("VIDEO_WEBHOOK_SIZE_MISMATCH videoId={} expectedBytes={} actualBytes={}",
-						video.getId(), video.getFileSizeBytes(), record.fileSizeBytes());
+						found.getId(), found.getFileSizeBytes(), record.fileSizeBytes());
 			}
 		}, () -> LOGGER.warn("Bỏ qua MinIO webhook không có metadata cho objectKey={}",
 				record.storagePath()));

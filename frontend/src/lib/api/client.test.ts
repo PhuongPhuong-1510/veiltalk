@@ -145,6 +145,16 @@ describe("api client", () => {
     expect(error?.details).toEqual({ reason: "not-member" });
   });
 
+  it("giữ Retry-After trong ApiError để UI countdown", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(
+      JSON.stringify({ error: { code: "RATE_LIMITED", message: "Too many requests" } }),
+      { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "37" } },
+    ));
+
+    await expect(request("/users/search/usernames", { method: "POST", body: { query: "abc" } }))
+      .rejects.toMatchObject({ status: 429, code: "RATE_LIMITED", retryAfterSeconds: 37 });
+  });
+
   it("token đã hết hạn ngay khi khởi động app (không có refresh token) -> đá về login êm, không throw ngoài tầm kiểm soát", async () => {
     refreshToken = null;
     fetchMock.mockResolvedValueOnce(
@@ -161,6 +171,14 @@ describe("api client", () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     const result = await request("/videos/abc");
+
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined for a successful upsert with an empty body", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    const result = await request<void>("/avatars/me", { method: "PUT", body: {} });
 
     expect(result).toBeUndefined();
   });

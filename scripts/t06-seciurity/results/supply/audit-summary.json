@@ -1,0 +1,14 @@
+{
+  "caseId": "SUPPLY-002",
+  "checkedAt": "2026-10-28T08:12:06.086Z",
+  "packageLockSha256": "cd4294b49c3d03486cb1b9975f8cbf39f3274621713f9032f4ea1127c3b04f09",
+  "productionDependencies": 25,
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  }
+}

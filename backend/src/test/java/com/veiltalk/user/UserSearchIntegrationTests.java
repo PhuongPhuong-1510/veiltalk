@@ -71,6 +71,7 @@ class UserSearchIntegrationTests {
 				.andExpect(jsonPath("$.found").value(true))
 				.andExpect(jsonPath("$.user.id").value(target.getId().toString()))
 				.andExpect(jsonPath("$.user.display_name").value("Target user"))
+				.andExpect(jsonPath("$.user.username").doesNotExist())
 				.andExpect(jsonPath("$.user.email").doesNotExist());
 	}
 
@@ -104,7 +105,8 @@ class UserSearchIntegrationTests {
 		}
 		mockMvc.perform(searchRequest(targetEmail))
 				.andExpect(status().isTooManyRequests())
-				.andExpect(header().string("Retry-After", org.hamcrest.Matchers.not(org.hamcrest.Matchers.isEmptyOrNullString())));
+				.andExpect(header().string("Retry-After", org.hamcrest.Matchers.not(org.hamcrest.Matchers.isEmptyOrNullString())))
+				.andExpect(jsonPath("$.error.code").value("RATE_LIMITED"));
 	}
 
 	@Test

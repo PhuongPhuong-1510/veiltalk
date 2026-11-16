@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="scripts\t06-seciurity\boundaries.test.cjs" time="0.167412" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\boundaries.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\config-security.test.cjs" time="0.115106" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\config-security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\critical.test.cjs" time="0.155343" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\critical.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\cross-security.test.cjs" time="0.153428" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\cross-security.test.cjs"/>
+	<testcase name="INPUT-009 video format cannot add path traversal segments to object key" time="2.878218" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="scripts\t06-seciurity\observability.test.cjs" time="0.149726" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\observability.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\ownership.test.cjs" time="0.156228" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\ownership.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\security.test.cjs" time="0.152125" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\signaling-security.test.cjs" time="0.150074" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\signaling-security.test.cjs"/>
+	<testcase name="scripts\t06-seciurity\video-security.test.cjs" time="0.157778" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\video-security.test.cjs"/>
+	<!-- tests 10 -->
+	<!-- suites 0 -->
+	<!-- pass 10 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 4437.5331 -->
+</testsuites>

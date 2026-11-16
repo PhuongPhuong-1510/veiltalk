@@ -1,0 +1,10 @@
+{
+  "T05-ENV-003": {
+    "status": "NOT RUN",
+    "reason": "Cần hai lần chạy runner độc lập; lượt xác minh này chạy một lần."
+  },
+  "T05-ENV-005": {
+    "status": "NOT RUN",
+    "reason": "Chưa chạy probe cố ý làm fail trong thư mục kết quả riêng."
+  }
+}

@@ -2,6 +2,7 @@ require("dotenv").config({ quiet: true });
 
 const { createServer } = require("./server");
 const { createCallNotifyClient } = require("./callNotifyClient");
+const { createRevocationStore } = require("./revocationStore");
 
 const port = process.env.PORT || 3000;
 const jwtSecret = process.env.SIGNALING_JWT_SECRET;
@@ -28,6 +29,12 @@ const callNotifyClient = createCallNotifyClient({
   timeoutMs: callNotifyTimeoutMs,
 });
 
-createServer({ port, jwtSecret, trustedProxyIps, callNotifyClient });
-
-console.log(`VeilTalk signaling server listening on port ${port}`);
+createRevocationStore({ host: process.env.REDIS_HOST || "localhost", port: process.env.REDIS_PORT || 6379 })
+  .then((revocationStore) => {
+    createServer({ port, jwtSecret, trustedProxyIps, callNotifyClient, revocationStore });
+    console.log(`VeilTalk signaling server listening on port ${port}`);
+  })
+  .catch((error) => {
+    console.error(`Cannot start signaling without token revocation checks: ${error.message}`);
+    process.exit(1);
+  });

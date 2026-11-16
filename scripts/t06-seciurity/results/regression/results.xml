@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="T05-CALL-001" time="1.341681" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-002" time="0.525293" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-003" time="0.494514" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-009" time="1.138442" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-011" time="0.275490" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-012" time="1.622509" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-013" time="0.530761" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-001" time="0.732648" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-002" time="0.991097" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-003" time="0.934015" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-004" time="0.428770" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-005" time="0.436469" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-001" time="0.819746" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-002" time="0.777788" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-005" time="0.892249" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-001" time="0.834750" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-002" time="0.939129" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-003" time="0.762260" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-004" time="1.241055" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-005" time="1.162210" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-001" time="0.476942" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-002" time="1.866086" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-003" time="0.907394" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-005" time="1.182838" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-006" time="0.664080" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-DEL-001" time="1.052271" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ENV-001" time="0.797749" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ENV-005" time="0.088904" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-007" time="11.039468" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\extended.test.cjs"/>
+	<testcase name="T05-MSG-011" time="4.259145" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\extended.test.cjs"/>
+	<testcase name="T05-CROSS-002" time="0.944540" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CROSS-003" time="0.847684" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CROSS-004" time="1.521127" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CROSS-005" time="1.382129" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-USR-001" time="0.671199" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-USR-002" time="0.219323" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-USR-003" time="0.486696" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-AVA-001" time="0.719020" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-AVA-002" time="0.678218" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-003" time="0.602957" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-001" time="0.725451" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-004" time="1.026548" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-012" time="1.232454" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-DEL-002" time="1.492909" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CROSS-001" time="0.615636" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-006" time="0.705764" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-007" time="0.778748" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-008" time="0.443008" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-009" time="0.743021" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-010" time="0.562047" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-011" time="0.876852" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-USR-004" time="0.439756" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-USR-005" time="0.412269" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-USR-006" time="0.545055" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-USR-007" time="0.789430" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-USR-008" time="0.400307" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-AVA-003" time="0.445571" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-AVA-004" time="0.252995" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-AVA-005" time="0.235094" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-AVA-006" time="0.730517" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-004" time="0.588253" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-006" time="0.698456" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-009" time="1.186768" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-010" time="0.601502" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-006" time="1.896694" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-007" time="0.609861" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-008" time="0.882498" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-009" time="1.660500" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-010" time="2.993201" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-012" time="0.798388" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-013" time="0.696826" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-014" time="0.702674" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-015" time="2.802788" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MSG-016" time="0.703465" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-002" time="0.708191" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-003" time="0.877428" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-004" time="2.938860" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-006" time="0.532508" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-007" time="1.696440" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-008" time="0.712507" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-009" time="0.709913" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-010" time="0.194525" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-004" time="0.601893" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-005" time="0.483362" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-006" time="0.372094" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-007" time="31.381519" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\p1.test.cjs"/>
+	<testcase name="T05-CALL-010" time="0.454612" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-ACC-012" time="1.915387" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CON-008" time="0.710313" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-005" time="1.468595" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-WS-011" time="1.629142" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CALL-008" time="33.706241" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\remaining.test.cjs"/>
+	<testcase name="T05-VID-007" time="1.623393" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\remaining.test.cjs"/>
+	<testcase name="T05-VID-008" time="1.108026" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\remaining.test.cjs"/>
+	<testcase name="T05-VID-009" time="1.335419" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\remaining.test.cjs"/>
+	<testcase name="T05-VID-010" time="1.025472" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-011" time="1.956021" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-013" time="0.939488" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-014" time="1.649760" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\remaining.test.cjs"/>
+	<testcase name="T05-VID-015" time="1.678254" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-016" time="1.510696" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-017" time="0.870197" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-018" time="1.248130" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\remaining.test.cjs"/>
+	<testcase name="T05-DEL-003" time="2.190302" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\remaining.test.cjs"/>
+	<testcase name="T05-DEL-004" time="1.774342" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-DEL-005" time="0.865617" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-DEL-006" time="1.367194" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-DEL-007" time="1.098573" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-DEL-008" time="1.850481" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MET-001" time="0.879957" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MET-002" time="5.749754" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MET-003" time="3.306103" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-MET-004" time="0.244926" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CROSS-006" time="0.536614" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CROSS-007" time="2.136833" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-CROSS-008" time="1.463806" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<!-- tests 116 -->
+	<!-- suites 0 -->
+	<!-- pass 116 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 198198.1955 -->
+</testsuites>

@@ -9,6 +9,7 @@ public record LoginResponse(UserResponse user, TokenResponse tokens) {
 	public record UserResponse(
 			UUID id,
 			String email,
+			String username,
 			@JsonProperty("display_name") String displayName,
 			String role,
 			@JsonProperty("has_avatar") boolean hasAvatar) {

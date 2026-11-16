@@ -623,9 +623,7 @@ export class AvatarMotionProcessor {
     this.upperBodyRigProfile = profile;
     this.upperBodyCalibration.setModelFingerprint(profile?.modelFingerprint ?? null);
     this.resetUpperBodyState();
-    // F1 learns automatically, but AR4 previously stayed idle until the DEV-only
-    // button was pressed. Begin paired collection when the model rig is ready;
-    // the button remains available to explicitly re-anchor neutral later.
+    // F1 and AR4 collect neutral samples automatically once the model rig is ready.
     if (profile) this.upperBodyCalibration.begin(profile.modelFingerprint);
   }
   getUpperBodyCalibration(): UpperBodyCalibrationSnapshot { return this.upperBodyCalibration.snapshot(); }

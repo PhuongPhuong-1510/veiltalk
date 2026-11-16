@@ -1,0 +1,9 @@
+{
+  "runId": "veiltalk-supply-1793175124629-8ab4c1",
+  "date": "2026-10-28T08:12:30.210Z",
+  "exitCode": 1,
+  "revision": "a759fa5d409a4e263da8dc61c06708f8acc96ae2",
+  "services": [
+    "npm registry audit of signaling production dependencies"
+  ]
+}

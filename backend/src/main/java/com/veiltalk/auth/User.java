@@ -31,6 +31,9 @@ public class User {
 	@Column(name = "display_name", nullable = false, length = 100)
 	private String displayName;
 
+	@Column(length = 30)
+	private String username;
+
 	@Column(name = "avatar_url", length = 500)
 	private String avatarUrl;
 
@@ -40,6 +43,9 @@ public class User {
 
 	@Column(name = "is_discoverable", nullable = false)
 	private boolean isDiscoverable;
+
+	@Column(name = "is_username_searchable", nullable = false)
+	private boolean isUsernameSearchable;
 
 	@Column(name = "email_notifications", nullable = false)
 	private boolean emailNotifications = true;
@@ -92,6 +98,14 @@ public class User {
 		this.displayName = displayName;
 	}
 
+	public String getUsername() {
+		return username;
+	}
+
+	public void setUsername(String username) {
+		this.username = username;
+	}
+
 	public String getAvatarUrl() {
 		return avatarUrl;
 	}
@@ -114,6 +128,14 @@ public class User {
 
 	public void setDiscoverable(boolean discoverable) {
 		isDiscoverable = discoverable;
+	}
+
+	public boolean isUsernameSearchable() {
+		return isUsernameSearchable;
+	}
+
+	public void setUsernameSearchable(boolean usernameSearchable) {
+		isUsernameSearchable = usernameSearchable;
 	}
 
 	public boolean isEmailNotifications() {

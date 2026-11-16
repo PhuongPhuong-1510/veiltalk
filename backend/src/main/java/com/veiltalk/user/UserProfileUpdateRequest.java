@@ -2,12 +2,14 @@ package com.veiltalk.user;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
+import com.veiltalk.auth.ValidTextControls;
 
 import jakarta.validation.constraints.Size;
 
 public class UserProfileUpdateRequest {
 
 	@Size(min = 1, max = 100)
+	@ValidTextControls
 	private String displayName;
 
 	private String avatarUrl;

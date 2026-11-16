@@ -6,8 +6,9 @@ import java.security.MessageDigest;
 
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.veiltalk.auth.InternalSecretPolicy;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,10 +25,8 @@ public class VideoWebhookAuthenticationFilter extends OncePerRequestFilter {
 	private final byte[] expectedAuthorization;
 
 	public VideoWebhookAuthenticationFilter(MinioProperties properties) {
-		String secret = properties.webhook() == null ? null : properties.webhook().secret();
-		if (!StringUtils.hasText(secret)) {
-			throw new IllegalStateException("MINIO_WEBHOOK_SECRET phải được cấu hình và không được rỗng");
-		}
+		String secret = InternalSecretPolicy.requireStrongSecret(
+				properties.webhook() == null ? null : properties.webhook().secret(), "MINIO_WEBHOOK_SECRET");
 		this.expectedAuthorization = ("Bearer " + secret).getBytes(StandardCharsets.UTF_8);
 	}
 

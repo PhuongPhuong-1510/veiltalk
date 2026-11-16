@@ -51,11 +51,12 @@ public class MessageRealtimePublisher {
 			UUID calleeUserId,
 			UUID callerId,
 			String callerDisplayName,
-			UUID callSessionId) {
+			UUID callSessionId,
+			UUID callId) {
 		publish(
 				calleeUserId,
 				"CALL_INCOMING",
-				new CallIncomingEvent(callerId, callerDisplayName, callSessionId),
+				new CallIncomingEvent(callerId, callerDisplayName, callSessionId, callId),
 				callSessionId);
 	}
 
@@ -100,6 +101,7 @@ public class MessageRealtimePublisher {
 	private record CallIncomingEvent(
 			@com.fasterxml.jackson.annotation.JsonProperty("caller_id") UUID callerId,
 			@com.fasterxml.jackson.annotation.JsonProperty("caller_display_name") String callerDisplayName,
-			@com.fasterxml.jackson.annotation.JsonProperty("call_session_id") UUID callSessionId) {
+			@com.fasterxml.jackson.annotation.JsonProperty("call_session_id") UUID callSessionId,
+			@com.fasterxml.jackson.annotation.JsonProperty("call_id") UUID callId) {
 	}
 }

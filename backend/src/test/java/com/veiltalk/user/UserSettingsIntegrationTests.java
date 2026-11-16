@@ -57,8 +57,26 @@ class UserSettingsIntegrationTests {
 		mockMvc.perform(authenticatedGet())
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.discoverable").value(false))
+				.andExpect(jsonPath("$.username_searchable").value(false))
 				.andExpect(jsonPath("$.email_notifications").value(true))
 				.andExpect(jsonPath("$.theme").value("system"));
+	}
+
+	@Test
+	void requiresUsernameBeforeEnablingUsernameSearch() throws Exception {
+		mockMvc.perform(authenticatedPut("""
+					{ "username_searchable": true }
+					"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code").value("USERNAME_REQUIRED"));
+
+		user.setUsername("settings_user");
+		userRepository.saveAndFlush(user);
+		mockMvc.perform(authenticatedPut("""
+					{ "username_searchable": true }
+					"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.username_searchable").value(true));
 	}
 
 	@Test

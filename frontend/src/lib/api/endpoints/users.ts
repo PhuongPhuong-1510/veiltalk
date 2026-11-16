@@ -5,7 +5,7 @@ export function getMe() {
   return request<User>("/users/me");
 }
 
-export function updateMe(fields: { display_name?: string; avatar_url?: string | null }) {
+export function updateMe(fields: { display_name?: string }) {
   return request<User>("/users/me", { method: "PUT", body: fields });
 }
 
@@ -22,8 +22,26 @@ export function updateSettings(fields: Partial<UserSettings>) {
 }
 
 export function searchUsers(email: string) {
-  return request<{ found: boolean; user?: { id: string; display_name: string } }>("/users/search", {
+  return request<{ found: boolean; user?: { id: string; display_name: string; avatar_url?: string | null } }>("/users/search", {
     method: "POST",
     body: { email },
+  });
+}
+
+export interface UsernameSearchResult {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url?: string | null;
+}
+
+export function searchUsernames(query: string, signal?: AbortSignal) {
+  return request<{
+    data: UsernameSearchResult[];
+    meta: { limit: number; truncated: boolean };
+  }>("/users/search/usernames", {
+    method: "POST",
+    body: { query, limit: 10 },
+    signal,
   });
 }

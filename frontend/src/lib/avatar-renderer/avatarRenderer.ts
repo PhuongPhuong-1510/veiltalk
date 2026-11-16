@@ -1,5 +1,5 @@
 import { assistBimanualPalms, type BimanualPalmAssistResult } from "../avatar-motion/bimanualPalmAssist";
-import { AmbientLight, Box3, Color, DirectionalLight, PerspectiveCamera, Quaternion, Scene, Vector3, WebGLRenderer } from "three";
+import { AmbientLight, Box3, Color, DirectionalLight, PerspectiveCamera, Quaternion, Scene, Vector3, WebGLRenderer, WebGLRenderTarget } from "three";
 
 import { IDENTITY_QUATERNION, isFingerJointName, type AvatarPoseJointNameV2, type AvatarPosePacket, type QuaternionData, type ShoulderMotionStateV1 } from "../avatar-motion/avatarPoseTypes";
 
@@ -33,6 +33,7 @@ import { refineIndexFace } from "./indexFaceRefinement";
 import { FinalFaceContactRefiner, type FinalFaceContactDiagnostic } from "./finalFaceContactRefinement";
 import { constrainArmDof, ARM_DOF_LIMITS } from "../avatar-motion/armDofConstraints";
 import { freezeRigProfile, validateRigProfile } from "../avatar-motion/normalizedRigProfile";
+import { createAvatarPreviewMotionController } from "../avatar-preview/avatarPreviewMotionController";
 
 
 
@@ -238,6 +239,7 @@ export class AvatarRenderer {
 
 
 
+
   constructor(canvas: HTMLCanvasElement, options: AvatarRendererOptions = {}, loader?: AvatarModelLoader) {
 
     this.canvas = canvas;
@@ -359,6 +361,93 @@ export class AvatarRenderer {
   }
 
 getVerticalOffset(): number { return this.verticalOffsetRatio; }
+
+  async capturePortrait(size = 512): Promise<Blob> {
+    this.assertUsable();
+    if (!this.model || size !== 512) throw new Error("Avatar portrait requires a loaded model and 512px output.");
+    const target = new WebGLRenderTarget(size, size, { depthBuffer: true, stencilBuffer: false });
+    const pixels = new Uint8Array(size * size * 4);
+    const previousTarget = this.webgl.getRenderTarget();
+    const previousBackground = this.scene.background;
+    const savedRotations = new Map<string, Quaternion>();
+    const savedRootPosition = this.model.root.position.clone();
+    const savedRootRotation = this.model.root.quaternion.clone();
+    const expressionManager = this.model.vrm?.expressionManager;
+    const savedExpressions = new Map<string, number>();
+    for (const name of Object.keys(expressionManager?.expressionMap ?? {})) {
+      savedExpressions.set(name, expressionManager?.getValue(name) ?? 0);
+    }
+    try {
+      for (const [name, bone] of Object.entries(this.model.bones)) {
+        if (!bone) continue;
+        savedRotations.set(name, bone.quaternion.clone());
+        const rest = this.model.restRotations[name as keyof typeof this.model.restRotations];
+        if (rest) bone.quaternion.set(rest.x, rest.y, rest.z, rest.w);
+      }
+      this.model.root.position.copy(savedRootPosition);
+      this.model.root.quaternion.copy(savedRootRotation);
+      for (const name of savedExpressions.keys()) expressionManager?.setValue(name, 0);
+
+      this.model.root.updateMatrixWorld(true);
+      const restBounds = new Box3().setFromObject(this.model.root);
+      const greeting = createAvatarPreviewMotionController({
+        vrm: this.model.vrm,
+        root: this.model.root,
+        bones: this.model.bones,
+        rigProfile: this.model.rigProfile,
+        motion: "wave-right",
+        modelWidth: Math.max(restBounds.getSize(new Vector3()).x, 0.5),
+      });
+      // A stable point after the raise transition: open palm, soft head tilt and a natural smile.
+      greeting.update(1.15);
+      this.model.vrm?.update(0);
+      this.model.root.updateMatrixWorld(true);
+
+      const bounds = new Box3().setFromObject(this.model.root);
+      const dimensions = bounds.getSize(new Vector3());
+      const center = bounds.getCenter(new Vector3());
+      const camera = new PerspectiveCamera(30, 1, 0.01, 100);
+      const portraitCenterY = bounds.min.y + dimensions.y * 0.71;
+      const visibleHeight = Math.max(dimensions.y * 0.62, 0.5);
+      const distance = visibleHeight / (2 * Math.tan((camera.fov * Math.PI) / 360));
+      camera.position.set(center.x, portraitCenterY, bounds.max.z + distance);
+      camera.lookAt(center.x, portraitCenterY, center.z);
+      camera.updateProjectionMatrix();
+
+      this.scene.background = null;
+      this.webgl.setRenderTarget(target);
+      this.webgl.setClearColor(0x000000, 0);
+      this.webgl.clear(true, true, true);
+      this.webgl.render(this.scene, camera);
+      this.webgl.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+    } finally {
+      for (const [name, rotation] of savedRotations) this.model?.bones[name as keyof typeof this.model.bones]?.quaternion.copy(rotation);
+      this.model.root.position.copy(savedRootPosition);
+      this.model.root.quaternion.copy(savedRootRotation);
+      for (const [name, value] of savedExpressions) expressionManager?.setValue(name, value);
+      this.model?.vrm?.update(0);
+      this.model.root.updateMatrixWorld(true);
+      this.scene.background = previousBackground;
+      this.webgl.setRenderTarget(previousTarget);
+      target.dispose();
+    }
+
+    const output = new Uint8ClampedArray(pixels.length);
+    const rowBytes = size * 4;
+    for (let y = 0; y < size; y += 1) {
+      const sourceStart = (size - 1 - y) * rowBytes;
+      output.set(pixels.subarray(sourceStart, sourceStart + rowBytes), y * rowBytes);
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = size; canvas.height = size;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Không thể tạo ảnh đại diện trên trình duyệt này.");
+    context.putImageData(new ImageData(output, size, size), 0, 0);
+    return new Promise<Blob>((resolve, reject) => canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("Không thể mã hóa ảnh đại diện PNG.")),
+      "image/png",
+    ));
+  }
 
   resize(width: number, height: number): void { this.assertUsable(); if (width <= 0 || height <= 0) return; this.webgl.setSize(width, height, false); this.camera.aspect = width / height; this.camera.updateProjectionMatrix(); }
 

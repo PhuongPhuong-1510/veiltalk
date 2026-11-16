@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="INT-011 public network cannot directly reach internal service routes" time="0.001311" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-environment.test.cjs">
+		<skipped type="skipped" message="Set T06_PUBLIC_BASE_URL to a production-equivalent proxy URL"/>
+	</testcase>
+	<testcase name="CONFIG-005 public deployment enforces HTTPS" time="0.000164" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-environment.test.cjs">
+		<skipped type="skipped" message="Set T06_PUBLIC_BASE_URL to a production-equivalent proxy URL"/>
+	</testcase>
+	<testcase name="CONFIG-006 production HTTPS path preserves required security headers" time="0.000097" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-environment.test.cjs">
+		<skipped type="skipped" message="Set T06_PUBLIC_BASE_URL to a production-equivalent proxy URL"/>
+	</testcase>
+	<testcase name="CONFIG-009 release images and public artifacts contain no supplied secret sentinels" time="0.000099" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-environment.test.cjs">
+		<skipped type="skipped" message="Set T06_RELEASE_IMAGES to comma-separated release image references"/>
+	</testcase>
+	<testcase name="CONFIG-011 proxy normalization cannot route encoded public paths into internal APIs" time="0.000332" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-environment.test.cjs">
+		<skipped type="skipped" message="Set T06_PUBLIC_BASE_URL to a production-equivalent proxy URL"/>
+	</testcase>
+	<testcase name="CONFIG-012 untrusted forwarding headers do not alter public trust decisions" time="0.000120" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-environment.test.cjs">
+		<skipped type="skipped" message="Set T06_PUBLIC_BASE_URL to a production-equivalent proxy URL"/>
+	</testcase>
+	<testcase name="CONFIG-014 deployed frontend sends a restrictive Content Security Policy" time="0.001346" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-environment.test.cjs">
+		<skipped type="skipped" message="Set T06_PUBLIC_FRONTEND_URL to the deployed frontend URL"/>
+	</testcase>
+	<testcase name="LOG-010 retained logs comply with the configured maximum age" time="0.000110" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-environment.test.cjs">
+		<skipped type="skipped" message="Set T06_LOG_RETENTION_DAYS and T06_LOG_RETENTION_ROOT from the approved policy"/>
+	</testcase>
+	<testcase name="VID-017 Redis failure after multipart creation has a tested compensation path" time="7.535354" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs" failure="Redis-session failure left the created MinIO multipart without an abort/compensation call&#10;&#10;1 !== 0&#10;">
+		<failure type="testCodeFailure" message="Redis-session failure left the created MinIO multipart without an abort/compensation call&#10;&#10;1 !== 0">
+[Error [ERR_TEST_FAILURE]: Redis-session failure left the created MinIO multipart without an abort/compensation call
+
+1 !== 0
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Redis-session failure left the created MinIO multipart without an abort/compensation call
+  
+  1 !== 0
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs:29:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="CONFIG-003 Compose does not publish PostgreSQL Redis or MinIO administration publicly" time="0.000777" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs" failure="postgres 5432 is published on all host interfaces">
+		<failure type="testCodeFailure" message="postgres 5432 is published on all host interfaces">
+[Error [ERR_TEST_FAILURE]: postgres 5432 is published on all host interfaces] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: postgres 5432 is published on all host interfaces
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs:40:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: ${POSTGRES_DB}\n      POSTGRES_USER: ${POSTGRES_USER}\n      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n    ports:\n      - "5432:5432"\n    networks:\n      - internal-net\n\n',
+    expected: /^[ \t]*-[ \t]*["']?(?!127\.0\.0\.1:|\[::1\]:)5432:5432["']?[ \t]*$/m,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="CONFIG-010 container manifests avoid privileged runtime settings and use a non-root app user" time="0.001121" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs" failure="backend/Dockerfile is missing, so runtime privilege cannot be verified">
+		<failure type="testCodeFailure" message="backend/Dockerfile is missing, so runtime privilege cannot be verified">
+[Error [ERR_TEST_FAILURE]: backend/Dockerfile is missing, so runtime privilege cannot be verified] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: backend/Dockerfile is missing, so runtime privilege cannot be verified
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs:56:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'fail',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="CONFIG-013 authenticated and token responses prohibit shared caching" time="0.709504" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs"/>
+	<testcase name="CONFIG-015 JVM PostgreSQL and Redis clocks stay within five seconds" time="0.315312" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs"/>
+	<testcase name="LOG-008 security-sensitive actions produce an audit trail without credentials" time="0.286125" classname="test" file="C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs" failure="Missing security audit event matching /(?:AUTH|LOGIN).*(?:FAIL|DENY)|(?:FAIL|DENY).*(?:AUTH|LOGIN)/i">
+		<failure type="testCodeFailure" message="Missing security audit event matching /(?:AUTH|LOGIN).*(?:FAIL|DENY)|(?:FAIL|DENY).*(?:AUTH|LOGIN)/i">
+[Error [ERR_TEST_FAILURE]: Missing security audit event matching /(?:AUTH|LOGIN).*(?:FAIL|DENY)|(?:FAIL|DENY).*(?:AUTH|LOGIN)/i] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Missing security audit event matching /(?:AUTH|LOGIN).*(?:FAIL|DENY)|(?:FAIL|DENY).*(?:AUTH|LOGIN)/i
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t06-seciurity\remaining-runnable.test.cjs:113:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '\r\n  .   ____          _            __ _ _\n /\\\\ / ___\'_ __ _ _(_)_ __  __ _ \\ \\ \\ \\\n( ( )\\___ | \'_ | \'_| | \'_ \\/ _` | \\ \\ \\ \\\n \\\\/  ___)| |_)| | | | | || (_| |  ) ) ) )\n  \'  |____| .__|_| |_|_| |_\\__, | / / / /\n =========|_|==============|___/=/_/_/_/\n\r\n :: Spring Boot ::               (v3.5.16)\r\n\r\n2026-10-28T15:11:28.315+07:00  INFO 18644 --- [backend] [           main] com.veiltalk.BackendApplication          : Starting BackendApplication v0.0.1-SNAPSHOT using Java 21.0.11 with PID 18644 (C:\\project\\veiltalk\\backend\\target\\backend-0.0.1-SNAPSHOT.jar started by admin in C:\\project\\veiltalk)\r\n2026-10-28T15:11:28.319+07:00  INFO 18644 --- [backend] [           main] com.veiltalk.BackendApplication          : The following 1 profile is active: "e2e"\r\n2026-10-28T15:11:29.683+07:00  INFO 18644 --- [backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode\r\n2026-10-28T15:11:29.685+07:00  INFO 18644 --- [backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.\r\n2026-10-28T15:11:29.867+07:00  INFO 18644 --- [backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 169 ms. Found 7 JPA repository interfaces.\r\n2026-10-28T15:11:29.886+07:00  INFO 18644 --- [backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode\r\n2026-10-28T15:11:29.887+07:00  INFO 18644 --- [backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.\r\n2026-10-28T15:11:29.904+07:00  INFO 18644 --- [backend] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.veiltalk.auth.RefreshTokenRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository\r\n2026-10-28T15:11:29.904+07:00  INFO 18644 --- [backend] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.veiltalk.auth.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository\r\n2026-10-28T15:11:29.904+07:00  INFO 18644 --- [backend] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.veiltalk.avatar.AvatarProfileRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository\r\n2026-10-28T15:11:29.904+07:00  INFO 18644 --- [backend] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.veiltalk.messaging.ConversationRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository\r\n2026-10-28T15:11:29.904+07:00  INFO 18644 --- [backend] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.veiltalk.messaging.MessageRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository\r\n2026-10-28T15:11:29.906+07:00  INFO 18644 --- [backend] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.veiltalk.video.VideoCleanupJobRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository\r\n2026-10-28T15:11:29.906+07:00  INFO 18644 --- [backend] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.veiltalk.video.VideoRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository\r\n2026-10-28T15:11:29.906+07:00  INFO 18644 --- [backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 7 ms. Found 0 Redis repository interfaces.\r\n2026-10-28T15:11:30.638+07:00  INFO 18644 --- [backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 58438 (http)\r\n2026-10-28T15:11:30.655+07:00  INFO 18644 --- [backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]\r\n2026-10-28T15:11:30.655+07:00  INFO 18644 --- [backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.55]\r\n2026-10-28T15:11:30.693+07:00  INFO 18644 --- [backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext\r\n2026-10-28T15:11:30.694+07:00  INFO 18644 --- [backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2325 ms\r\n2026-10-28T15:11:31.205+07:00  INFO 18644 --- [backend] [           main] o.s.boot.web.servlet.RegistrationBean    : Filter disableServletRegistration was not registered (disabled)\r\n2026-10-28T15:11:31.205+07:00  INFO 18644 --- [backend] [           main] o.s.boot.web.servlet.RegistrationBean    : Filter disableCallNotifyServletRegistration was not registered (disabled)\r\n2026-10-28T15:11:31.508+07:00  INFO 18644 --- [backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...\r\n2026-10-28T15:11:31.735+07:00  INFO 18644 --- [backend] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@1cfa7ee0\r\n2026-10-28T15:11:31.736+07:00  INFO 18644 --- [backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.\r\n2026-10-28T15:11:31.769+07:00  INFO 18644 --- [backend] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://127.0.0.1:58436/veiltalk_e2e (PostgreSQL 16.14)\r\n2026-10-28T15:11:31.817+07:00  INFO 18644 --- [backend] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet\r\n2026-10-28T15:11:31.822+07:00  INFO 18644 --- [backend] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 3 migrations (execution time 00:00.020s)\r\n2026-10-28T15:11:31.845+07:00  INFO 18644 --- [backend] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...\r\n2026-10-28T15:11:31.918+07:00  INFO 18644 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": &lt;&lt; Empty Schema >>\r\n2026-10-28T15:11:31.942+07:00  INFO 18644 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - initial schema"\r\n2026-10-28T15:11:32.108+07:00  INFO 18644 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - add user settings"\r\n2026-10-28T15:11:32.133+07:00  INFO 18644 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - video cleanup durability"\r\n2026-10-28T15:11:32.174+07:00  INFO 18644 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 3 migrations to schema "public", now at version v3 (execution time 00:00.166s)\r\n2026-10-28T15:11:32.269+07:00  INFO 18644 --- [backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]\r\n2026-10-28T15:11:32.328+07:00  INFO 18644 --- [backend] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.53.Final\r\n2026-10-28T15:11:32.365+07:00  INFO 18644 --- [backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled\r\n2026-10-28T15:11:32.644+07:00  INFO 18644 --- [backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer\r\n2026-10-28T15:11:32.739+07:00  INFO '... 2332 more characters,
+    expected: /(?:AUTH|LOGIN).*(?:FAIL|DENY)|(?:FAIL|DENY).*(?:AUTH|LOGIN)/i,
+    operator: 'match',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<!-- tests 14 -->
+	<!-- suites 0 -->
+	<!-- pass 2 -->
+	<!-- fail 4 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 8 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 9073.9365 -->
+</testsuites>

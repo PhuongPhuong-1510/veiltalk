@@ -16,7 +16,7 @@ test("sends POST with correct headers, body and Authorization header", async () 
     fetchImpl,
   });
 
-  const result = await client.notify("caller-id", "callee-id");
+  const result = await client.notify("caller-id", "callee-id", "call-id");
 
   assert.strictEqual(result, "notified");
   assert.strictEqual(capturedUrl, "http://backend:8080/internal/call/notify");
@@ -26,6 +26,7 @@ test("sends POST with correct headers, body and Authorization header", async () 
   assert.deepStrictEqual(JSON.parse(capturedOptions.body), {
     caller_id: "caller-id",
     callee_id: "callee-id",
+    call_id: "call-id",
   });
 });
 

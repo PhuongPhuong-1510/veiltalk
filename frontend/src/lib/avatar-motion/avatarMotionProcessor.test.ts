@@ -293,9 +293,10 @@ describe("AvatarMotionProcessor", () => {
       expect(packet.version).toBe(1);expect(packet.headRotation).not.toBeNull();expect(packet.headRotation!.w).toBeLessThan(.999);
     });
     it("calibrates paired face/pose samples and emits only rest-relative V2 rotations",()=>{
-      let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);processor.calibrateFaceNeutral();
+      let now=100;const processor=new AvatarMotionProcessor({filtered:false,now:()=>now});processor.setUpperBodyRigProfile(upperBodyProfile);
       for(let index=0;index<30;index+=1){now=100+index*33;const input=frame();input.frameTimestampMs=now;input.face.sampledAtMs=now;input.pose.sampledAtMs=now;processor.process(input);}
       expect(processor.getUpperBodyCalibration().state).toBe("calibrated");
+      expect(processor.getFacialCalibration().collectionMode).toBe("automatic");
       now+=33;const moved=frame();moved.frameTimestampMs=now;moved.face.sampledAtMs=now;moved.pose.sampledAtMs=now;const c=Math.cos(.3),s=Math.sin(.3);moved.face.facialTransform!.data=[c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1];
       const packet=processor.process(moved);expect(packet.version).toBe(2);expect(packet.headRotation).not.toBeNull();expect(packet.jointRotations.chest).toBeDefined();expect(packet.jointRotations.neck).toBeDefined();
       const serialized=JSON.stringify(packet);expect(serialized).not.toContain("landmarks");expect(serialized).not.toContain("facialTransform");expect(Object.values(packet.jointRotations).flatMap(Object.values).every(Number.isFinite)).toBe(true);

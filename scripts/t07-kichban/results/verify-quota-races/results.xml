@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="scripts\t07-kichban\auth-conv.test.cjs" time="0.092958" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\auth-conv.test.cjs"/>
+	<testcase name="scripts\t07-kichban\message.test.cjs" time="0.089539" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\message.test.cjs"/>
+	<testcase name="scripts\t07-kichban\realtime.test.cjs" time="0.084097" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\realtime.test.cjs"/>
+	<testcase name="T07-VID-010" time="1.260329" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED&#10;&#10;507 !== 200&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED&#10;&#10;507 !== 200">
+[Error [ERR_TEST_FAILURE]: HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED
+
+507 !== 200
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED
+  
+  507 !== 200
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:34:10)
+      at ok (C:\project\veiltalk\scripts\t04-api\support.cjs:40:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async prepareExistingVideo (C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs:51:14)
+      at async Promise.all (index 1)
+      at async quotaFinalizeRace (C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs:67:17)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 507,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-VID-011" time="0.409295" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED&#10;&#10;507 !== 200&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED&#10;&#10;507 !== 200">
+[Error [ERR_TEST_FAILURE]: HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED
+
+507 !== 200
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED
+  
+  507 !== 200
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:34:10)
+      at ok (C:\project\veiltalk\scripts\t04-api\support.cjs:40:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async prepareExistingVideo (C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs:51:14)
+      at async Promise.all (index 1)
+      at async quotaFinalizeRace (C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs:67:17)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 507,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-LOCK-008" time="0.389317" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED&#10;&#10;507 !== 200&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED&#10;&#10;507 !== 200">
+[Error [ERR_TEST_FAILURE]: HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED
+
+507 !== 200
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 200, got 507, error=STORAGE_QUOTA_EXCEEDED
+  
+  507 !== 200
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:34:10)
+      at ok (C:\project\veiltalk\scripts\t04-api\support.cjs:40:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async prepareExistingVideo (C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs:51:14)
+      at async Promise.all (index 1)
+      at async quotaFinalizeRace (C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs:67:17)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 507,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="scripts\t07-kichban\video.test.cjs" time="0.085775" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\video.test.cjs"/>
+	<!-- tests 7 -->
+	<!-- suites 0 -->
+	<!-- pass 4 -->
+	<!-- fail 3 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 2525.2307 -->
+</testsuites>

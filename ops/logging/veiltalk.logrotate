@@ -1,0 +1,12 @@
+# Install as /etc/logrotate.d/veiltalk on the Linux Docker host.
+# Run logrotate at least daily and ensure /var/log/veiltalk exists, root-owned.
+/var/log/veiltalk/runtime.log {
+    daily
+    rotate 29
+    maxage 29
+    missingok
+    ifempty
+    compress
+    dateext
+    copytruncate
+}

@@ -8,25 +8,45 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 public class AuthController {
 
 	private final AuthService authService;
+	private final AuthAbuseRateLimiter abuseRateLimiter;
+	private final AuthClientIpResolver ipResolver;
 
-	public AuthController(AuthService authService) {
+	public AuthController(AuthService authService, AuthAbuseRateLimiter abuseRateLimiter,
+			AuthClientIpResolver ipResolver) {
 		this.authService = authService;
+		this.abuseRateLimiter = abuseRateLimiter;
+		this.ipResolver = ipResolver;
 	}
 
 	@PostMapping("/auth/register")
 	@ResponseStatus(HttpStatus.CREATED)
-	RegisterResponse register(@Valid @RequestBody RegisterRequest request) {
-		return authService.register(request);
+	RegisterResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+		String ip = ipResolver.resolve(httpRequest);
+		abuseRateLimiter.reserveRegistration(ip);
+		try {
+			return authService.register(request);
+		} catch (RuntimeException exception) {
+			abuseRateLimiter.releaseRegistration(ip);
+			throw exception;
+		}
 	}
 
 	@PostMapping("/auth/login")
-	LoginResponse login(@Valid @RequestBody LoginRequest request) {
-		return authService.login(request);
+	LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+		String ip = ipResolver.resolve(httpRequest);
+		abuseRateLimiter.checkLogin(request.email(), ip);
+		try {
+			return authService.login(request);
+		} catch (UnauthorizedException exception) {
+			abuseRateLimiter.recordLoginPairFailure(request.email(), ip);
+			throw exception;
+		}
 	}
 
 	@PostMapping("/auth/refresh")

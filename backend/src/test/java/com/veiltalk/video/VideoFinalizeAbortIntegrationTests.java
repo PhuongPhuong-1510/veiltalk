@@ -3,6 +3,7 @@ package com.veiltalk.video;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -59,6 +60,8 @@ class VideoFinalizeAbortIntegrationTests {
 
 	@MockitoBean
 	private VideoMultipartStorage multipartStorage;
+	@MockitoBean
+	private VideoMediaValidator mediaValidator;
 
 	private final Set<UUID> redisVideoIds = new HashSet<>();
 	private User user;
@@ -66,6 +69,7 @@ class VideoFinalizeAbortIntegrationTests {
 
 	@BeforeEach
 	void setUp() {
+		given(mediaValidator.isPlayable(anyString(), anyString(), anyLong())).willReturn(true);
 		user = createUser();
 		token = jwtService.generateAccessToken(user.getId(), user.getRole());
 	}

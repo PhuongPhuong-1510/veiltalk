@@ -10,19 +10,22 @@ export class ApiError extends Error {
   status: number;
   code: string;
   details?: unknown;
+  retryAfterSeconds?: number;
 
-  constructor(status: number, code: string, message: string, details?: unknown) {
+  constructor(status: number, code: string, message: string, details?: unknown, retryAfterSeconds?: number) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
 export interface User {
   id: string;
   email: string;
+  username?: string | null;
   display_name: string;
   avatar_url?: string | null;
   role: string;
@@ -38,6 +41,7 @@ export interface Tokens {
 
 export interface UserSettings {
   discoverable: boolean;
+  username_searchable: boolean;
   email_notifications: boolean;
   theme: "dark" | "light" | "system";
 }
@@ -56,7 +60,10 @@ export interface AvatarProfile {
   user_id: string;
   model_id: string;
   model_url: string;
-  customizations: Record<string, string>;
+  customizations: Record<string, unknown>;
+  profile_revision: string;
+  portrait_version?: string | null;
+  last_save_request_id?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -6,7 +6,9 @@ import {
   getPasswordStrength,
   getPostRestorePath,
   getRegistrationEmailError,
+  getRegistrationUsernameError,
   isRegistrationValid,
+  isUsernameValid,
 } from "./authFlow";
 
 describe("auth flow", () => {
@@ -34,16 +36,21 @@ describe("register flow", () => {
     expect(getPasswordStrength("Abcdefg1!").score).toBe(4);
   });
 
-  it("chỉ cho đăng ký khi cả ba field hợp lệ", () => {
-    expect(isRegistrationValid("user@example.com", "Abcdefg1", "Luna")).toBe(true);
-    expect(isRegistrationValid("invalid", "Abcdefg1", "Luna")).toBe(false);
-    expect(isRegistrationValid("user@example.com", "abcdefgh", "Luna")).toBe(false);
-    expect(isRegistrationValid("user@example.com", "Abcdefg1", " ")).toBe(false);
+  it("chỉ cho đăng ký khi email, mật khẩu, tên và username hợp lệ", () => {
+    expect(isRegistrationValid("user@example.com", "Abcdefg1", "Luna", "luna.night")).toBe(true);
+    expect(isRegistrationValid("invalid", "Abcdefg1", "Luna", "luna.night")).toBe(false);
+    expect(isRegistrationValid("user@example.com", "abcdefgh", "Luna", "luna.night")).toBe(false);
+    expect(isRegistrationValid("user@example.com", "Abcdefg1", " ", "luna.night")).toBe(false);
+    expect(isRegistrationValid("user@example.com", "Abcdefg1", "Luna", "ab")).toBe(false);
+    expect(isUsernameValid("Luna.Night")).toBe(true);
+    expect(isUsernameValid("luna__night")).toBe(false);
   });
 
   it("chỉ map conflict email thành lỗi inline", () => {
     expect(getRegistrationEmailError(new ApiError(409, "EMAIL_EXISTS", "conflict")))
       .toBe("Email này đã được sử dụng.");
     expect(getRegistrationEmailError(new ApiError(400, "VALIDATION_ERROR", "bad"))).toBeNull();
+    expect(getRegistrationUsernameError(new ApiError(409, "USERNAME_TAKEN", "conflict")))
+      .toBe("Username này đã được sử dụng.");
   });
 });

@@ -1,6 +1,7 @@
 package com.veiltalk.video;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -9,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -16,6 +18,7 @@ import com.veiltalk.auth.ForbiddenException;
 import com.veiltalk.auth.ConflictException;
 import com.veiltalk.auth.NotFoundException;
 import com.veiltalk.auth.ValidationException;
+import com.veiltalk.auth.TooManyRequestsException;
 
 import jakarta.persistence.EntityManager;
 
@@ -33,6 +36,10 @@ public class VideoService {
 	private final VideoProperties videoProperties;
 	private final EntityManager entityManager;
 	private final RedisDistributedLock distributedLock;
+	private final VideoMediaValidator mediaValidator;
+	private final VideoCleanupTransactionSupport cleanupTransactionSupport;
+	@Value("${video.active-upload-limit:3}")
+	private int activeUploadLimit = 3;
 
 	public VideoService(
 			VideoRepository videoRepository,
@@ -40,17 +47,31 @@ public class VideoService {
 			VideoUploadSessionStore sessionStore,
 			VideoProperties videoProperties,
 			EntityManager entityManager,
-			RedisDistributedLock distributedLock) {
+			RedisDistributedLock distributedLock,
+			VideoMediaValidator mediaValidator,
+			VideoCleanupTransactionSupport cleanupTransactionSupport) {
 		this.videoRepository = videoRepository;
 		this.multipartStorage = multipartStorage;
 		this.sessionStore = sessionStore;
 		this.videoProperties = videoProperties;
 		this.entityManager = entityManager;
 		this.distributedLock = distributedLock;
+		this.mediaValidator = mediaValidator;
+		this.cleanupTransactionSupport = cleanupTransactionSupport;
 	}
 
 	@Transactional
 	public CreateVideoResponse initiateUpload(UUID userId, CreateVideoRequest request) {
+		if (activeUploadLimit <= 0) throw new IllegalStateException("Video active upload limit must be positive");
+		// Hold the user row lock until transaction commit so concurrent backend
+		// instances cannot each observe the same free upload slot.
+		entityManager.createNativeQuery("SELECT id FROM users WHERE id = :userId FOR UPDATE")
+				.setParameter("userId", userId).getSingleResult();
+		long activeUploads = videoRepository.findRecordingByUserId(userId).stream()
+				.filter(video -> sessionStore.findSession(video.getId()).isPresent()).count();
+		if (activeUploads >= activeUploadLimit) {
+			throw new TooManyRequestsException(Duration.ofHours(1));
+		}
 		// 1) Quota (NFR-19): chỉ tính video status='ready'; recording/processing/failed không tính.
 		long usedBytes = videoRepository.sumReadyFileSizeBytes(userId);
 		if (usedBytes + request.estimatedSizeBytes() > videoProperties.storageLimitBytes()) {
@@ -59,12 +80,33 @@ public class VideoService {
 		}
 
 		String format = StringUtils.hasText(request.format()) ? request.format() : "mp4";
+		String safeFormatForKey = format.replaceAll("[^A-Za-z0-9]", "_");
 
 		// 2) Gọi MinIO TRƯỚC khi insert để nếu MinIO lỗi thì không sinh record 'recording' mồ côi.
 		// objectKey phải cố định suốt phiên (create → upload part → finalize dùng chung key);
 		// dùng một UUID riêng cho key, không phụ thuộc id do DB sinh.
-		String storageKey = "videos/" + UUID.randomUUID() + "/source." + format;
+		String storageKey = "videos/" + UUID.randomUUID() + "/source." + safeFormatForKey;
 		String uploadId = multipartStorage.createMultipartUpload(storageKey);
+		try {
+			return finishInitiateUpload(userId, request, format, storageKey, uploadId);
+		} catch (RuntimeException exception) {
+			try {
+				multipartStorage.abortMultipartUpload(storageKey, uploadId);
+			} catch (RuntimeException abortException) {
+				LOGGER.error("Could not abort failed upload {}; queueing cleanup", storageKey, abortException);
+				try {
+					cleanupTransactionSupport.recordAbortCleanupJob(null, storageKey, uploadId, Instant.now());
+				} catch (RuntimeException queueException) {
+					exception.addSuppressed(queueException);
+					LOGGER.error("Could not queue multipart cleanup for {}", storageKey, queueException);
+				}
+			}
+			throw exception;
+		}
+	}
+
+	private CreateVideoResponse finishInitiateUpload(UUID userId, CreateVideoRequest request,
+			String format, String storageKey, String uploadId) {
 		String firstChunkUrl = multipartStorage.presignPartUrl(storageKey, uploadId, FIRST_PART_NUMBER);
 
 		// 3) Tạo record videos status='recording'. file_size_bytes có CHECK > 0 nên lưu tạm
@@ -84,7 +126,7 @@ public class VideoService {
 
 		// 4) Gieo phiên multipart vào Redis để P2-T21 tích lũy ETag theo part.
 		// Lỗi ở đây ném ra ⇒ transaction rollback ⇒ không sinh record 'recording' mồ côi.
-		// Multipart đã tạo trên MinIO để background timeout job (P2-T22) dọn — KHÔNG abort ở đây.
+		// Nếu Redis lỗi, outer catch abort multipart; timeout job không thấy record đã rollback.
 		try {
 			sessionStore.createSession(
 					video.getId(), uploadId, userId, request.chunkSizeBytes());
@@ -225,7 +267,8 @@ public class VideoService {
 		try {
 			var objectSize = multipartStorage.statObjectSize(video.getStoragePath());
 			if (objectSize.isPresent()) {
-				if (objectSize.getAsLong() == expectedBytes) {
+				if (objectSize.getAsLong() == expectedBytes
+						&& mediaValidator.isPlayable(video.getStoragePath(), video.getFormat(), expectedBytes)) {
 					videoRepository.markReadyFromWebhook(video.getStoragePath(), expectedBytes);
 					return true;
 				}
@@ -263,15 +306,22 @@ public class VideoService {
 	 */
 	@Transactional(readOnly = true)
 	public VideoLibraryResponse listVideos(UUID userId, String statusFilter, String cursor, int limit) {
-		VideoStatus status = statusFilter == null ? null : VideoStatus.fromDatabaseValue(statusFilter);
+		VideoStatus status;
+		try {
+			status = statusFilter == null ? null : VideoStatus.fromDatabaseValue(statusFilter);
+		} catch (IllegalArgumentException exception) {
+			throw new ValidationException("status không hợp lệ.");
+		}
 		VideoCursor decoded = VideoCursor.decode(cursor);
 		int pageSize = Math.min(Math.max(limit, 1), 50);
 
-		List<Video> page = videoRepository.findLibraryPage(
-				userId, status,
-				decoded == null ? null : decoded.createdAt(),
-				decoded == null ? null : decoded.id(),
-				PageRequest.of(0, pageSize + 1));
+		List<Video> page = status == null
+				? videoRepository.findLibraryPage(userId,
+						decoded == null ? null : decoded.createdAt(),
+						decoded == null ? null : decoded.id(), PageRequest.of(0, pageSize + 1))
+				: videoRepository.findLibraryPageByStatus(userId, status,
+						decoded == null ? null : decoded.createdAt(),
+						decoded == null ? null : decoded.id(), PageRequest.of(0, pageSize + 1));
 
 		boolean hasMore = page.size() > pageSize;
 		List<Video> pageItems = hasMore ? page.subList(0, pageSize) : page;

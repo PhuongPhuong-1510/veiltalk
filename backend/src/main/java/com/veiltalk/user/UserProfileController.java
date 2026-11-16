@@ -2,8 +2,9 @@ package com.veiltalk.user;
 
 import java.util.UUID;
 
+import com.veiltalk.auth.TooManyRequestsException;
+
 import org.springframework.security.core.Authentication;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,14 +20,17 @@ public class UserProfileController {
 	private final UserProfileService userProfileService;
 	private final UserAccountService userAccountService;
 	private final UserSearchService userSearchService;
+	private final UsernameSearchService usernameSearchService;
 
 	public UserProfileController(
 			UserProfileService userProfileService,
 			UserAccountService userAccountService,
-			UserSearchService userSearchService) {
+			UserSearchService userSearchService,
+			UsernameSearchService usernameSearchService) {
 		this.userProfileService = userProfileService;
 		this.userAccountService = userAccountService;
 		this.userSearchService = userSearchService;
+		this.usernameSearchService = usernameSearchService;
 	}
 
 	@GetMapping("/users/me")
@@ -73,10 +77,15 @@ public class UserProfileController {
 				(UUID) authentication.getPrincipal(),
 				request);
 		if (!result.retryAfter().isZero()) {
-			return ResponseEntity.status(429)
-					.header(HttpHeaders.RETRY_AFTER, Long.toString(result.retryAfter().toSeconds()))
-					.build();
+			throw new TooManyRequestsException(result.retryAfter());
 		}
 		return ResponseEntity.ok(result.response());
+	}
+
+	@org.springframework.web.bind.annotation.PostMapping("/users/search/usernames")
+	UsernameSearchResponse searchUsernames(
+			Authentication authentication,
+			@Valid @RequestBody UsernameSearchRequest request) {
+		return usernameSearchService.search((UUID) authentication.getPrincipal(), request);
 	}
 }

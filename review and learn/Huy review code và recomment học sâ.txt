@@ -1,0 +1,20 @@
+Huy review code và recomment học sâu từng phần 
+
+-- Tech:
+   -- Luồng chạy spring Websocket hiện tại dự án 
+   -- Redis / Spring Data Redis: Thu hồi token, giới hạn tần suất, phiên upload, khóa phân tán và Pub/Sub.
+   -- MinIO / MinIO Java SDK: Lưu file video, hỗ trợ upload nhiều phần và URL có chữ ký.
+   -- Actuator / Micrometer	Health check và một số bộ đếm lỗi realtime.
+   -- Docker dự án 
+   -- Spring sercu 
+-- Kĩ thuật:
+   -- Xác thực JWT stateless
+   -- BCrypt và hash refresh token
+   -- Thu hồi token bằng Redis TTL
+   -- Transaction
+   -- Heartbeat và quản lý vòng đời socket
+   -- Quản lý gửi WebSocket đồng thời 
+   -- Multipart upload
+   -- Pessimistic database lock
+   -- Lua script trong Redis
+

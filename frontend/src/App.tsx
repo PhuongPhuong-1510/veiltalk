@@ -1,42 +1,48 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
   Check,
   Eye,
   EyeOff,
+  WifiOff,
   LoaderCircle,
-  RefreshCw,
   ScanFace,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import {
-  avatarDark,
   avatarWide,
   heroBackground,
   heroCharacter,
   kokoroLogo,
-  neonScene,
-  profilePortrait,
-  welcomeNeon,
 } from "./assets";
 import { useAuthStore } from "./lib/store/authStore";
 import { avatarsApi } from "./lib/api";
 import type { AvatarModel } from "./lib/api/types";
-import { getAvatarCustomizationPath, getAvatarThumbnailSrc } from "./lib/avatar/avatarSetup";
+import AuthRoute from "./components/auth/AuthRoute";
+import { getAvatarCustomizationPath } from "./lib/avatar/avatarSetup";
+import { avatarDraftKey, avatarFlowPath, type AvatarFlowMode } from "./lib/avatar/avatarFlow";
 import {
   getLoginErrorMessage,
   getPasswordStrength,
   getPostRestorePath,
   getRegistrationEmailError,
+  getRegistrationUsernameError,
   isRegistrationValid,
+  normalizeUsername,
 } from "./lib/auth/authFlow";
 import "./App.css";
 
 const SPLASH_MIN_DURATION_MS = 2_000;
 const AvatarMotionPreview = lazy(() => import("./components/avatar/AvatarMotionPreview"));
+const LocalVrmThumbnail = lazy(() => import("./components/avatar/LocalVrmThumbnail"));
+const AvatarColorLab = lazy(() => import("./components/avatar/AvatarColorLab"));
+const AvatarPreviewScreen = lazy(() => import("./components/avatar/AvatarPreviewScreen"));
+const HomeScreen = lazy(() => import("./components/home/HomeScreen"));
+const ProfileScreen = lazy(() => import("./components/connected/ProfileScreen"));
+const VideoLibraryScreen = lazy(() => import("./components/connected/VideoLibraryScreen"));
 const TrackingDevHarness = import.meta.env.DEV
   ? lazy(() => import("./components/dev/TrackingDevHarness"))
   : null;
@@ -82,7 +88,6 @@ function WelcomeScreen() {
 
   return (
     <main className="dark welcome-screen">
-      <img className="welcome-new-background" src={heroBackground} alt="" />
       <section className="welcome-content">
         <header className="brand-lockup">
           <img className="brand-mark-image" src={kokoroLogo} alt="Kokoro logo" />
@@ -142,7 +147,6 @@ function LoginScreen() {
 
   return (
     <main className="dark auth-page">
-      <img className="auth-background" src={heroBackground} alt="" />
       <div className="auth-frame">
         <button className="icon-button back" onClick={() => navigate("/welcome")} aria-label="Quay lại">
           <ChevronLeft aria-hidden="true" />
@@ -275,7 +279,6 @@ function OnboardingScreen() {
       onTouchStart={(event) => { touchStartX.current = event.touches[0].clientX; }}
       onTouchEnd={handleTouchEnd}
     >
-      <img className="intro-background" src={heroBackground} alt="" />
       <button className="intro-skip" onClick={() => navigate("/register")}>Bỏ qua</button>
 
       <section className="intro-card" key={slideIndex}>
@@ -321,31 +324,42 @@ function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameSearchable, setUsernameSearchable] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const strength = getPasswordStrength(password);
-  const canSubmit = isRegistrationValid(email, password, displayName) && !isLoading;
+  const canSubmit = isRegistrationValid(email, password, displayName, username) && !isLoading;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
     setEmailError(null);
+    setUsernameError(null);
     setFormError(null);
 
     try {
-      await register(email.trim(), password, displayName.trim());
+      await register(
+        email.trim(),
+        password,
+        displayName.trim(),
+        normalizeUsername(username),
+        usernameSearchable,
+      );
       navigate("/avatar/setup", { replace: true });
     } catch (error) {
       const conflict = getRegistrationEmailError(error);
+      const usernameConflict = getRegistrationUsernameError(error);
       if (conflict) setEmailError(conflict);
+      else if (usernameConflict) setUsernameError(usernameConflict);
       else setFormError("Không thể tạo tài khoản. Vui lòng kiểm tra thông tin và thử lại.");
     }
   }
 
   return (
     <main className="dark auth-page">
-      <img className="auth-background" src={heroBackground} alt="" />
       <div className="auth-frame register-frame">
         <button className="icon-button back" onClick={() => navigate("/onboarding")} aria-label="Quay lại">
           <ChevronLeft aria-hidden="true" />
@@ -386,6 +400,33 @@ function RegisterScreen() {
             <label htmlFor="register-name">Tên hiển thị
               <input id="register-name" autoComplete="name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Ví dụ: Yozakura Luna" maxLength={100} required disabled={isLoading} />
             </label>
+            <label htmlFor="register-username">Username
+              <input
+                id="register-username"
+                autoComplete="username"
+                value={username}
+                onChange={(event) => { setUsername(event.target.value); setUsernameError(null); }}
+                onBlur={() => setUsername(normalizeUsername(username))}
+                placeholder="ví dụ: luna.night"
+                minLength={3}
+                maxLength={30}
+                required
+                disabled={isLoading}
+                aria-invalid={Boolean(usernameError)}
+              />
+              <small>3–30 ký tự: a–z, 0–9, dấu chấm hoặc gạch dưới.</small>
+              {usernameError && <small className="field-error">{usernameError}</small>}
+            </label>
+            <label className="auth-consent" htmlFor="register-username-searchable">
+              <input
+                id="register-username-searchable"
+                type="checkbox"
+                checked={usernameSearchable}
+                onChange={(event) => setUsernameSearchable(event.target.checked)}
+                disabled={isLoading}
+              />
+              <span>Cho phép người khác tìm thấy tôi bằng @username.</span>
+            </label>
             <button className="primary wide" type="submit" disabled={!canSubmit}>
               {isLoading && <LoaderCircle className="button-spinner" />} {isLoading ? "Đang tạo…" : "Đăng ký"}
             </button>
@@ -398,49 +439,51 @@ function RegisterScreen() {
   );
 }
 
-const avatarFallbacks = [
-  profilePortrait,
-  welcomeNeon,
-  avatarDark,
-  avatarWide,
-  heroCharacter,
-  neonScene,
-];
-
-function AvatarSelectScreen() {
+function AvatarSelectScreen({ mode = "onboarding" }: { mode?: AvatarFlowMode }) {
   const navigate = useNavigate();
+  const userId = useAuthStore((state) => state.user?.id);
   const [models, setModels] = useState<AvatarModel[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [loadVersion, setLoadVersion] = useState(0);
-
+  const [hoveredModelId, setHoveredModelId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(models.length / 6));
+  const safePage = Math.min(page, pageCount);
+  const visibleModels = models.slice((safePage - 1) * 6, safePage * 6);
   useEffect(() => {
     let active = true;
-    setIsLoading(true);
-    setLoadError(false);
-
-    void avatarsApi.getModels()
-      .then(({ models: responseModels }) => {
+    setCatalogLoading(true); setCatalogError("");
+    void Promise.all([
+      avatarsApi.getModels(),
+      mode === "edit" ? avatarsApi.getMyAvatar() : Promise.resolve(null),
+    ])
+      .then(([response, profile]) => {
         if (!active) return;
-        setModels(responseModels);
-        setIsLoading(false);
+        setModels(response.models);
+        if (profile && userId) {
+          setSelectedModelId(profile.model_id);
+          sessionStorage.setItem(avatarDraftKey(userId, profile.model_id), JSON.stringify({ modelId: profile.model_id, ...profile.customizations }));
+          const index = response.models.findIndex((item) => item.id === profile.model_id);
+          if (index >= 0) setPage(Math.floor(index / 6) + 1);
+        }
       })
-      .catch(() => {
-        if (!active) return;
-        setLoadError(true);
-        setIsLoading(false);
-      });
-
+      .catch(() => { if (active) setCatalogError("Không thể tải danh sách avatar. Kiểm tra kết nối rồi thử lại."); })
+      .finally(() => { if (active) setCatalogLoading(false); });
     return () => { active = false; };
-  }, [loadVersion]);
+  }, [mode, userId]);
+  const showPage = (nextPage: number) => {
+    const safePage = Math.min(Math.max(1, nextPage), pageCount);
+    setHoveredModelId(null);
+    setPage(safePage);
+  };
 
   return (
     <main className="dark avatar-select-page">
       <img className="avatar-select-background" src={heroBackground} alt="" />
       <section className="avatar-select-card">
         <header className="avatar-setup-header">
-          <button className="icon-button" onClick={() => navigate("/register")} aria-label="Quay lại">
+          <button className="icon-button" onClick={() => navigate(mode === "edit" ? "/profile" : "/register")} aria-label="Quay lại">
             <ChevronLeft />
           </button>
           <div className="avatar-progress" aria-label="Bước 1 trên 3">
@@ -462,48 +505,69 @@ function AvatarSelectScreen() {
           <p>Chọn một model 3D làm diện mạo khi gọi video và trò chuyện trong Kokoro.</p>
         </div>
 
-        {isLoading && (
-          <div className="avatar-loading" role="status"><LoaderCircle /> Đang tải danh sách avatar…</div>
-        )}
+        <div className="avatar-page-cache" aria-live="polite">
+          {catalogLoading && <div className="avatar-catalog-state"><LoaderCircle className="button-spinner" /> Đang tải catalog avatar…</div>}
+          {catalogError && <div className="avatar-catalog-state is-error"><span>{catalogError}</span><button type="button" onClick={() => window.location.reload()}>Thử lại</button></div>}
+          {!catalogLoading && !catalogError && <div className="avatar-model-grid">
+                {visibleModels.map((model, index) => {
+                  const selected = selectedModelId === model.id;
+                  const globalIndex = (safePage - 1) * 6 + index;
+                  const motion = hoveredModelId === model.id
+                    ? (globalIndex % 2 === 0 ? "wave-right" : "wave-left")
+                    : "sway";
+                  return (
+                    <button
+                      key={model.id}
+                      className={selected ? "selected" : ""}
+                      onClick={() => setSelectedModelId(model.id)}
+                      onMouseEnter={() => setHoveredModelId(model.id)}
+                      onMouseLeave={() => setHoveredModelId((current) => current === model.id ? null : current)}
+                      onFocus={() => setHoveredModelId(model.id)}
+                      onBlur={() => setHoveredModelId((current) => current === model.id ? null : current)}
+                      aria-pressed={selected}
+                    >
+                      <Suspense fallback={<div className="local-vrm-thumbnail is-loading"><span><LoaderCircle /> Đang tải VRM…</span></div>}>
+                        <LocalVrmThumbnail name={model.name} url={model.thumbnail_url} motion={motion} />
+                      </Suspense>
+                      <span>{model.name}</span>
+                      {selected && <b aria-label="Đã chọn"><Check /></b>}
+                    </button>
+                  );
+                })}
+              </div>}
+        </div>
 
-        {loadError && (
-          <div className="avatar-load-error" role="alert">
-            <p>Không thể tải danh sách avatar. Hãy kiểm tra kết nối backend.</p>
-            <button onClick={() => setLoadVersion((value) => value + 1)}><RefreshCw /> Thử lại</button>
-          </div>
-        )}
-
-        {!isLoading && !loadError && (
-          <div className="avatar-model-grid">
-            {models.map((model, index) => {
-              const fallback = avatarFallbacks[index % avatarFallbacks.length];
-              const selected = selectedModelId === model.id;
-              return (
-                <button
-                  key={model.id}
-                  className={selected ? "selected" : ""}
-                  onClick={() => setSelectedModelId(model.id)}
-                  aria-pressed={selected}
-                >
-                  <img
-                    src={getAvatarThumbnailSrc(model, fallback)}
-                    onError={(event) => { event.currentTarget.src = fallback; }}
-                    alt={`Avatar ${model.name}`}
-                  />
-                  <span>{model.name}</span>
-                  {selected && <b aria-label="Đã chọn"><Check /></b>}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <nav className="avatar-pagination" aria-label="Phân trang danh sách avatar">
+          <button
+            type="button"
+            onClick={() => showPage(safePage - 1)}
+            disabled={safePage === 1}
+            aria-label="Trang avatar trước"
+          ><ChevronLeft /></button>
+          {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => (
+            <button
+              type="button"
+              key={pageNumber}
+              className={pageNumber === safePage ? "active" : ""}
+              onClick={() => showPage(pageNumber)}
+              aria-label={`Trang avatar ${pageNumber}`}
+              aria-current={pageNumber === safePage ? "page" : undefined}
+            >{pageNumber}</button>
+          ))}
+          <button
+            type="button"
+            onClick={() => showPage(safePage + 1)}
+            disabled={safePage === pageCount}
+            aria-label="Trang avatar sau"
+          ><ChevronRight /></button>
+        </nav>
 
         <footer className="avatar-select-actions">
-          <button className="secondary" onClick={() => navigate("/register")}>Quay lại</button>
+          <button className="secondary" onClick={() => navigate(mode === "edit" ? "/profile" : "/register")}>Quay lại</button>
           <button
             className="primary"
             disabled={!selectedModelId}
-            onClick={() => selectedModelId && navigate(getAvatarCustomizationPath(selectedModelId))}
+            onClick={() => selectedModelId && navigate(mode === "edit" ? avatarFlowPath(mode, "customize", selectedModelId) : getAvatarCustomizationPath(selectedModelId))}
           >
             Tiếp theo <ChevronRight />
           </button>
@@ -513,30 +577,51 @@ function AvatarSelectScreen() {
   );
 }
 
-function TaskPlaceholder({ title, task }: { title: string; task: string }) {
+function TaskPlaceholder({ title, task, backTo = "/home" }: { title: string; task: string; backTo?: string }) {
   const navigate = useNavigate();
   return (
     <main className="task-placeholder">
       <img src={kokoroLogo} alt="Kokoro" />
       <h1>{title}</h1>
       <p>Màn hình này sẽ được hoàn thiện trong {task}.</p>
-      <button className="primary" onClick={() => navigate("/welcome")}>Về màn chào mừng</button>
+      <button className="primary" onClick={() => navigate(backTo)}>Quay lại Kokoro</button>
     </main>
   );
 }
 
+function LegacyConversationRedirect() {
+  const { conversationId } = useParams();
+  return <Navigate to={conversationId ? `/home?conversation=${encodeURIComponent(conversationId)}` : "/home"} replace />;
+}
+
 function AppRoutes() {
+  const guest = (screen: React.ReactNode) => <AuthRoute mode="guest">{screen}</AuthRoute>;
+  const protectedRoute = (screen: React.ReactNode) => <AuthRoute mode="protected">{screen}</AuthRoute>;
+  const avatarSetup = (screen: React.ReactNode) => <AuthRoute mode="avatar-setup">{screen}</AuthRoute>;
+
   return (
     <Routes>
       <Route path="/" element={<SplashScreen />} />
-      <Route path="/welcome" element={<WelcomeScreen />} />
-      <Route path="/onboarding" element={<OnboardingScreen />} />
-      <Route path="/login" element={<LoginScreen />} />
-      <Route path="/register" element={<RegisterScreen />} />
-      <Route path="/avatar/setup" element={<AvatarSelectScreen />} />
-      <Route path="/avatar/motion" element={<Suspense fallback={<div>Đang tải avatar…</div>}><AvatarMotionPreview /></Suspense>} />
-      <Route path="/avatar/customize" element={<TaskPlaceholder title="Tùy chỉnh avatar" task="P4-T11" />} />
-      <Route path="/home" element={<TaskPlaceholder title="Kokoro của bạn" task="P4-T12" />} />
+      <Route path="/welcome" element={guest(<WelcomeScreen />)} />
+      <Route path="/onboarding" element={guest(<OnboardingScreen />)} />
+      <Route path="/login" element={guest(<LoginScreen />)} />
+      <Route path="/register" element={guest(<RegisterScreen />)} />
+      <Route path="/avatar/setup" element={avatarSetup(<AvatarSelectScreen />)} />
+      <Route path="/avatar/color-lab" element={avatarSetup(<Navigate to="/avatar/customize" replace />)} />
+      <Route path="/avatar/motion" element={protectedRoute(<Suspense fallback={<div>Đang tải avatar…</div>}><AvatarMotionPreview /></Suspense>)} />
+      <Route path="/avatar/customize" element={avatarSetup(<Suspense fallback={<div>Đang tải tùy chỉnh avatar…</div>}><AvatarColorLab /></Suspense>)} />
+      <Route path="/avatar/preview" element={avatarSetup(<Suspense fallback={<div>Đang tải xem trước avatar…</div>}><AvatarPreviewScreen /></Suspense>)} />
+      <Route path="/avatar/edit/setup" element={protectedRoute(<AvatarSelectScreen mode="edit" />)} />
+      <Route path="/avatar/edit/customize" element={protectedRoute(<Suspense fallback={<div>Đang tải tùy chỉnh avatar…</div>}><AvatarColorLab mode="edit" /></Suspense>)} />
+      <Route path="/avatar/edit/preview" element={protectedRoute(<Suspense fallback={<div>Đang tải xem trước avatar…</div>}><AvatarPreviewScreen mode="edit" /></Suspense>)} />
+      <Route path="/home" element={protectedRoute(<Suspense fallback={<div>Đang tải trò chuyện…</div>}><HomeScreen /></Suspense>)} />
+      <Route path="/search" element={protectedRoute(<Navigate to="/home?find=people" replace />)} />
+      <Route path="/videos" element={protectedRoute(<Suspense fallback={<div>Đang tải video…</div>}><VideoLibraryScreen /></Suspense>)} />
+      <Route path="/videos/record" element={protectedRoute(<TaskPlaceholder title="Quay video avatar" task="P4-T20" />)} />
+      <Route path="/calls/new" element={protectedRoute(<TaskPlaceholder title="Gọi video" task="P4-T15–P4-T17" />)} />
+      <Route path="/calls/incoming" element={protectedRoute(<TaskPlaceholder title="Cuộc gọi đến" task="P4-T18–P4-T19" />)} />
+      <Route path="/profile" element={protectedRoute(<Suspense fallback={<div>Đang tải hồ sơ…</div>}><ProfileScreen /></Suspense>)} />
+      <Route path="/conversations/:conversationId" element={protectedRoute(<LegacyConversationRedirect />)} />
       {TrackingDevHarness && (
         <Route path="/dev/tracking" element={<Suspense fallback={<div>Đang tải tracking harness…</div>}><TrackingDevHarness /></Suspense>} />
       )}
@@ -551,9 +636,21 @@ function AppRoutes() {
   );
 }
 
+function ConnectivityNotice() {
+  const [offline, setOffline] = useState(() => !navigator.onLine);
+  useEffect(() => {
+    const online = () => setOffline(false), offlineHandler = () => setOffline(true);
+    window.addEventListener("online", online); window.addEventListener("offline", offlineHandler);
+    return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offlineHandler); };
+  }, []);
+  if (!offline) return null;
+  return <aside className="connectivity-notice" role="alert" aria-live="assertive"><WifiOff /><div><strong>Không có kết nối mạng</strong><span>Kokoro sẽ tự kết nối lại khi mạng ổn định.</span></div><button type="button" onClick={() => window.location.reload()}>Thử lại</button></aside>;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <ConnectivityNotice />
       <AppRoutes />
     </BrowserRouter>
   );

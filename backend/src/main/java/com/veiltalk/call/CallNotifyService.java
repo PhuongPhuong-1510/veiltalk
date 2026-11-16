@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import com.veiltalk.auth.NotFoundException;
 import com.veiltalk.auth.User;
 import com.veiltalk.auth.UserRepository;
+import com.veiltalk.auth.ValidationException;
 import com.veiltalk.messaging.MessageRealtimePublisher;
 
 @Service
@@ -23,6 +24,9 @@ public class CallNotifyService {
 	}
 
 	public void notify(CallNotifyRequest request) {
+		if (request.callId() == null) {
+			throw new ValidationException("call_id is required");
+		}
 		User caller = userRepository.findByIdAndDeletedAtIsNull(request.callerId())
 				.orElseThrow(() -> new NotFoundException(CALLEE_NOT_FOUND_MESSAGE));
 		User callee = userRepository.findByIdAndDeletedAtIsNull(request.calleeId())
@@ -33,6 +37,7 @@ public class CallNotifyService {
 				callee.getId(),
 				caller.getId(),
 				caller.getDisplayName(),
-				callSessionId);
+				callSessionId,
+				request.callId());
 	}
 }

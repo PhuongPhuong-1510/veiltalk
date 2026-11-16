@@ -1,6 +1,8 @@
 package com.veiltalk.messaging;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -133,7 +135,7 @@ public class WebSocketSessionRegistry {
 		private final UUID userId;
 		private final WebSocketSession session;
 		private final AtomicInteger unansweredPings = new AtomicInteger();
-		private final AtomicInteger contractViolations = new AtomicInteger();
+		private final Deque<Long> contractViolations = new ArrayDeque<>();
 		private final AtomicBoolean active = new AtomicBoolean(true);
 		private final AtomicReference<ScheduledFuture<?>> heartbeatTask = new AtomicReference<>();
 		private final AtomicReference<ScheduledFuture<?>> expiryTask = new AtomicReference<>();
@@ -163,8 +165,13 @@ public class WebSocketSessionRegistry {
 			unansweredPings.set(0);
 		}
 
-		int recordContractViolation() {
-			return contractViolations.incrementAndGet();
+		synchronized int recordContractViolation(long nowMillis, long windowMillis) {
+			while (!contractViolations.isEmpty()
+					&& contractViolations.peekFirst() <= nowMillis - windowMillis) {
+				contractViolations.removeFirst();
+			}
+			contractViolations.addLast(nowMillis);
+			return contractViolations.size();
 		}
 
 		boolean isActive() {

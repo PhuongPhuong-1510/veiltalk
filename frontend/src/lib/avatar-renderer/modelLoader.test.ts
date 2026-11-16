@@ -51,6 +51,20 @@ describe("AvatarModelLoader", () => {
     expect(profile?.collisionReference?.head.radius).toBeGreaterThan(0);
     expect(Object.isFrozen(profile?.collisionReference?.head)).toBe(true);
   });
+  it("builds an arm profile from spine when a VRM 0.x model omits chest", () => {
+    const root = new Object3D(); const spine = new Object3D(); const neck = new Object3D();
+    const leftShoulder = new Object3D(); const leftUpperArm = new Object3D(); const leftLowerArm = new Object3D(); const leftHand = new Object3D();
+    const rightShoulder = new Object3D(); const rightUpperArm = new Object3D(); const rightLowerArm = new Object3D(); const rightHand = new Object3D();
+    neck.position.y = .5; leftShoulder.position.x = .2; rightShoulder.position.x = -.2;
+    leftLowerArm.position.x = .3; leftHand.position.x = .25; rightLowerArm.position.x = -.3; rightHand.position.x = -.25;
+    root.add(spine); spine.add(neck, leftShoulder, rightShoulder); leftShoulder.add(leftUpperArm); leftUpperArm.add(leftLowerArm); leftLowerArm.add(leftHand);
+    rightShoulder.add(rightUpperArm); rightUpperArm.add(rightLowerArm); rightLowerArm.add(rightHand); root.updateMatrixWorld(true);
+    const profile = createRigProfile(10, "avatar#10", { spine, neck, leftShoulder, leftUpperArm, leftLowerArm, leftHand, rightShoulder, rightUpperArm, rightLowerArm, rightHand });
+    expect(profile).not.toBeNull();
+    expect(profile?.modelFingerprint).toBe("avatar#10");
+    expect(profile?.joints.leftUpperArm).toBeDefined();
+    expect(profile?.joints.rightLowerArm).toBeDefined();
+  });
   it("captures shoulder rest positions and torso-up in parent local space",()=>{
     const chest=new Object3D(),leftShoulder=new Object3D(),rightShoulder=new Object3D(),leftUpperArm=new Object3D(),rightUpperArm=new Object3D();chest.rotation.z=.3;chest.add(leftShoulder,rightShoulder);leftShoulder.add(leftUpperArm);rightShoulder.add(rightUpperArm);leftShoulder.position.set(.02,.3,0);rightShoulder.position.set(-.02,.3,0);leftUpperArm.position.x=.18;rightUpperArm.position.x=-.18;chest.updateMatrixWorld(true);
     const bones={chest,leftShoulder,rightShoulder,leftUpperArm,rightUpperArm};const profile=createUpperBodyRigProfile(1,"shoulder-test",bones);const rig=createShoulderTranslationRig(bones,profile);

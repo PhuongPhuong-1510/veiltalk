@@ -12,6 +12,9 @@ public record AvatarProfileResponse(
 		@JsonProperty("model_id") String modelId,
 		@JsonProperty("model_url") String modelUrl,
 		Map<String, Object> customizations,
+		@JsonProperty("profile_revision") UUID profileRevision,
+		@JsonProperty("portrait_version") UUID portraitVersion,
+		@JsonProperty("last_save_request_id") UUID lastSaveRequestId,
 		@JsonProperty("created_at") Instant createdAt,
 		@JsonProperty("updated_at") Instant updatedAt) {
 }

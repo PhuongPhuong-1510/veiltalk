@@ -82,6 +82,10 @@ public class MessageService {
 							authenticatedUserId),
 					false);
 		}
+		if (userRepository.findByIdAndDeletedAtIsNull(
+				recipientUserId(conversation, authenticatedUserId)).isEmpty()) {
+			throw new NotFoundException("Recipient not found");
+		}
 		validateTimestamp(request.clientTimestamp());
 
 		boolean created = messageRepository.insertIfAbsent(

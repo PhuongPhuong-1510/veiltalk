@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "motion:audit": "node scripts/audit-motion-rigs.mjs",
+    "avatar:previews": "node scripts/build-avatar-previews.mjs",
+    "avatar:thumbnails": "node scripts/render-avatar-thumbnails.mjs",
     "contact:audit": "node scripts/audit-face-contact.mjs",
     "contact:evaluate": "node scripts/evaluate-face-contact.mjs",
     "contact:manifest": "node scripts/manifest-face-contact.mjs"
@@ -35,6 +37,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "happy-dom": "20.14.5",
     "oxlint": "^1.71.0",
+    "sharp": "^0.35.5",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vitest": "^4.1.10"

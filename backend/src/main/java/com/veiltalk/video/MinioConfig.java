@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
+import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 @Configuration
 @EnableConfigurationProperties({MinioProperties.class, VideoProperties.class})
@@ -31,6 +33,7 @@ public class MinioConfig {
     // MinioAsyncClient công khai low-level multipart API (createMultipartUpload...) mà
     // MinioClient không expose — cần cho luồng quay video P2-T20→T22.
     @Bean
+    @Primary
     MinioAsyncClient minioAsyncClient(MinioProperties properties) {
         MinioAsyncClient.Builder builder =
                 MinioAsyncClient.builder().endpoint(properties.endpoint());
@@ -45,6 +48,20 @@ public class MinioConfig {
             builder.credentials(properties.accessKey(), properties.secretKey());
         }
 
+        return builder.build();
+    }
+
+    @Bean("presignMinioAsyncClient")
+    MinioAsyncClient presignMinioAsyncClient(MinioProperties properties,
+            @Qualifier("minioAsyncClient") MinioAsyncClient internalClient) {
+        if (!StringUtils.hasText(properties.publicEndpoint())) {
+            return internalClient;
+        }
+        MinioAsyncClient.Builder builder = MinioAsyncClient.builder()
+                .endpoint(properties.publicEndpoint())
+                // MinIO's default region; avoids a public-network lookup just to sign a URL.
+                .region("us-east-1");
+        builder.credentials(properties.accessKey(), properties.secretKey());
         return builder.build();
     }
 }

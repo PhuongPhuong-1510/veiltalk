@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Pattern;
 public class UserSettingsRequest {
 
 	private Boolean discoverable;
+	private Boolean usernameSearchable;
 	private Boolean emailNotifications;
 
 	@Pattern(regexp = "^(dark|light|system)$")
@@ -20,6 +21,15 @@ public class UserSettingsRequest {
 
 	public void setDiscoverable(Boolean discoverable) {
 		this.discoverable = discoverable;
+	}
+
+	public Boolean getUsernameSearchable() {
+		return usernameSearchable;
+	}
+
+	@JsonSetter("username_searchable")
+	public void setUsernameSearchable(Boolean usernameSearchable) {
+		this.usernameSearchable = usernameSearchable;
 	}
 
 	public Boolean getEmailNotifications() {

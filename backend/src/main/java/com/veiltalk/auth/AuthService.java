@@ -20,7 +20,6 @@ import jakarta.persistence.EntityManager;
 @Service
 public class AuthService {
 
-	private static final long ACCESS_TOKEN_EXPIRY_SECONDS = 900;
 	private static final String EMAIL_CONFLICT_MESSAGE = "Email is already registered";
 	private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid email or password";
 	private static final String INVALID_REFRESH_TOKEN_MESSAGE = "Invalid refresh token";
@@ -32,6 +31,7 @@ public class AuthService {
 	private final JwtBlacklistService jwtBlacklistService;
 	private final PasswordEncoder passwordEncoder;
 	private final EntityManager entityManager;
+	private final UsernamePolicy usernamePolicy;
 
 	public AuthService(
 			UserRepository userRepository,
@@ -40,7 +40,8 @@ public class AuthService {
 			JwtService jwtService,
 			JwtBlacklistService jwtBlacklistService,
 			PasswordEncoder passwordEncoder,
-			EntityManager entityManager) {
+			EntityManager entityManager,
+			UsernamePolicy usernamePolicy) {
 		this.userRepository = userRepository;
 		this.refreshTokenRepository = refreshTokenRepository;
 		this.avatarProfileRepository = avatarProfileRepository;
@@ -48,23 +49,33 @@ public class AuthService {
 		this.jwtBlacklistService = jwtBlacklistService;
 		this.passwordEncoder = passwordEncoder;
 		this.entityManager = entityManager;
+		this.usernamePolicy = usernamePolicy;
 	}
 
 	@Transactional
 	public RegisterResponse register(RegisterRequest request) {
+		String username = usernamePolicy.normalizeAndValidate(request.username());
 		if (userRepository.findByEmailAndDeletedAtIsNull(request.email()).isPresent()) {
 			throw new ConflictException(EMAIL_CONFLICT_MESSAGE);
+		}
+		if (userRepository.findByUsername(username).isPresent()) {
+			throw new UsernameTakenException();
 		}
 
 		User user = new User();
 		user.setEmail(request.email());
 		user.setPasswordHash(passwordEncoder.encode(request.password()));
 		user.setDisplayName(request.displayName());
+		user.setUsername(username);
+		user.setUsernameSearchable(Boolean.TRUE.equals(request.usernameSearchable()));
 
 		try {
 			userRepository.saveAndFlush(user);
 		}
 		catch (DataIntegrityViolationException exception) {
+			if (causedByConstraint(exception, "idx_users_username")) {
+				throw new UsernameTakenException();
+			}
 			throw new ConflictException(EMAIL_CONFLICT_MESSAGE);
 		}
 		entityManager.refresh(user);
@@ -75,13 +86,14 @@ public class AuthService {
 				new RegisterResponse.UserResponse(
 						user.getId(),
 						user.getEmail(),
+						user.getUsername(),
 						user.getDisplayName(),
 						user.getRole().getDatabaseValue(),
 						user.getCreatedAt()),
 				new RegisterResponse.TokenResponse(
 						accessToken,
 						refreshToken,
-						ACCESS_TOKEN_EXPIRY_SECONDS));
+						jwtService.accessExpirySeconds()));
 	}
 
 	@Transactional
@@ -97,13 +109,14 @@ public class AuthService {
 				new LoginResponse.UserResponse(
 						user.getId(),
 						user.getEmail(),
+						user.getUsername(),
 						user.getDisplayName(),
 						user.getRole().getDatabaseValue(),
 						avatarProfileRepository.existsByUserId(user.getId())),
 				new LoginResponse.TokenResponse(
 						accessToken,
 						refreshToken,
-						ACCESS_TOKEN_EXPIRY_SECONDS));
+						jwtService.accessExpirySeconds()));
 	}
 
 	@Transactional(readOnly = true)
@@ -112,7 +125,7 @@ public class AuthService {
 		User user = userRepository.findByIdAndDeletedAtIsNull(storedToken.getUserId())
 				.orElseThrow(() -> new UnauthorizedException(INVALID_REFRESH_TOKEN_MESSAGE));
 		String accessToken = jwtService.generateAccessToken(user.getId(), user.getRole());
-		return new RefreshResponse(accessToken, ACCESS_TOKEN_EXPIRY_SECONDS);
+		return new RefreshResponse(accessToken, jwtService.accessExpirySeconds());
 	}
 
 	@Transactional
@@ -178,5 +191,14 @@ public class AuthService {
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is not available", exception);
 		}
+	}
+
+	private boolean causedByConstraint(Throwable throwable, String constraintName) {
+		for (Throwable current = throwable; current != null; current = current.getCause()) {
+			if (current.getMessage() != null && current.getMessage().contains(constraintName)) {
+				return true;
+			}
+		}
+		return false;
 	}
 }

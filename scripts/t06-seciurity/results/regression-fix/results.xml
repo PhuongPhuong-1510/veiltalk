@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="scripts\t05-e2e\call.test.cjs" time="0.173236" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\call.test.cjs"/>
+	<testcase name="scripts\t05-e2e\core.test.cjs" time="0.164902" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\core.test.cjs"/>
+	<testcase name="scripts\t05-e2e\environment.test.cjs" time="0.157412" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\environment.test.cjs"/>
+	<testcase name="scripts\t05-e2e\extended.test.cjs" time="0.154807" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\extended.test.cjs"/>
+	<testcase name="scripts\t05-e2e\journeys.test.cjs" time="0.173020" classname="test" file="C:\project\veiltalk\scripts\t05-e2e\journeys.test.cjs"/>
+	<testcase name="T05-USR-006" time="1.533814" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="T05-VID-011" time="2.968418" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<!-- tests 7 -->
+	<!-- suites 0 -->
+	<!-- pass 7 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 5709.6008 -->
+</testsuites>

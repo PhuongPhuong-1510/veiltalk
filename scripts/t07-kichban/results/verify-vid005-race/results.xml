@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="scripts\t07-kichban\auth-conv.test.cjs" time="0.078585" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\auth-conv.test.cjs"/>
+	<testcase name="scripts\t07-kichban\message.test.cjs" time="0.077209" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\message.test.cjs"/>
+	<testcase name="scripts\t07-kichban\realtime.test.cjs" time="0.079739" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\realtime.test.cjs"/>
+	<testcase name="scripts\t07-kichban\remaining.test.cjs" time="0.082861" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs"/>
+	<testcase name="T07-VID-005" time="0.771003" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Only part 2 may be reserved while part 2 bytes do not exist in MinIO; statuses=200,200&#10;+ actual - expected&#10;&#10;  [&#10;    200,&#10;+   200&#10;-   400&#10;  ]&#10;">
+		<failure type="testCodeFailure" message="Only part 2 may be reserved while part 2 bytes do not exist in MinIO; statuses=200,200&#10;+ actual - expected&#10;&#10;  [&#10;    200,&#10;+   200&#10;-   400&#10;  ]">
+[Error [ERR_TEST_FAILURE]: Only part 2 may be reserved while part 2 bytes do not exist in MinIO; statuses=200,200
++ actual - expected
+
+  [
+    200,
++   200
+-   400
+  ]
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Only part 2 may be reserved while part 2 bytes do not exist in MinIO; statuses=200,200
+  + actual - expected
+  
+    [
+      200,
+  +   200
+  -   400
+    ]
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\video.test.cjs:73:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 200, 200 ],
+    expected: [ 200, 400 ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<!-- tests 5 -->
+	<!-- suites 0 -->
+	<!-- pass 4 -->
+	<!-- fail 1 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 1181.4331 -->
+</testsuites>

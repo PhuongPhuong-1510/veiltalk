@@ -184,9 +184,10 @@ class MessageRealtimePublisherTests {
 		UUID calleeUserId = UUID.randomUUID();
 		UUID callerId = UUID.randomUUID();
 		UUID callSessionId = UUID.randomUUID();
+		UUID callId = UUID.randomUUID();
 		ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
 
-		publisher.publishCallIncoming(calleeUserId, callerId, "Nguyễn Văn A", callSessionId);
+		publisher.publishCallIncoming(calleeUserId, callerId, "Nguyễn Văn A", callSessionId, callId);
 
 		verify(redisTemplate).convertAndSend(
 				org.mockito.ArgumentMatchers.eq("messaging:user:" + calleeUserId),
@@ -196,6 +197,7 @@ class MessageRealtimePublisherTests {
 		assertThat(payload.get("data").get("caller_id").asText()).isEqualTo(callerId.toString());
 		assertThat(payload.get("data").get("caller_display_name").asText()).isEqualTo("Nguyễn Văn A");
 		assertThat(payload.get("data").get("call_session_id").asText()).isEqualTo(callSessionId.toString());
+		assertThat(payload.get("data").get("call_id").asText()).isEqualTo(callId.toString());
 	}
 
 	private MessageResponse sampleMessage() {

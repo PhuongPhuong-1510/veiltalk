@@ -10,6 +10,7 @@ public record UserSearchResponse(
 
 	public record UserSummary(
 			UUID id,
-			@JsonProperty("display_name") String displayName) {
+			@JsonProperty("display_name") String displayName,
+			@JsonProperty("avatar_url") String avatarUrl) {
 	}
 }

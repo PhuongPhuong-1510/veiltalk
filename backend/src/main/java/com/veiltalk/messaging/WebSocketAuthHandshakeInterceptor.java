@@ -2,10 +2,12 @@ package com.veiltalk.messaging;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.veiltalk.auth.JwtBlacklistService;
 import com.veiltalk.auth.JwtClaims;
 import com.veiltalk.auth.JwtService;
+import com.veiltalk.auth.AuthClientIpResolver;
 import com.veiltalk.auth.UserRepository;
 import com.veiltalk.auth.UserTokenRevocationService;
 
@@ -27,6 +30,7 @@ public class WebSocketAuthHandshakeInterceptor implements HandshakeInterceptor {
 	static final String JWT_ID_ATTRIBUTE = "messaging.jwtId";
 	static final String JWT_ISSUED_AT_ATTRIBUTE = "messaging.jwtIssuedAt";
 	static final String JWT_EXPIRES_AT_ATTRIBUTE = "messaging.jwtExpiresAt";
+	static final String CONNECTION_LEASE_ATTRIBUTE = "messaging.connectionLease";
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(WebSocketAuthHandshakeInterceptor.class);
 	private static final String ACCESS_TOKEN_TYPE = "access";
@@ -36,16 +40,22 @@ public class WebSocketAuthHandshakeInterceptor implements HandshakeInterceptor {
 	private final JwtBlacklistService jwtBlacklistService;
 	private final UserTokenRevocationService userTokenRevocationService;
 	private final UserRepository userRepository;
+	private final AuthClientIpResolver clientIpResolver;
+	private final MessagingConnectionLimiter connectionLimiter;
 
 	public WebSocketAuthHandshakeInterceptor(
 			JwtService jwtService,
 			JwtBlacklistService jwtBlacklistService,
 			UserTokenRevocationService userTokenRevocationService,
-			UserRepository userRepository) {
+			UserRepository userRepository,
+			AuthClientIpResolver clientIpResolver,
+			MessagingConnectionLimiter connectionLimiter) {
 		this.jwtService = jwtService;
 		this.jwtBlacklistService = jwtBlacklistService;
 		this.userTokenRevocationService = userTokenRevocationService;
 		this.userRepository = userRepository;
+		this.clientIpResolver = clientIpResolver;
+		this.connectionLimiter = connectionLimiter;
 	}
 
 	@Override
@@ -67,12 +77,21 @@ public class WebSocketAuthHandshakeInterceptor implements HandshakeInterceptor {
 					|| userRepository.findByIdAndDeletedAtIsNull(claims.subject()).isEmpty()) {
 				return reject(response);
 			}
+			UUID leaseId = UUID.randomUUID();
+			MessagingConnectionLimiter.Result admission = connectionLimiter.reserve(
+					clientIpResolver.resolve(request), claims.subject(), leaseId);
+			if (admission != MessagingConnectionLimiter.Result.ALLOWED) {
+				response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
+				response.getHeaders().set(HttpHeaders.RETRY_AFTER, "60");
+				return false;
+			}
 
 			attributes.put(USER_ID_ATTRIBUTE, claims.subject());
 			attributes.put(USER_ROLE_ATTRIBUTE, claims.role());
 			attributes.put(JWT_ID_ATTRIBUTE, claims.jwtId());
 			attributes.put(JWT_ISSUED_AT_ATTRIBUTE, claims.issuedAt());
 			attributes.put(JWT_EXPIRES_AT_ATTRIBUTE, claims.expiresAt());
+			attributes.put(CONNECTION_LEASE_ATTRIBUTE, leaseId);
 			return true;
 		}
 		catch (IllegalArgumentException exception) {

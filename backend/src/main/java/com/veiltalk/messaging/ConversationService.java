@@ -16,6 +16,7 @@ import com.veiltalk.auth.UnauthorizedException;
 import com.veiltalk.auth.User;
 import com.veiltalk.auth.UserRepository;
 import com.veiltalk.auth.ValidationException;
+import com.veiltalk.avatar.AvatarPortraitResolver;
 
 @Service
 public class ConversationService {
@@ -31,16 +32,19 @@ public class ConversationService {
 	private final MessageRepository messageRepository;
 	private final UserRepository userRepository;
 	private final ConversationCursorCodec cursorCodec;
+	private final AvatarPortraitResolver avatarPortraitResolver;
 
 	public ConversationService(
 			ConversationRepository conversationRepository,
 			MessageRepository messageRepository,
 			UserRepository userRepository,
-			ConversationCursorCodec cursorCodec) {
+			ConversationCursorCodec cursorCodec,
+			AvatarPortraitResolver avatarPortraitResolver) {
 		this.conversationRepository = conversationRepository;
 		this.messageRepository = messageRepository;
 		this.userRepository = userRepository;
 		this.cursorCodec = cursorCodec;
+		this.avatarPortraitResolver = avatarPortraitResolver;
 	}
 
 	@Transactional
@@ -92,12 +96,13 @@ public class ConversationService {
 				? new ArrayList<>(fetched.subList(0, limit))
 				: fetched;
 		Map<UUID, User> usersById = loadOtherUsers(conversations, authenticatedUserId);
+		Map<UUID, String> portraitsByUserId = avatarPortraitResolver.resolveAll(usersById.values());
 		Map<UUID, ConversationLastMessageResponse> messagesByConversationId =
 				loadLastMessages(conversations);
 		List<ConversationSummaryResponse> data = conversations.stream()
 				.map(conversation -> new ConversationSummaryResponse(
 						conversation.getId(),
-						toOtherUserResponse(otherUser(conversation, authenticatedUserId, usersById)),
+						toOtherUserResponse(otherUser(conversation, authenticatedUserId, usersById), portraitsByUserId),
 						messagesByConversationId.get(conversation.getId()),
 						conversation.getUpdatedAt()))
 				.toList();
@@ -146,7 +151,7 @@ public class ConversationService {
 				new ConversationResponse.OtherUserResponse(
 						otherUser.getId(),
 						otherUser.getDisplayName(),
-						otherUser.getAvatarUrl()),
+						avatarPortraitResolver.resolve(otherUser.getId(), otherUser.getAvatarUrl())),
 				conversation.getCreatedAt(),
 				conversation.getUpdatedAt());
 	}
@@ -219,10 +224,25 @@ public class ConversationService {
 	}
 
 	private ConversationResponse.OtherUserResponse toOtherUserResponse(User otherUser) {
+		if (otherUser.getDeletedAt() != null) {
+			return new ConversationResponse.OtherUserResponse(otherUser.getId(), "Deleted user", null);
+		}
 		return new ConversationResponse.OtherUserResponse(
 				otherUser.getId(),
 				otherUser.getDisplayName(),
-				otherUser.getAvatarUrl());
+				avatarPortraitResolver.resolve(otherUser.getId(), otherUser.getAvatarUrl()));
+	}
+
+	private ConversationResponse.OtherUserResponse toOtherUserResponse(
+			User otherUser,
+			Map<UUID, String> portraitsByUserId) {
+		if (otherUser.getDeletedAt() != null) {
+			return new ConversationResponse.OtherUserResponse(otherUser.getId(), "Deleted user", null);
+		}
+		return new ConversationResponse.OtherUserResponse(
+				otherUser.getId(),
+				otherUser.getDisplayName(),
+				portraitsByUserId.get(otherUser.getId()));
 	}
 
 	private record ConversationPair(UUID userAId, UUID userBId) {

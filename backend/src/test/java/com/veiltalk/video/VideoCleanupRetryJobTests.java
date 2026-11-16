@@ -49,6 +49,23 @@ class VideoCleanupRetryJobTests {
 	}
 
 	@Test
+	void preinsertAbortRetryDoesNotRequireAVideoRow() {
+		VideoCleanupJobRepository jobRepository = mock(VideoCleanupJobRepository.class);
+		VideoRepository videoRepository = mock(VideoRepository.class);
+		VideoMultipartStorage storage = mock(VideoMultipartStorage.class);
+		VideoCleanupJob job = VideoCleanupJob.abortMultipart(
+				null, "videos/orphan/source.mp4", "upload-orphan", NOW);
+		given(jobRepository.findDue(NOW)).willReturn(List.of(job));
+
+		new VideoCleanupRetryJob(jobRepository, videoRepository, storage, properties(), fixedClock())
+				.runRetry();
+
+		verify(storage).abortMultipartUpload(job.getStoragePath(), job.getUploadId());
+		verify(videoRepository, never()).failAndSoftDeleteRecording(any(), any());
+		verify(jobRepository).delete(job);
+	}
+
+	@Test
 	void successfulRemoveObjectRetryDeletesJobWithoutTouchingVideoStatus() {
 		VideoCleanupJobRepository jobRepository = mock(VideoCleanupJobRepository.class);
 		VideoRepository videoRepository = mock(VideoRepository.class);

@@ -80,11 +80,12 @@ class CallNotifyIntegrationTests {
 		User caller = createUser("call-caller");
 		User callee = createUser("call-callee");
 		EventListener calleeListener = connect(callee);
+		UUID callId = UUID.randomUUID();
 
 		mockMvc.perform(post("/internal/call/notify")
 						.header("Authorization", AUTHORIZATION)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content(notifyBody(caller.getId(), callee.getId())))
+						.content(notifyBody(caller.getId(), callee.getId(), callId)))
 				.andExpect(status().isNoContent());
 
 		JsonNode event = calleeListener.awaitEvent("CALL_INCOMING");
@@ -94,6 +95,7 @@ class CallNotifyIntegrationTests {
 		UUID expectedSessionId = CallSessionIdGenerator.generate(caller.getId(), callee.getId());
 		assertThat(event.path("data").path("call_session_id").asText())
 				.isEqualTo(expectedSessionId.toString());
+		assertThat(event.path("data").path("call_id").asText()).isEqualTo(callId.toString());
 	}
 
 	@Test
@@ -164,7 +166,11 @@ class CallNotifyIntegrationTests {
 	}
 
 	private String notifyBody(UUID callerId, UUID calleeId) {
-		return "{\"caller_id\":\"" + callerId + "\",\"callee_id\":\"" + calleeId + "\"}";
+		return notifyBody(callerId, calleeId, UUID.randomUUID());
+	}
+
+	private String notifyBody(UUID callerId, UUID calleeId, UUID callId) {
+		return "{\"caller_id\":\"" + callerId + "\",\"callee_id\":\"" + calleeId + "\",\"call_id\":\"" + callId + "\"}";
 	}
 
 	private EventListener connect(User user) throws Exception {

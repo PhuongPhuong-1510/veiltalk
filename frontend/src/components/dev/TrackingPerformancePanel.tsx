@@ -45,7 +45,7 @@ export function TrackingPerformancePanel({ metrics, context, onResetMeasurement 
     ...(context?.rendererRunning === false ? ["Renderer đang dừng."] : []),
   ];
   const download = () => {
-    const report = { phase: "B", schemaVersion: 1, sourceHash: import.meta.env.VITE_MOTION_SOURCE_HASH ?? null,
+    const report = { phase: "tracking-performance", schemaVersion: 1, sourceHash: import.meta.env.VITE_MOTION_SOURCE_HASH ?? null,
       capturedAtUtc: new Date().toISOString(), page: window.location.pathname, scenario,
       environment: { userAgent: navigator.userAgent, hardwareConcurrency: navigator.hardwareConcurrency, crossOriginIsolated: globalThis.crossOriginIsolated, devicePixelRatio: window.devicePixelRatio },
       benchmark: { validForControlledComparison: invalidReasons.length === 0, invalidReasons, webcamQualityVerified: false },
@@ -61,7 +61,7 @@ export function TrackingPerformancePanel({ metrics, context, onResetMeasurement 
       definitions, context, metrics };
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
-    link.href = url; link.download = `tracking-phase-b-${scenario}-${Date.now()}.json`; link.click();
+    link.href = url; link.download = `tracking-performance-${scenario}-${Date.now()}.json`; link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const fpsRows = [
@@ -74,7 +74,7 @@ export function TrackingPerformancePanel({ metrics, context, onResetMeasurement 
     ["Render (cửa sổ mẫu renderer)", metrics.renderFps],
   ] as const;
   return <details className="tracking-performance">
-    <summary>Performance – Phase B · publish {format(metrics.trackingPublishFps)} FPS · accepted Hands {format(observations?.acceptedHandFps)} Hz</summary>
+    <summary>Hiệu năng tracking · publish {format(metrics.trackingPublishFps)} FPS · accepted Hands {format(observations?.acceptedHandFps)} Hz</summary>
     <p>UI ~2 Hz. FPS: 10 giây; timing: tối đa 600 mẫu mỗi bước. “—” = chưa có mẫu/không áp dụng. Render dùng collector hiện có.</p>
     <p>Callback/presented frame không phải thời điểm cảm biến chụp ảnh. Hands worker chạy song song: không cộng Face + Pose + Hands thành tổng.</p>
     <button type="button" onClick={download}>Tải metrics JSON</button>

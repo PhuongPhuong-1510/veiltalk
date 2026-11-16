@@ -27,7 +27,7 @@ public class VideoCleanupJob {
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
 
-	@Column(name = "video_id", nullable = false)
+	@Column(name = "video_id")
 	private UUID videoId;
 
 	@Column(name = "storage_path", nullable = false, length = 500)

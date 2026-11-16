@@ -1,0 +1,17 @@
+# Requires PUBLIC_HOST and ops/tls/fullchain.pem + ops/tls/privkey.pem.
+# Keep all application and data ports bound to loopback in docker-compose.yml.
+services:
+  backend:
+    environment:
+      MINIO_PUBLIC_ENDPOINT: https://${PUBLIC_HOST:?Set PUBLIC_HOST to the public DNS name}
+  nginx:
+    ports: !override
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST to the public DNS name}
+      MINIO_BUCKET: ${MINIO_BUCKET:?Set MINIO_BUCKET}
+    volumes:
+      - ./ops/nginx/veiltalk.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./ops/tls:/etc/nginx/tls:ro
+P

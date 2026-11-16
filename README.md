@@ -112,7 +112,7 @@ Có thể tạo JWT secret bằng:
 openssl rand -hex 32
 ```
 
-`JWT_SECRET` và `SIGNALING_JWT_SECRET` phải dùng cùng giá trị.
+`JWT_SECRET` và `SIGNALING_JWT_SECRET` phải dùng cùng giá trị. Tạo riêng `INTERNAL_CALL_NOTIFY_SECRET` và `MINIO_WEBHOOK_SECRET` bằng cùng lệnh `openssl rand -hex 32`; mỗi secret phải chứa ít nhất 32 byte UTF-8 và không dùng giá trị mẫu. Backend từ chối khởi động khi thiếu hoặc quá ngắn. Kiểm tra độ dài không chứng minh secret được sinh ngẫu nhiên; người vận hành phải tạo bằng nguồn ngẫu nhiên an toàn.
 
 ### 2. Khởi động các dịch vụ nền tảng
 
@@ -137,7 +137,15 @@ cd backend
 .\mvnw.cmd spring-boot:run
 ```
 
-Khi chạy backend trực tiếp trên máy, dùng `localhost` cho PostgreSQL và Redis. Các hostname `postgres` và `redis` chỉ hoạt động bên trong mạng Docker Compose.
+Backend tự đọc `.env` khi chạy từ thư mục gốc repository hoặc `backend/`, không cần nạp biến bằng PowerShell. Bạn cũng có thể bấm Run tại `BackendApplication.java` trong IDE với working directory là một trong hai thư mục này.
+
+Khi chạy backend trực tiếp trên máy, đặt `DB_HOST=localhost`, `REDIS_HOST=localhost` và `MINIO_ENDPOINT=http://localhost:9000` trong `.env`. Docker Compose tự dùng hostname nội bộ cho container backend.
+
+File `.env` dùng cú pháp `KEY=value`: không bọc giá trị trong dấu nháy và đặt chú thích ở dòng riêng để tương thích với cách Spring đọc file properties. Biến môi trường đã được đặt trong terminal hoặc IDE vẫn được ưu tiên hơn `.env`.
+
+Đặt mật khẩu database ở `VEILTALK_DB_PASSWORD` trong `.env`, cùng giá trị với `POSTGRES_PASSWORD`. Tên riêng này tránh bị biến `DB_PASSWORD` của dự án khác trong Windows ghi đè. Backend vẫn hỗ trợ `DB_PASSWORD` khi chưa khai báo `VEILTALK_DB_PASSWORD`.
+
+Sau khi log xuất hiện `Started BackendApplication`, kiểm tra `http://localhost:8080/actuator/health`; trạng thái mong đợi là `UP`.
 
 ### 4. Chạy signaling server
 
@@ -160,6 +168,8 @@ Frontend mặc định được phục vụ tại `http://localhost:5173`.
 > Cấu hình chạy trọn hệ thống bằng Docker Compose vẫn đang được hoàn thiện cùng tiến độ dự án. Hãy dùng hướng dẫn phát triển theo từng thành phần ở trên cho trạng thái repository hiện tại.
 
 ## Kiểm thử
+
+Backend cần `ffprobe` trong `PATH` (hoặc đặt `VIDEO_FFPROBE_PATH`) để kiểm định video hoàn chỉnh trước khi phát. Tác vụ probe tải object vào thư mục tạm trên host backend; cần đủ dung lượng tạm cho một video tối đa theo quota và có thể chỉnh timeout bằng `VIDEO_FFPROBE_TIMEOUT_SECONDS`.
 
 ```bash
 # Backend

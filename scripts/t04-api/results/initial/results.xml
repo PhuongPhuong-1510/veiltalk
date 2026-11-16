@@ -1,0 +1,679 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="COM-001" time="2.056229" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-002" time="0.877478" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-003" time="0.213655" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-004" time="0.443157" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-005" time="0.212452" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,404].includes(r.status))&#10;">
+		<failure type="testCodeFailure" message="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,404].includes(r.status))">
+[Error [ERR_TEST_FAILURE]: The expression evaluated to a falsy value:
+
+  assert.ok([400,404].includes(r.status))
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([400,404].includes(r.status))
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:35:186)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="COM-006" time="0.244044" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-007" time="0.222594" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-008" time="0.212577" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-009" time="0.184063" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([404,405].includes(r.status))&#10;">
+		<failure type="testCodeFailure" message="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([404,405].includes(r.status))">
+[Error [ERR_TEST_FAILURE]: The expression evaluated to a falsy value:
+
+  assert.ok([404,405].includes(r.status))
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([404,405].includes(r.status))
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:39:129)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="COM-010" time="0.170348" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,415].includes(r.status))&#10;">
+		<failure type="testCodeFailure" message="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,415].includes(r.status))">
+[Error [ERR_TEST_FAILURE]: The expression evaluated to a falsy value:
+
+  assert.ok([400,415].includes(r.status))
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([400,415].includes(r.status))
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:40:230)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="COM-011" time="0.269495" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-012" time="0.194760" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-013" time="0.191863" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-014" time="0.065185" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="COM-015" time="0.384689" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-001" time="0.172779" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-002" time="0.179586" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-003" time="0.037455" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-004" time="0.046108" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-005" time="0.156496" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-006" time="0.200571" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-007" time="0.308628" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 409, got 201, error=none&#10;&#10;201 !== 409&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 409, got 201, error=none&#10;&#10;201 !== 409">
+[Error [ERR_TEST_FAILURE]: HTTP expected 409, got 201, error=none
+
+201 !== 409
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 409, got 201, error=none
+  
+  201 !== 409
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:33:10)
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:53:165)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 409,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="AUTH-008" time="0.314299" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-009" time="0.307680" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-010" time="0.027168" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-011" time="0.376790" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-012" time="0.224291" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-013" time="0.334384" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-014" time="0.027681" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 400, got 401, error=UNAUTHORIZED&#10;&#10;401 !== 400&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 400, got 401, error=UNAUTHORIZED&#10;&#10;401 !== 400">
+[Error [ERR_TEST_FAILURE]: HTTP expected 400, got 401, error=UNAUTHORIZED
+
+401 !== 400
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 400, got 401, error=UNAUTHORIZED
+  
+  401 !== 400
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:33:10)
+      at bad (C:\project\veiltalk\scripts\t04-api\http.test.cjs:7:30)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:60:30)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 401,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="AUTH-015" time="0.161083" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-016" time="0.197374" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-017" time="0.175905" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-018" time="0.339003" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-019" time="0.187409" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-020" time="0.170297" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-021" time="0.175805" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AUTH-022" time="0.528837" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-001" time="0.170516" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-002" time="0.196149" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-003" time="0.235379" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-004" time="0.230986" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-005" time="0.269910" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-006" time="0.206946" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-007" time="0.168247" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-008" time="0.186461" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-009" time="0.243120" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-010" time="0.246028" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-011" time="0.209805" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-012" time="0.353940" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Expected values to be strictly equal:&#10;&#10;false !== true&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;false !== true">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+false !== true
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:81:139)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="USR-013" time="0.364451" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-014" time="0.183367" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-015" time="0.479497" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-016" time="0.383406" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-017" time="0.529017" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-018" time="0.330933" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-019" time="0.318266" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="USR-020" time="0.528376" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-001" time="0.005582" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-002" time="0.182960" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-003" time="0.169739" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-004" time="0.180066" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Cannot read properties of null (reading 'model_id')">
+		<failure type="testCodeFailure" message="Cannot read properties of null (reading 'model_id')">
+[Error [ERR_TEST_FAILURE]: Cannot read properties of null (reading 'model_id')] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: TypeError: Cannot read properties of null (reading 'model_id')
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:94:188)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="AVA-005" time="0.216268" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Cannot read properties of null (reading 'id')">
+		<failure type="testCodeFailure" message="Cannot read properties of null (reading 'id')">
+[Error [ERR_TEST_FAILURE]: Cannot read properties of null (reading 'id')] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: TypeError: Cannot read properties of null (reading 'id')
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:95:282)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="AVA-006" time="0.185522" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-007" time="0.165374" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-008" time="0.176466" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Cannot read properties of null (reading 'customizations')">
+		<failure type="testCodeFailure" message="Cannot read properties of null (reading 'customizations')">
+[Error [ERR_TEST_FAILURE]: Cannot read properties of null (reading 'customizations')] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: TypeError: Cannot read properties of null (reading 'customizations')
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:98:186)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="AVA-009" time="0.174267" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-010" time="0.182127" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-011" time="0.185760" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Cannot read properties of null (reading 'customizations')">
+		<failure type="testCodeFailure" message="Cannot read properties of null (reading 'customizations')">
+[Error [ERR_TEST_FAILURE]: Cannot read properties of null (reading 'customizations')] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: TypeError: Cannot read properties of null (reading 'customizations')
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:101:287)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="AVA-012" time="0.346349" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-013" time="0.325163" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="AVA-014" time="0.491893" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-001" time="0.404992" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-002" time="0.343489" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-003" time="0.337031" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-004" time="0.163979" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-005" time="0.178851" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-006" time="0.484346" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-007" time="0.179923" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-008" time="0.383107" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-009" time="0.794170" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-010" time="0.191487" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-011" time="0.265937" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 400, got 200, error=none&#10;&#10;200 !== 400&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 400, got 200, error=none&#10;&#10;200 !== 400">
+[Error [ERR_TEST_FAILURE]: HTTP expected 400, got 200, error=none
+
+200 !== 400
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 400, got 200, error=none
+  
+  200 !== 400
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:33:10)
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:116:102)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="CON-012" time="0.180603" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-013" time="0.748261" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-014" time="0.368864" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-015" time="0.502849" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="CON-016" time="0.181239" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,404].includes((await req('GET','/conversations/invalid',a.token)).status))&#10;">
+		<failure type="testCodeFailure" message="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,404].includes((await req('GET','/conversations/invalid',a.token)).status))">
+[Error [ERR_TEST_FAILURE]: The expression evaluated to a falsy value:
+
+  assert.ok([400,404].includes((await req('GET','/conversations/invalid',a.token)).status))
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([400,404].includes((await req('GET','/conversations/invalid',a.token)).status))
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:121:119)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="CON-017" time="0.564562" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-001" time="0.407450" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-002" time="0.408221" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-003" time="0.372062" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-004" time="0.545510" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-005" time="0.360175" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-006" time="0.363136" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-007" time="0.363731" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-008" time="0.383946" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-009" time="0.342672" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-010" time="0.441184" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-011" time="0.519172" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-012" time="0.186463" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,404].includes((await req('POST','/conversations/invalid/messages',a.token,validMessage())).status))&#10;">
+		<failure type="testCodeFailure" message="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,404].includes((await req('POST','/conversations/invalid/messages',a.token,validMessage())).status))">
+[Error [ERR_TEST_FAILURE]: The expression evaluated to a falsy value:
+
+  assert.ok([400,404].includes((await req('POST','/conversations/invalid/messages',a.token,validMessage())).status))
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([400,404].includes((await req('POST','/conversations/invalid/messages',a.token,validMessage())).status))
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\http.test.cjs:135:144)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="MSG-013" time="0.371065" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-014" time="0.347156" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-015" time="1.287925" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-016" time="3.627258" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-017" time="0.422376" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-018" time="0.353375" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-019" time="0.487950" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-020" time="0.510194" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-021" time="0.647112" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-022" time="0.406785" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-023" time="0.399583" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-024" time="0.623688" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-025" time="0.383012" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-026" time="0.396459" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-027" time="0.525200" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-028" time="0.547400" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MSG-029" time="0.344727" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-001" time="0.291376" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-002" time="0.416396" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-003" time="0.248688" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 200, got 401, error=UNAUTHORIZED&#10;&#10;401 !== 200&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 200, got 401, error=UNAUTHORIZED&#10;&#10;401 !== 200">
+[Error [ERR_TEST_FAILURE]: HTTP expected 200, got 401, error=UNAUTHORIZED
+
+401 !== 200
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 200, got 401, error=UNAUTHORIZED
+  
+  401 !== 200
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:33:10)
+      at ok (C:\project\veiltalk\scripts\t04-api\support.cjs:39:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\video-internal.test.cjs:14:76)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 401,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="VID-004" time="0.297970" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-005" time="0.340180" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-006" time="0.170352" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-007" time="0.203266" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-008" time="0.966822" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-009" time="0.361445" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-010" time="0.248213" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-011" time="0.265450" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-012" time="0.262660" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-013" time="0.370621" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-014" time="0.167021" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-015" time="0.518837" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-016" time="0.407302" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-017" time="0.232727" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-018" time="0.453982" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-019" time="0.257402" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-020" time="0.248610" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-021" time="0.231156" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-022" time="0.189824" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Expected values to be strictly equal:&#10;&#10;undefined !== 'mp4'&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;undefined !== 'mp4'">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+undefined !== 'mp4'
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== 'mp4'
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\video-internal.test.cjs:34:124)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'mp4',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="VID-023" time="0.161275" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-024" time="0.320729" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-025" time="0.270776" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-026" time="0.228267" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,404].includes(r.status))&#10;">
+		<failure type="testCodeFailure" message="The expression evaluated to a falsy value:&#10;&#10;  assert.ok([400,404].includes(r.status))">
+[Error [ERR_TEST_FAILURE]: The expression evaluated to a falsy value:
+
+  assert.ok([400,404].includes(r.status))
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok([400,404].includes(r.status))
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\video-internal.test.cjs:38:323)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="VID-027" time="0.338349" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-028" time="0.413427" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-029" time="0.387414" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-030" time="0.285840" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-031" time="0.239130" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-032" time="0.262926" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-033" time="0.243083" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-034" time="0.423185" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-035" time="0.389505" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-036" time="0.240425" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-037" time="0.242174" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-038" time="0.624526" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-039" time="0.232470" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="VID-040" time="0.407178" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Command failed: docker exec veiltalk-e2e-1792386875327-164421-postgres psql -U e2e -d veiltalk_e2e -At -c UPDATE videos SET status='failed', file_size_bytes=0 WHERE id='04b078fa-1ea6-49b7-b37d-4bb44f4cc001'&#10;ERROR:  new row for relation &amp;quot;videos&amp;quot; violates check constraint &amp;quot;videos_file_size_bytes_check&amp;quot;&#10;DETAIL:  Failing row contains (04b078fa-1ea6-49b7-b37d-4bb44f4cc001, f7409c54-7c81-40e1-9baf-566d044a6bc1, T04 video, videos/981703a6-764e-4fd0-947d-8fd9e136fadd/source.webm, 0, null, failed, webm, 2026-10-19 05:16:08.942272+00, 2026-10-19 05:16:09.156877+00, null, Nzg2NWEzYTEtMWUzMi00NzBjLWFiMTktY2Y4YTNjNGIxN2Q4LmYwOWFkZWFjLTlh...).&#10;">
+		<failure type="testCodeFailure" message="Command failed: docker exec veiltalk-e2e-1792386875327-164421-postgres psql -U e2e -d veiltalk_e2e -At -c UPDATE videos SET status='failed', file_size_bytes=0 WHERE id='04b078fa-1ea6-49b7-b37d-4bb44f4cc001'&#10;ERROR:  new row for relation &amp;quot;videos&amp;quot; violates check constraint &amp;quot;videos_file_size_bytes_check&amp;quot;&#10;DETAIL:  Failing row contains (04b078fa-1ea6-49b7-b37d-4bb44f4cc001, f7409c54-7c81-40e1-9baf-566d044a6bc1, T04 video, videos/981703a6-764e-4fd0-947d-8fd9e136fadd/source.webm, 0, null, failed, webm, 2026-10-19 05:16:08.942272+00, 2026-10-19 05:16:09.156877+00, null, Nzg2NWEzYTEtMWUzMi00NzBjLWFiMTktY2Y4YTNjNGIxN2Q4LmYwOWFkZWFjLTlh...).">
+[Error [ERR_TEST_FAILURE]: Command failed: docker exec veiltalk-e2e-1792386875327-164421-postgres psql -U e2e -d veiltalk_e2e -At -c UPDATE videos SET status='failed', file_size_bytes=0 WHERE id='04b078fa-1ea6-49b7-b37d-4bb44f4cc001'
+ERROR:  new row for relation "videos" violates check constraint "videos_file_size_bytes_check"
+DETAIL:  Failing row contains (04b078fa-1ea6-49b7-b37d-4bb44f4cc001, f7409c54-7c81-40e1-9baf-566d044a6bc1, T04 video, videos/981703a6-764e-4fd0-947d-8fd9e136fadd/source.webm, 0, null, failed, webm, 2026-10-19 05:16:08.942272+00, 2026-10-19 05:16:09.156877+00, null, Nzg2NWEzYTEtMWUzMi00NzBjLWFiMTktY2Y4YTNjNGIxN2Q4LmYwOWFkZWFjLTlh...).
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: Error: Command failed: docker exec veiltalk-e2e-1792386875327-164421-postgres psql -U e2e -d veiltalk_e2e -At -c UPDATE videos SET status='failed', file_size_bytes=0 WHERE id='04b078fa-1ea6-49b7-b37d-4bb44f4cc001'
+  ERROR:  new row for relation "videos" violates check constraint "videos_file_size_bytes_check"
+  DETAIL:  Failing row contains (04b078fa-1ea6-49b7-b37d-4bb44f4cc001, f7409c54-7c81-40e1-9baf-566d044a6bc1, T04 video, videos/981703a6-764e-4fd0-947d-8fd9e136fadd/source.webm, 0, null, failed, webm, 2026-10-19 05:16:08.942272+00, 2026-10-19 05:16:09.156877+00, null, Nzg2NWEzYTEtMWUzMi00NzBjLWFiMTktY2Y4YTNjNGIxN2Q4LmYwOWFkZWFjLTlh...).
+  
+      at genericNodeError (node:internal/errors:985:15)
+      at wrappedFn (node:internal/errors:539:14)
+      at checkExecSyncError (node:child_process:925:11)
+      at execFileSync (node:child_process:961:15)
+      at sql (C:\project\veiltalk\scripts\t04-api\support.cjs:109:10)
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\video-internal.test.cjs:52:68)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    status: 1,
+    signal: null,
+    output: [ null, '', 'ERROR:  new row for relation "videos" violates check constraint "videos_file_size_bytes_check"\nDETAIL:  Failing row contains (04b078fa-1ea6-49b7-b37d-4bb44f4cc001, f7409c54-7c81-40e1-9baf-566d044a6bc1, T04 video, videos/981703a6-764e-4fd0-947d-8fd9e136fadd/source.webm, 0, null, failed, webm, 2026-10-19 05:16:08.942272+00, 2026-10-19 05:16:09.156877+00, null, Nzg2NWEzYTEtMWUzMi00NzBjLWFiMTktY2Y4YTNjNGIxN2Q4LmYwOWFkZWFjLTlh...).\n' ],
+    pid: 1456,
+    stdout: '',
+    stderr: 'ERROR:  new row for relation "videos" violates check constraint "videos_file_size_bytes_check"\nDETAIL:  Failing row contains (04b078fa-1ea6-49b7-b37d-4bb44f4cc001, f7409c54-7c81-40e1-9baf-566d044a6bc1, T04 video, videos/981703a6-764e-4fd0-947d-8fd9e136fadd/source.webm, 0, null, failed, webm, 2026-10-19 05:16:08.942272+00, 2026-10-19 05:16:09.156877+00, null, Nzg2NWEzYTEtMWUzMi00NzBjLWFiMTktY2Y4YTNjNGIxN2Q4LmYwOWFkZWFjLTlh...).\n'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="INT-001" time="0.326227" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-002" time="0.327342" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-003" time="0.470270" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-004" time="0.164561" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-005" time="0.014123" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Expected values to be strictly equal:&#10;&#10;404 !== 400&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;404 !== 400">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+404 !== 400
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  404 !== 400
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\video-internal.test.cjs:58:198)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 404,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="INT-006" time="0.009022" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-007" time="0.678930" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-008" time="0.030815" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-009" time="0.011077" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-010" time="0.703945" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="INT-011" time="0.203620" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-001" time="0.190729" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-002" time="0.161084" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-003" time="0.501607" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-004" time="0.468933" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-005" time="0.171792" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-006" time="3.223513" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-007" time="0.352784" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-008" time="0.163362" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="MET-009" time="0.160712" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-001" time="0.402257" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-002" time="0.213091" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-003" time="0.369103" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-004" time="0.391390" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-005" time="0.371845" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-006" time="0.220389" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-007" time="0.484227" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-008" time="0.814911" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="WSC-009" time="0.673372" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-001" time="0.332885" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-002" time="2.291287" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Expected values to be strictly equal:&#10;+ actual - expected&#10;&#10;+ undefined&#10;- 4001&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;+ actual - expected&#10;&#10;+ undefined&#10;- 4001">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- 4001
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 4001
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\websocket.test.cjs:16:478)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 4001,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="SIG-003" time="0.380429" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-004" time="3.372483" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Missing WS CALL_OFFER; received ; close=open">
+		<failure type="testCodeFailure" message="Missing WS CALL_OFFER; received ; close=open">
+[Error [ERR_TEST_FAILURE]: Missing WS CALL_OFFER; received ; close=open] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: Error: Missing WS CALL_OFFER; received ; close=open
+      at Socket.take (C:\project\veiltalk\scripts\t04-api\support.cjs:149:11)
+      at async TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\websocket.test.cjs:18:301)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="SIG-005" time="0.422131" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-006" time="0.455246" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-007" time="0.612429" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Expected values to be strictly equal:&#10;&#10;true !== false&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;true !== false">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+true !== false
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t04-api\websocket.test.cjs:21:244)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="SIG-008" time="0.359948" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<testcase name="SIG-009" time="33.836767" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs"/>
+	<!-- tests 195 -->
+	<!-- suites 0 -->
+	<!-- pass 174 -->
+	<!-- fail 21 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 109834.3276 -->
+</testsuites>

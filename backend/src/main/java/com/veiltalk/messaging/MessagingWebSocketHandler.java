@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -14,6 +15,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.veiltalk.messaging.WebSocketSessionRegistry.SessionState;
 
+import jakarta.annotation.PostConstruct;
+
 @Component
 public class MessagingWebSocketHandler extends TextWebSocketHandler {
 
@@ -21,28 +24,46 @@ public class MessagingWebSocketHandler extends TextWebSocketHandler {
 	private static final String PONG_EVENT = "PONG";
 	private static final String TYPING_EVENT = "TYPING";
 	private static final String TYPING_STOP_EVENT = "TYPING_STOP";
-	private static final int MAX_CONTRACT_VIOLATIONS = 3;
+	@Value("${messaging.websocket.contract-violation-limit:3}")
+	private int contractViolationLimit = 3;
+	@Value("${messaging.websocket.contract-violation-window-seconds:60}")
+	private long contractViolationWindowSeconds = 60;
 
 	private final WebSocketSessionRegistry sessionRegistry;
 	private final WebSocketKeepAliveScheduler keepAliveScheduler;
 	private final MessagingTypingService typingService;
 	private final ObjectMapper objectMapper;
+	private final MessagingConnectionLimiter connectionLimiter;
+
+	@PostConstruct
+	void validateViolationPolicy() {
+		if (contractViolationLimit <= 0 || contractViolationWindowSeconds <= 0
+				|| contractViolationWindowSeconds > Long.MAX_VALUE / 1000) {
+			throw new IllegalArgumentException("Messaging WebSocket violation policy must be positive");
+		}
+	}
 
 	public MessagingWebSocketHandler(
 			WebSocketSessionRegistry sessionRegistry,
 			WebSocketKeepAliveScheduler keepAliveScheduler,
 			MessagingTypingService typingService,
-			ObjectMapper objectMapper) {
+			ObjectMapper objectMapper,
+			MessagingConnectionLimiter connectionLimiter) {
 		this.sessionRegistry = sessionRegistry;
 		this.keepAliveScheduler = keepAliveScheduler;
 		this.typingService = typingService;
 		this.objectMapper = objectMapper;
+		this.connectionLimiter = connectionLimiter;
 	}
 
 	@Override
 	public void afterConnectionEstablished(WebSocketSession session) {
 		UUID userId = authenticatedUserId(session);
 		if (userId == null) {
+			closeUnusableSession(session);
+			return;
+		}
+		if (connectionLease(session) == null) {
 			closeUnusableSession(session);
 			return;
 		}
@@ -73,6 +94,16 @@ public class MessagingWebSocketHandler extends TextWebSocketHandler {
 
 		String type = event.path("type").asText();
 		if (PONG_EVENT.equals(type)) {
+			try {
+				if (!connectionLimiter.renew(state.userId(), connectionLease(session))) {
+					keepAliveScheduler.terminate(state, CloseStatus.POLICY_VIOLATION);
+					return;
+				}
+			} catch (RuntimeException exception) {
+				LOGGER.error("Messaging WebSocket connection lease check failed for session {}", session.getId());
+				keepAliveScheduler.terminate(state, CloseStatus.SERVER_ERROR);
+				return;
+			}
 			keepAliveScheduler.pongReceived(state);
 			return;
 		}
@@ -99,6 +130,14 @@ public class MessagingWebSocketHandler extends TextWebSocketHandler {
 	@Override
 	public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
 		removeSession(session);
+		UUID userId = authenticatedUserId(session), leaseId = connectionLease(session);
+		if (userId != null && leaseId != null) {
+			try {
+				connectionLimiter.release(userId, leaseId);
+			} catch (RuntimeException exception) {
+				LOGGER.warn("Messaging WebSocket connection lease release failed for session {}", session.getId());
+			}
+		}
 	}
 
 	private SessionState removeSession(WebSocketSession session) {
@@ -129,7 +168,7 @@ public class MessagingWebSocketHandler extends TextWebSocketHandler {
 
 		try {
 			if (!typingService.relay(state.userId(), type, conversationId)) {
-				reject(
+				rejectAuthorization(
 						state,
 						"FORBIDDEN",
 						"Typing is not allowed for this conversation");
@@ -146,7 +185,19 @@ public class MessagingWebSocketHandler extends TextWebSocketHandler {
 	}
 
 	private void reject(SessionState state, String code, String message) {
-		int violationCount = state.recordContractViolation();
+		int violationCount = state.recordContractViolation(
+				System.currentTimeMillis(), contractViolationWindowSeconds * 1000);
+		sendError(state, code, message);
+		if (violationCount >= contractViolationLimit) {
+			keepAliveScheduler.terminate(state, CloseStatus.POLICY_VIOLATION);
+		}
+	}
+
+	private void rejectAuthorization(SessionState state, String code, String message) {
+		sendError(state, code, message);
+	}
+
+	private void sendError(SessionState state, String code, String message) {
 		try {
 			String payload = objectMapper.writeValueAsString(
 					new ErrorEvent("ERROR", new ErrorData(code, message)));
@@ -160,15 +211,17 @@ public class MessagingWebSocketHandler extends TextWebSocketHandler {
 			keepAliveScheduler.terminate(state, CloseStatus.SERVER_ERROR);
 			return;
 		}
-		if (violationCount >= MAX_CONTRACT_VIOLATIONS) {
-			keepAliveScheduler.terminate(state, CloseStatus.POLICY_VIOLATION);
-		}
 	}
 
 	private UUID authenticatedUserId(WebSocketSession session) {
 		Object userId = session.getAttributes().get(
 				WebSocketAuthHandshakeInterceptor.USER_ID_ATTRIBUTE);
 		return userId instanceof UUID uuid ? uuid : null;
+	}
+
+	private UUID connectionLease(WebSocketSession session) {
+		Object lease = session.getAttributes().get(WebSocketAuthHandshakeInterceptor.CONNECTION_LEASE_ATTRIBUTE);
+		return lease instanceof UUID uuid ? uuid : null;
 	}
 
 	private void closeUnusableSession(WebSocketSession session) {

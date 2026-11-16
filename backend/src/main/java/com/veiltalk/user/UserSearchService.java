@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.UUID;
 
 import com.veiltalk.auth.UserRepository;
+import com.veiltalk.avatar.AvatarPortraitResolver;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,12 +14,15 @@ public class UserSearchService {
 
 	private final UserRepository userRepository;
 	private final UserSearchRateLimiter rateLimiter;
+	private final AvatarPortraitResolver avatarPortraitResolver;
 
 	public UserSearchService(
 			UserRepository userRepository,
-			UserSearchRateLimiter rateLimiter) {
+			UserSearchRateLimiter rateLimiter,
+			AvatarPortraitResolver avatarPortraitResolver) {
 		this.userRepository = userRepository;
 		this.rateLimiter = rateLimiter;
+		this.avatarPortraitResolver = avatarPortraitResolver;
 	}
 
 	@Transactional(readOnly = true)
@@ -31,7 +35,10 @@ public class UserSearchService {
 		return userRepository.findByEmailAndIsDiscoverableTrueAndDeletedAtIsNull(request.email())
 				.map(user -> SearchResult.found(new UserSearchResponse(
 						true,
-						new UserSearchResponse.UserSummary(user.getId(), user.getDisplayName()))))
+						new UserSearchResponse.UserSummary(
+								user.getId(),
+								user.getDisplayName(),
+								avatarPortraitResolver.resolve(user.getId(), user.getAvatarUrl())))))
 				.orElseGet(() -> SearchResult.success(new UserSearchResponse(false, null)));
 	}
 

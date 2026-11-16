@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="T07-AUTH-005" time="0.499554" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="HTTP expected 401, got 200, error=none&#10;&#10;200 !== 401&#10;">
+		<failure type="testCodeFailure" message="HTTP expected 401, got 200, error=none&#10;&#10;200 !== 401">
+[Error [ERR_TEST_FAILURE]: HTTP expected 401, got 200, error=none
+
+200 !== 401
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: HTTP expected 401, got 200, error=none
+  
+  200 !== 401
+  
+      at expect (C:\project\veiltalk\scripts\t04-api\support.cjs:34:10)
+      at ok (C:\project\veiltalk\scripts\t04-api\support.cjs:40:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\auth-conv.test.cjs:33:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 401,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="scripts\t07-kichban\message.test.cjs" time="0.077950" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\message.test.cjs"/>
+	<testcase name="T07-CALL-013" time="4.415835" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Missing WS CALL_ANSWER; received ; close=open">
+		<failure type="testCodeFailure" message="Missing WS CALL_ANSWER; received ; close=open">
+[Error [ERR_TEST_FAILURE]: Missing WS CALL_ANSWER; received ; close=open] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: Error: Missing WS CALL_ANSWER; received ; close=open
+      at Socket.take (C:\project\veiltalk\scripts\t04-api\support.cjs:154:11)
+      at async TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\realtime.test.cjs:288:22)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+}
+		</failure>
+	</testcase>
+	<testcase name="scripts\t07-kichban\remaining.test.cjs" time="0.085597" classname="test" file="C:\project\veiltalk\scripts\t07-kichban\remaining.test.cjs"/>
+	<testcase name="T07-VID-002" time="0.545997" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="The losing terminal operation must return 409; statuses=404,204&#10;&#10;0 !== 1&#10;">
+		<failure type="testCodeFailure" message="The losing terminal operation must return 409; statuses=404,204&#10;&#10;0 !== 1">
+[Error [ERR_TEST_FAILURE]: The losing terminal operation must return 409; statuses=404,204
+
+0 !== 1
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The losing terminal operation must return 409; statuses=404,204
+  
+  0 !== 1
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\video.test.cjs:27:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-VID-003" time="0.539040" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Deleting a recording/processing video leaked its upload session&#10;&#10;'1' !== '0'&#10;">
+		<failure type="testCodeFailure" message="Deleting a recording/processing video leaked its upload session&#10;&#10;'1' !== '0'">
+[Error [ERR_TEST_FAILURE]: Deleting a recording/processing video leaked its upload session
+
+'1' !== '0'
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Deleting a recording/processing video leaked its upload session
+  
+  '1' !== '0'
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\video.test.cjs:42:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '1',
+    expected: '0',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="T07-VID-005" time="0.236687" classname="test" file="C:\project\veiltalk\scripts\t04-api\support.cjs" failure="Part 3 must not be reserved before part 2 bytes and real ETag exist in MinIO&#10;&#10;200 !== 400&#10;">
+		<failure type="testCodeFailure" message="Part 3 must not be reserved before part 2 bytes and real ETag exist in MinIO&#10;&#10;200 !== 400">
+[Error [ERR_TEST_FAILURE]: Part 3 must not be reserved before part 2 bytes and real ETag exist in MinIO
+
+200 !== 400
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Part 3 must not be reserved before part 2 bytes and real ETag exist in MinIO
+  
+  200 !== 400
+  
+      at TestContext.&lt;anonymous> (C:\project\veiltalk\scripts\t07-kichban\video.test.cjs:74:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<!-- tests 7 -->
+	<!-- suites 0 -->
+	<!-- pass 2 -->
+	<!-- fail 5 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 6662.009 -->
+</testsuites>

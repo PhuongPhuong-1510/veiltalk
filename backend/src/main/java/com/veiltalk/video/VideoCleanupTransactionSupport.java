@@ -11,10 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
  * Ghi thay đổi DB liên quan cleanup trong transaction RIÊNG (REQUIRES_NEW), tách biệt bean
  * để tránh self-invocation (proxy Spring chỉ chặn được lời gọi xuyên bean).
  *
- * <p>Dùng bởi {@link VideoAccountCleanupService} — service này chạy bên trong transaction
+	 * <p>Dùng bởi {@link VideoAccountCleanupService} và {@link VideoService}. Các service chạy bên trong transaction
  * của {@code UserAccountService.deleteAccount}; nếu MinIO abort thất bại, ghi cleanup job
  * PHẢI commit độc lập, không được kéo theo rollback soft-delete/revoke token của tài khoản
- * (và ngược lại, một lỗi ở đây không được làm rollback thao tác xóa tài khoản).
+	 * (và ngược lại, một lỗi ở đây không được làm rollback thao tác xóa tài khoản).
  */
 @Service
 class VideoCleanupTransactionSupport {

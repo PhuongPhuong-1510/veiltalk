@@ -303,8 +303,8 @@ Thanh điều khiển xuất hiện dưới màn hình video call. Layout: căn 
 | **Thuộc tính**        | **Đặc tả**                                                                                                                                                     |
 |-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Header**            | Logo nhỏ + 'Tạo tài khoản' (text-xl, Outfit). Back button góc trái nếu có thể quay về onboarding.                                                              |
-| **Form fields**       | Email input, Password input (có toggle show/hide), Display name input. Thứ tự này vì email + password là thông tin bảo mật, tên hiển thị là thông tin cá nhân. |
-| **Không có username** | Prototype có bản nháp `@kokoro_name`, nhưng API/database không hỗ trợ field này nên không hiển thị và không tự lưu giả phía client.                     |
+| **Form fields**       | Email, Password (có toggle show/hide), Display name và Username. Username là bắt buộc, được chuẩn hóa lowercase và báo lỗi inline nếu sai định dạng/đã tồn tại. |
+| **Quyền tìm username** | Checkbox “Cho phép người khác tìm thấy tôi bằng @username”, mặc định tắt. Consent này độc lập với quyền tìm qua email. |
 | **Password strength** | 4-segment progress bar dưới password field: đỏ (yếu) → cam → vàng → xanh lá (mạnh). Label realtime: 'Cần chữ hoa và số'.                                       |
 | **CTA**               | Nút Primary 'Đăng ký' full-width. Disabled cho đến khi tất cả field hợp lệ.                                                                                    |
 | **Footer**            | Text-sm: 'Bằng cách đăng ký, bạn đồng ý với Điều khoản sử dụng và Chính sách bảo mật' — link underline violet.                                                 |
@@ -344,7 +344,7 @@ Thanh điều khiển xuất hiện dưới màn hình video call. Layout: căn 
 | **Preview**              | Avatar model đã chọn hiển thị phía trên, kích thước lớn (chiếm 45% màn hình), xoay chậm 360° để thấy toàn bộ. |
 | **Customization panels** | Tab navigation ngang dưới preview: Tóc / Mắt / Trang phục / Phụ kiện (chỉ những category model đó hỗ trợ).    |
 | **Color picker**         | Swatches màu phổ biến + nút '+ Tùy chỉnh' mở color wheel full. Preview cập nhật realtime khi chọn màu.        |
-| **Outfit selector**      | Grid thumbnail nhỏ của các outfit. Scroll ngang trong panel.                                                  |
+| **Trang phục**           | Chỉ đổi màu các lớp trang phục có sẵn của model. Không hiển thị bộ chọn nhiều outfit khi model không có asset thay thế thật. |
 | **Reset**                | Nút ghost 'Đặt lại' để về customization mặc định.                                                             |
 | **CTA**                  | Nút Primary 'Tiếp theo' ở bottom.                                                                             |
 
@@ -362,27 +362,37 @@ Thanh điều khiển xuất hiện dưới màn hình video call. Layout: căn 
 
 ### 5.8. SCR-10 — Home: Danh sách Trò chuyện
 
-| **Thuộc tính**         | **Đặc tả**                                                                                                                                                                                                                                                                                               |
-|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Layout tổng thể**    | Bottom navigation bar (4 tab). Content area ở giữa. Header minimal với search icon và avatar nhỏ của user.                                                                                                                                                                                               |
-| **Header**             | Chữ 'Trò chuyện' (text-xl, Outfit). Icon search mở search bar inline. Avatar nhỏ 36px góc phải mở profile.                                                                                                                                                                                               |
-| **Conversation list**  | List vertical. Mỗi item: avatar nhỏ 48px + tên hiển thị + preview tin nhắn cuối + timestamp. Tin nhắn chưa đọc: bold + badge đếm màu accent-primary.                                                                                                                                                     |
-| **Empty state**        | Khi chưa có trò chuyện: illustration nhỏ + text 'Chưa có trò chuyện nào. Tìm bạn bè để bắt đầu!' + nút 'Tìm người dùng' → SCR-11.                                                                                                                                                                        |
-| **Avatar trong list**  | Hiển thị nhân vật ảo dạng thumbnail TĨNH (frame đầu tiên của idle animation) — khác với SCR-07 dùng animated vì list có thể dài, animate nhiều item cùng lúc tốn CPU và gây giật scroll. Online indicator: chấm xanh cyan 10px cạnh avatar.                                                              |
-| **No-avatar fallback** | Khi người kia chưa setup avatar: hiển thị avatar generic mặc định của hệ thống (hình mặt nạ VeilTalk) thay vì ảnh đại diện hoặc initials — nhất quán với Privacy by Visual.                                                                                                                              |
-| **Swipe action**       | Swipe trái trên item: nút 'Ẩn' (không phải 'Xóa') màu cam — ẩn conversation khỏi danh sách trên thiết bị này. Confirmation tooltip: 'Cuộc trò chuyện sẽ hiện lại khi có tin nhắn mới.' Dùng 'Ẩn' thay 'Xóa' vì API không có endpoint DELETE /conversations — hành vi đúng là ẩn local, không xóa server. |
+**Mục tiêu sản phẩm:** Home là điểm vào nhanh cho giao tiếp hằng ngày, ưu tiên danh sách hội thoại. Không biến Home thành dashboard chứa toàn bộ thư viện video, màn chat chi tiết hoặc nhiều canvas VRM cùng lúc.
+
+| **Thuộc tính** | **Đặc tả** |
+|---|---|
+| **Layout tổng thể** | Mobile dùng bottom navigation 4 tab; desktop/tablet dùng sidebar trái và vùng nội dung trung tâm. Các mục điều hướng: Trò chuyện, Tìm người dùng, Video và Hồ sơ/Cài đặt. Giữ nền tối tím Kokoro nhưng mật độ thị giác nhẹ hơn flow thiết lập avatar. |
+| **Header** | Tiêu đề “Trò chuyện”, lời chào ngắn theo `display_name`, nút tìm/tạo hội thoại và avatar nhỏ của user mở Hồ sơ. Ô lọc hội thoại hiện có được mở inline; tìm user mới vẫn chuyển sang SCR-11. |
+| **Hành động nhanh** | Có tối đa hai CTA: “Bắt đầu trò chuyện” → SCR-11 và “Quay video avatar” → SCR-16/record flow. Nếu dùng avatar động để tạo điểm nhấn, chỉ render **một** VRM của chính user; không render VRM trong từng dòng hội thoại. |
+| **Conversation list** | Gọi `GET /conversations`, sắp xếp theo `updated_at` giảm dần và dùng cursor pagination. Mỗi item gồm thumbnail 48px, tên, preview tin cuối, timestamp và trạng thái sent/delivered/read khi có. Nhấn item → `/conversations/{conversationId}` (SCR-12). |
+| **Tin chưa đọc** | Có thể dùng kiểu chữ đậm khi `last_message.sender_id` khác user hiện tại và status chưa phải `read`. Không hiển thị badge số lượng giả: API hiện chưa trả `unread_count`; badge số chỉ được thêm sau khi contract/backend hỗ trợ. |
+| **Avatar trong list** | Chỉ dùng ảnh preview tĩnh đã sinh sẵn hoặc URL ảnh tĩnh do API trả về. Cấm dựng một WebGL/VRM renderer cho mỗi item vì gây tốn GPU, bộ nhớ và giật scroll. Nếu chưa có preview tĩnh thì dùng generic mask, không tải file VRM để chụp ảnh ngay trên Home. |
+| **Presence** | Chưa hiển thị chấm xanh online/offline. Chỉ bật presence indicator sau khi có Presence Service xuyên instance và contract trạng thái đáng tin cậy; trước đó dùng trạng thái trung tính hoặc ẩn hoàn toàn. |
+| **Empty state** | Generic mask/illustration nhỏ, nội dung “Chưa có trò chuyện nào. Tìm bạn bè để bắt đầu!” và CTA “Tìm người dùng” → SCR-11. |
+| **Loading** | Skeleton giữ đúng chiều cao row và không nhấp layout. Trang đầu hiển thị skeleton list; trang tiếp theo dùng loader nhỏ cuối danh sách. |
+| **Error/offline** | Lỗi trang đầu hiển thị thông báo gọn + “Thử lại”. Nếu đã có dữ liệu cũ thì giữ list và hiển thị banner mất kết nối, không xóa nội dung đang thấy. |
+| **Pagination** | Tải trang tiếp theo khi sentinel cuối list vào viewport; khóa request trùng; dừng khi `has_more=false`. Giữ item đã tải khi request trang sau thất bại. |
+| **Swipe action** | Swipe trái trên mobile hoặc menu ba chấm trên desktop: “Ẩn” (không phải “Xóa”). Ẩn local theo `conversation.id` kèm `updated_at`; hội thoại tự hiện lại khi server trả về `updated_at` mới hơn mốc đã ẩn. Tooltip: “Cuộc trò chuyện sẽ hiện lại khi có tin nhắn mới.” |
+| **Responsive/accessibility** | Row có vùng bấm tối thiểu 44px, hỗ trợ keyboard focus, `aria-label` cho nút chỉ có icon và reduced-motion. Mobile giữ bottom nav cố định; desktop không kéo bottom nav lên thành thanh quá rộng. |
+
+**Khoanh vùng SCR-10:** màn này không chứa message list đầy đủ, WebRTC call controls, video library grid hoặc cài đặt chi tiết. Các chức năng đó thuộc SCR-12 đến SCR-18.
 
 ### 5.9. SCR-11 — Tìm kiếm Người dùng
 
 | **Thuộc tính**       | **Đặc tả**                                                                                                                                |
 |----------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
 | **Trigger**          | Tab search trong bottom nav hoặc nút 'Tìm người dùng' từ empty state.                                                                     |
-| **Search bar**       | Prominent full-width search input, auto-focus khi vào màn hình. Placeholder: 'Nhập email chính xác...'                                    |
+| **Search bar**       | Một input full-width, auto-focus. Nhập `@username`/username để autocomplete exact + prefix sau 350ms; email chỉ tìm khi submit và phải chính xác. |
 | **Privacy note**     | Text-xs text-muted phía dưới search bar: 'Chỉ tìm được người đã bật tùy chọn cho phép tìm kiếm' — ghi chú nhẹ nhàng, không phải cảnh báo. |
-| **Kết quả tìm thấy** | Card kết quả: avatar nhân vật ảo + tên hiển thị + nút 'Nhắn tin'. Không hiện email để bảo vệ privacy.                                     |
+| **Kết quả tìm thấy** | Tối đa 10 card: avatar + `display_name` + `@username` (nếu đi từ username search) + nút 'Nhắn tin'. Không hiện email hoặc tổng số kết quả. |
 | **Không tìm thấy**   | Text-muted 'Không tìm thấy người dùng với email này.' — cùng message cho cả hai case (không tồn tại / chưa bật discoverable).             |
 | **Rate limit UI**    | Nếu 429: disabled input + countdown 'Thử lại sau 45 giây' — progress bar đếm ngược.                                                       |
-| **Lịch sử tìm kiếm** | Lưu local 5 email gần nhất, hiện dạng chip xóa được dưới search bar khi input trống.                                                      |
+| **Lịch sử tìm kiếm** | Lưu local tối đa 5 query gần nhất theo từng tài khoản, xóa được và tự xóa khi logout. Không cache danh sách kết quả. |
 
 ### 5.10. SCR-12 — Màn hình Chat
 
